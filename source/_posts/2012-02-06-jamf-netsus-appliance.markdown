@@ -3,7 +3,7 @@ layout: post
 title: "JAMF NetSUS Appliance"
 date: 2012-02-06 11:22
 comments: true
-categories: 
+categories: ['os x', 'netboot', 'os x and linux']
 ---
 
 ## JAMF's NetSUS Appliance - Netboot in a Box

@@ -3,7 +3,7 @@ layout: post
 title: "Using Run Stages with Puppet"
 date: 2011-03-11 11:34
 comments: true
-categories: 
+categories: ['puppet', 'runstages']
 ---
 
 

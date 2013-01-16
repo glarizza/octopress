@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: netboot | Shit Gary Says]]></title>
+  <link href="http://glarizza.github.com/blog/categories/netboot/atom.xml" rel="self"/>
+  <link href="http://glarizza.github.com/"/>
+  <updated>2013-01-16T13:00:36-08:00</updated>
+  <id>http://glarizza.github.com/</id>
+  <author>
+    <name><![CDATA[Gary larizza]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[JAMF NetSUS Appliance]]></title>
+    <link href="http://glarizza.github.com/blog/2012/02/06/jamf-netsus-appliance/"/>
+    <updated>2012-02-06T11:22:00-08:00</updated>
+    <id>http://glarizza.github.com/blog/2012/02/06/jamf-netsus-appliance</id>
+    <content type="html"><![CDATA[<h2>JAMF's NetSUS Appliance - Netboot in a Box</h2>
+
+<p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">Today, JAMF released a new appliance VM</a> based on Ubuntu 10.04 LTS (Lucid) that, for once, provides an 'out of the box' implementation of Netboot and Software Update Service WITHOUT requiring OS X hardware (based on <a href="http://github.com/wdas/reposado">Reposado</a>) and <a href="http://twitpic.com/8glygw">other open-source technologies.</a></p>
+
+<p>For those people who are relatively new to Linux, I thought I'd provide an easy walkthrough of how to get started using this VM on your Laptop.  I'm going to demo this using VMware Fusion instead of VirtualBox mainly because I prefer how Fusion handles Networking.  I've used many VMs, and Fusion always tends to be much more solid and stable for me.  If you don't have Fusion or don't WANT to use Fusion, feel free to use VirtualBox.</p>
+
+<h2>Download and Convert the OVA File</h2>
+
+<p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">The appliance can be downloaded directly from JAMF</a> and comes as a VirtualBox OVA file.  <a href="http://derflounder.wordpress.com/2012/02/06/converting-jamfs-netbootsus-appliance-to-vmware/">Rich Trouton has provided a great walkthrough</a> on converting the OVA file to a VMX file, so I'll link you to that post (since he did it so well).</p>
+
+<h2>Start up the VM</h2>
+
+<p>Once you have your VMX file, you can open it up with Fusion and import it into your Virtual Machine Library.  There is one change we'll want to make, so click on the VM and open its Settings panel (this is different from Fusion 3.0 and 4.0 - I'll be describing the 4.0 method).  In the Settings panel, you'll want to select the Network Adapter icon and make sure the radio button next to "Share the Mac's network connection (NAT)" is selected.  This will create a local IP address so we can contact it directly from our Laptop.  Once you've done that, start the VM and get to the login screen (you'll need to click the Ok button through the message about logging into the NetSUS instance).  Feel free to login with the username 'shelluser' and the password 'shelluser'.  You should see a Message of the Day splash with one of the sections being "IP address for eth0:".  Note the IP address, we'll need it in the next section (if you don't see this, just run <code>ifconfig</code> from the command line and look for the IP address for the eth0 adapter - it should be in the format of 192.168.x.x).</p>
+
+<h2>Prepare to Break Free!</h2>
+
+<p>It really sucks to work with VMs from WITHIN the VM window for various reasons (lack of Copy/Paste, loss of mouse, etc…), so we're going to setup a host entry on your local laptop so we can SSH into the VM as we need.  I'm going to give my VM a hostname of 'netsus.puppetlabs.vm' but you can name it whatever you want.  Let's first edit the /etc/hosts file on your laptop (NOT within the VM, this is ON your laptop) by running the following from the command line:</p>
+
+<p>```</p>
+
+<pre><code>sudo vim /etc/hosts
+</code></pre>
+
+<p>```</p>
+
+<p>Feel free to use pico/nano to edit /etc/hosts in case you don't have any experience with vim.  We want to add the following line in the /etc/hosts file:</p>
+
+<p>```</p>
+
+<pre><code>192.168.217.154 netsus.puppetlabs.vm
+</code></pre>
+
+<p>```</p>
+
+<p><strong>NOTE</strong> SUBSTITUTE 192.168.217.154 WITH THE IP ADDRESS YOU GOT FROM THE PREVIOUS STEP!  That's the IP address that was assigned on MY laptop, and it will definitely be different from the IP address you got on YOUR computer.  Also, you don't HAVE to use 'netsus.puppetlabs.vm' - you can assign it any name you want.  Save and close /etc/hosts and then let's test connectivity from the command line by doing a ping:</p>
+
+<p>```</p>
+
+<pre><code>ping 192.168.217.154
+</code></pre>
+
+<p>```</p>
+
+<p>As long as we have connection, we're fine (remember, substitute your IP Address for mine).  If you DON'T have connectivity, make sure your VM is running and review your /etc/hosts file to make sure the changes were saved (also, check the IP address on your VM again).</p>
+
+<h2>Snapshot Time</h2>
+
+<p>The beauty of Fusion is that you can take snapshots and revert to them should you mess things up.  Let's take a snapshot now in case we screw things up in the following steps.  I'm using VMware Fusion 4.0, so I take a snapshot by clicking on the VM window, clicking on the Virtual Machine menu at the top, and then down to Snapshots.  From there, you can click the 'Take Snapshot' button and let it do its thing.  When it's done, hit the close button and return to the VM</p>
+
+<h2>Enable SSH and Login</h2>
+
+<p>By default, the VM doesn't have the SSHD process running, so we can't yet SSH in from our laptop.  Enable this by doing the following from within the VM:</p>
+
+<p>```</p>
+
+<pre><code>sudo apt-get install openssh-server
+</code></pre>
+
+<p>```</p>
+
+<p>Hit "Y" when it asks if it should download and install.  When it completes, switch back to your LAPTOP (i.e. NOT inside the VM), open up Terminal, and do the following:</p>
+
+<p>```</p>
+
+<pre><code>ssh shelluser@netsus.puppetlabs.vm
+</code></pre>
+
+<p>```</p>
+
+<p>Type yes to add the SSH key to your known_hosts file and use the password 'shelluser' to login.  Tada! Now you can work directly from Terminal and enable copy/pasting directly from your Terminal window.  You can always type <code>exit</code> to close the ssh connection when you're done.</p>
+
+<h2>Install Puppet</h2>
+
+<p>So, it wouldn't be one of my write-ups if I DIDN'T get Puppet installed.  Actually, if you've only managed Macs, then you might not have seen the benefit of Puppet before.  Now that we're on Linux, you'll definitely see the benefit of Puppet (especially if you're not familiar with the service/package manipulation commands).  Puppet can help abstract that for you, so we're going to enable it.</p>
+
+<p>The version of Puppet that's in the main package repository is quite old (0.25 as opposed to the current 2.7.10 version we support).  Let's add Puppet Labs' Apt Repository to the list of repositories queried so we can get a recent version of Puppet.  Do that by opening up the /etc/apt/sources.list file for editing with the following:</p>
+
+<p>```</p>
+
+<pre><code>sudo vim /etc/apt/sources.list
+</code></pre>
+
+<p>```</p>
+
+<p>If it prompts you for your password, go ahead and enter it.  Also, if you're not familiar with vi or vim, I'll try and help you with the basics.  Arrow down to the line JUST above the line that begins with "deb http://" and press the i button on your keyboard to insert the following lines:</p>
+
+<p>```</p>
+
+<pre><code>deb http://apt.puppetlabs.com/ubuntu lucid main
+deb-src http://apt.puppetlabs.com/ubuntu lucid main
+</code></pre>
+
+<p>```</p>
+
+<p>When you're done, hit the escape key and press ZZ (hold shift and hit Z twice, you want two capital-Z's) to save and close the file.  This will add Puppet Labs' repository to the list of repos queried.</p>
+
+<p>Next, we'll need to add Puppet Labs' GPG key to the system so we can validate the packages that are downloaded.  From the terminal, execute the following:</p>
+
+<p>```</p>
+
+<pre><code> gpg --recv-key 4BD6EC30
+</code></pre>
+
+<p>```</p>
+
+<p>The first time you run it, it will bother you about needing to create the keyserver file and won't run correctly.  Let's execute it correctly to receive the key:</p>
+
+<p>```</p>
+
+<pre><code> gpg --recv-key 4BD6EC30
+</code></pre>
+
+<p>```</p>
+
+<p>Great, we should have the key, now we want to load it.  Do that with this command:</p>
+
+<p>```</p>
+
+<pre><code>gpg -a --export 4BD6EC30 | sudo apt-key add -
+</code></pre>
+
+<p>```</p>
+
+<p>Finally, let's update apt so that it knows about the repository.  Do that with this command:</p>
+
+<p>```</p>
+
+<pre><code>sudo apt-get update
+</code></pre>
+
+<p>```</p>
+
+<p>When it finishes running, you can finally install Puppet with the following command:</p>
+
+<p>```</p>
+
+<pre><code>sudo apt-get install puppet
+</code></pre>
+
+<p>```</p>
+
+<p>Type "Y" when it asks you if it should download and install all the dependencies.  That's it!  Puppet should be installed!  Run the following to see what version we've installed:</p>
+
+<p>```</p>
+
+<pre><code>puppet --version
+</code></pre>
+
+<p>```</p>
+
+<p>As of this writing, 2.7.10 is the current version.  As long as you don't have version 0.25 you should be good!</p>
+
+<h2>Snapshots away</h2>
+
+<p>It would be wise to take another snapshot at this point.  Don't worry, I'll wait.</p>
+
+<h2>Inspect the System</h2>
+
+<p>Puppet lets us see what's been installed on the VM.  Take a look at all the packages on the system by doing the following:</p>
+
+<p>```</p>
+
+<pre><code>sudo puppet resource package
+</code></pre>
+
+<p>```</p>
+
+<p>Type your password when prompted and Puppet will return you with a list of all packages on the system and the versions that are running.  Similarly, you can see what services are running with the following:</p>
+
+<p>```</p>
+
+<pre><code>sudo puppet resource service
+</code></pre>
+
+<p>```</p>
+
+<p>Notice that sshd is running and other services like netatalk (that enables AFP on Linux) should also be running.  Sweet.  We'll come back to Puppet later.</p>
+
+<h2>Login to the Web GUI</h2>
+
+<p>If your VM is running, you should be able to open a web browser on your Laptop and navigate to the following address:</p>
+
+<p>```</p>
+
+<pre><code>https://netsus.puppetlabs.vm
+</code></pre>
+
+<p>```</p>
+
+<p>Note the httpS as we'll need to use SSL to get into the Web GUI.  When it asks if you want to accept the self-signed cert, make sure to choose Yes.  You can login with the user 'webadmin' and the password 'webadmin'</p>
+
+<p>Once you're logged in, <a href="https://s3.amazonaws.com/jamfsoftware-content/downloads/NetBootSUS+Appliance_v1.0.pdf">feel free to read through JAMF's instructions for enabling their services.</a>  They do a much better job than I about walking you through that.</p>
+
+<h2>Access to the Raw Files</h2>
+
+<p>Back in the Terminal window, you can access all the PHP/Shell magic that comprises the Web GUI in the /var/www/webadmin directory.  You can poke around through all the files (and use sudo to open some of the key bits) at your leisure.</p>
+
+<p>Note that /etc/dhcpd.conf is the main configuration file for the DHCPD service and it's got some special bits to accommodate Apple Hardware.</p>
+
+<p>Also, /var/appliance has some magic (and the /var/appliance/configurefornetboot script has some sed statements for fixing a stock dhcpd.conf file and enabling those Apple Hardware bits).</p>
+
+<h2>More Later?</h2>
+
+<p>That's it for now - I just wanted to get something online to show people how to setup and poke around in the VM.  Later I can show you how to manipulate and manage the VM with Puppet, which is pretty fun.  Your VM should get you started and let you play around locally, but if you want to test out Netboot and the like then you'll need an externally-accessible IP address (as apposed to the 192.168.x.x IP, which is only accessible from your Laptop).  You can change the settings in VMware Fusion to enable that (like we did in step 2).</p>
+
+<p>Hope this helped you out!</p>
+]]></content>
+  </entry>
+  
+</feed>

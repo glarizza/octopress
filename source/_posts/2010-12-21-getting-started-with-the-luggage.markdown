@@ -3,7 +3,7 @@ layout: post
 title: "Getting Started with The Luggage"
 date: 2010-12-21 09:47
 comments: true
-categories: 
+categories: ['luggage', 'os x', 'packaging']
 ---
 
 With the current movement in the Mac Community toward modular imaging strategies, there's a spike in the need for properly formed package installers. Apple's package format is well documented for its benefits and flaws and there are a string of applications that will help you create your perfect package (from Apple's Packagemaker to the many third-party applications).  While all the various package creation applications will ultimately create a desirable package in the end, very few of them have the triple-threat of easy code-review, replication, and portability.  This is where The Luggage comes in.
