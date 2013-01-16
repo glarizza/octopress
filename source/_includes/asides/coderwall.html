@@ -1,0 +1,31 @@
+{% if site.coderwall_user %}
+<section>
+  <h1>Coderwall Badges</h1>
+  <ul id="cw_badges">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <p id="badges"></p>
+  <script type="text/javascript">
+    function show_achievements(args) {
+      var badges = args["data"]["badges"];
+      var achievements = "";
+      for (var i = 0; i < badges.length; i++) {
+        var alt_text = badges[i]["name"];
+        var title_text = badges[i]["name"] + ' - ' + badges[i]["description"];
+        achievements += '<a href="http://coderwall.com/{{site.coderwall_user}}/"><img src="'
+          + badges[i]["badge"]
+          + '" width="48" height="48" alt="' + alt_text
+          + '" title="' + title_text
+          + '" style="margin-top: 7px;margin-right: 4px;"'
+          + '"/></a>';
+      };
+      document.getElementById("cw_badges").style.display = "none";
+      document.getElementById("badges").innerHTML = achievements;
+    }
+  </script>
+  <script src="http://coderwall.com/{{site.coderwall_user}}.json?callback=show_achievements"></script>
+  {% if site.coderwall_endorse_me %}
+  <p><a href="http://coderwall.com/{{site.coderwall_user}}"><img src="http://api.coderwall.com/{{site.coderwall_user}}/endorsecount.png" /></a></p>
+  {% endif %}
+</section>
+{% endif %}
