@@ -65,7 +65,7 @@ github_skip_forks: true
 
 # Coderwall
 coderwall_user: glarizza
-coderwall_endorse_me: true
+
 # Twitter
 twitter_user: glarizza
 twitter_tweet_count: 4
