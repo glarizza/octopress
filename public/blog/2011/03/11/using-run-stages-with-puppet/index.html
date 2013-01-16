@@ -1,0 +1,376 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Using Run Stages with Puppet - Shit Gary Says</title>
+  <meta name="author" content="Gary larizza">
+
+  
+  <meta name="description" content="As of version 2.6, Puppet introduced a feature called &#8220;Run Stages&#8221; that will allow you to better control the order that Puppet configures &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://glarizza.github.com/blog/2011/03/11/using-run-stages-with-puppet/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="Shit Gary Says" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shit Gary Says</a></h1>
+  
+    <h2>...things I don't want to forget</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:glarizza.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Using Run Stages With Puppet</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2011-03-11T11:34:00-08:00" pubdate data-updated="true">Mar 11<span>th</span>, 2011</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>As of version 2.6, Puppet introduced a feature called &#8220;Run Stages&#8221; that will allow you to better control the order that Puppet configures your system.  The problem with Run Stages (as of right now) is that there&#8217;s not that much good Documentation out there.  Hopefully this document helps someone else out there who wants to setup Run Stages in their own environment.</p>
+
+<h2>A NOTE ON SYNTAX!!!</h2>
+
+<p>One of THE MOST DIFFICULT concepts to understand for puppet newbies is that these two things are identical:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kn">include</span> <span class="nc">foo</span>
+</span><span class='line'><span class="nc">class</span> <span class="p">{</span> <span class="s1">&#39;foo&#39;</span><span class="p">:</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Both of these lines INVOKE the &#8216;foo&#8217; class for use on a particular node.  The problem is that the second method (the parameterized class method) looks nearly IDENTICAL to the method you would use to DECLARE the foo class in foo.pp.  The only difference is that the class name is now INSIDE the curly braces (versus being OUTSIDE the braces when you DECLARE the class in your foo.pp file).  It is VERY important that you distinguish the difference between DECLARING a class and using a parameterized class to INCLUDE the class in your site.pp file.  I will point this out later too&#8230;</p>
+
+<h2>A Linux Example - Repositories</h2>
+
+<p>I would bet that the resource with the most &#8220;require&#8221; and &#8220;before&#8221; dependencies in the Linux world (Well, in the RHEL world anyways) would be the yumrepo.  I&#8217;m sure most of us have many declared yumrepo resources in our manifests that each have their own tangled web of dependencies.  My goal was to create a &#8220;repo&#8221; class that would have all of my repositories and use a Run Stage to ensure that my repo class was installed prior to any other package installs.  Let&#8217;s look at some code:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">class</span> <span class="nc">general::repo</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nc">yumrepo</span> <span class="p">{</span> <span class="s1">&#39;huronrepo&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">descr</span>    <span class="p">=&gt;</span> <span class="s1">&#39;Huron Repository&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">enabled</span>  <span class="p">=&gt;</span>  <span class="s1">&#39;1&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">gpgcheck</span> <span class="p">=&gt;</span>  <span class="s1">&#39;0&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">baseurl</span>  <span class="p">=&gt;</span>  <span class="s1">&#39;http://10.13.0.6/huronrepo&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is my repo subclass based on my general base class.  I have a single repository, but could easily have another 5 or 10 as need arises (I&#8217;m keeping things simple for demo purposes).  Let&#8217;s look at another class:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">class</span> <span class="nc">general::centos</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">general::repo</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">package</span> <span class="p">{</span> <span class="s1">&#39;mcollective&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">name</span>    <span class="p">=&gt;</span> <span class="s2">&quot;mcollective&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">ensure</span>  <span class="p">=&gt;</span> <span class="s1">&#39;present&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="nc">Package</span><span class="p">[</span><span class="s1">&#39;stomp&#39;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here&#8217;s a centos subclass off of the general base class.  We&#8217;re including our repo class and declaring a single package that requires our &#8220;huronrepo&#8221; yumrepo.  If we only needed to install a single package, we could use the &#8220;require&#8221; parameter; but if you assume that we will eventually need to install MULTIPLE packages, then this logic doesn&#8217;t scale. Just to keep things consistent, here&#8217;s my general base class:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">class</span> <span class="nc">general</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kr">case</span> <span class="nv">$::operatingsystem</span> <span class="p">{</span>
+</span><span class='line'>    <span class="s1">&#39;CentOS&#39;</span><span class="p">:</span> <span class="p">{</span> <span class="kn">include</span> <span class="nc">general::centos</span> <span class="err">}</span>
+</span><span class='line'>    <span class="err">&#39;Darwin&#39;</span><span class="nc">:</span> <span class="p">{</span> <span class="ss">include</span> <span class="ss">general</span><span class="p">::</span><span class="ss">osx</span> <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You can see that we include the general::centos class as long as Puppet is running on a CentOS box.  There&#8217;s one final piece to this puzzle - it&#8217;s the actual declaration and assignment of the Run Stages.  I&#8217;m doing this in my site.pp file.  Here&#8217;s a snippit of what&#8217;s in my site.pp file:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="c-Singleline"># /etc/puppet/manifests/site.pp</span>
+</span><span class='line'>
+</span><span class='line'><span class="nc">Exec</span> <span class="p">{</span> <span class="ss">path</span> <span class="err">=&amp;</span><span class="ss">gt</span><span class="err">;</span> <span class="s2">&quot;/usr/bin:/usr/sbin:/bin:/sbin&quot;</span> <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline"># Run Stages</span>
+</span><span class='line'><span class="ss">stage</span> <span class="p">{</span> <span class="s1">&#39;pre&#39;</span><span class="err">:</span>
+</span><span class='line'>  <span class="ss">before</span> <span class="p">=&gt;</span> <span class="nc">Stage</span><span class="p">[</span><span class="s2">&quot;main&quot;</span><span class="p">],</span>
+</span><span class='line'><span class="p">}</span><span class="c-Singleline"></span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline"># Node Declaration</span>
+</span><span class='line'><span class="ss">node</span> <span class="s1">&#39;server.whomever.com&#39;</span> <span class="p">{</span>
+</span><span class='line'>  <span class="ss">class</span> <span class="p">{</span> <span class="s1">&#39;general::repos&#39;</span><span class="err">:</span>
+</span><span class='line'>    <span class="ss">stage</span> <span class="p">=&gt;</span> <span class="s1">&#39;pre&#39;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here&#8217;s where we&#8217;ve declared a &#8220;pre&#8221; stage that needs to run before the &#8220;main&#8221; stage.  We don&#8217;t have to declare the &#8220;main&#8221; stage because Puppet uses that stage by default.  Next, we&#8217;re including the general::repos class inside our &#8216;server.whomever.com&#8217; node declaration and assigning it to the &#8220;pre&#8221; stage (which means that everything in that class will get configured prior to our &#8220;main&#8221; stage).  Remember that you can declare as many stages as you need and chain them all to setup the order that you want, but that can become very unmanageable very quickly.  I find it ideal to setup a &#8216;pre&#8217; stage for repo setup, and then setting up dependencies within class files.</p>
+
+<h2>The World is Your Stage</h2>
+
+<p>This might not be the &#8220;best&#8221; way to use Run Stages, but it works for me.  Hopefully this little writeup cements the concept for you too.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Gary larizza</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2011-03-11T11:34:00-08:00" pubdate data-updated="true">Mar 11<span>th</span>, 2011</time>
+      
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://glarizza.github.com/blog/2011/03/11/using-run-stages-with-puppet/" data-via="glarizza" data-counturl="http://glarizza.github.com/blog/2011/03/11/using-run-stages-with-puppet/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2010/12/21/getting-started-with-the-luggage/" title="Previous Post: Getting Started with The Luggage">&laquo; Getting Started with The Luggage</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2012/02/06/jamf-netsus-appliance/" title="Next Post: JAMF NetSUS Appliance">JAMF NetSUS Appliance &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2012/02/06/jamf-netsus-appliance/">JAMF NetSUS Appliance</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/03/11/using-run-stages-with-puppet/">Using Run Stages with Puppet</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2010/12/21/getting-started-with-the-luggage/">Getting Started with The Luggage</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/glarizza">@glarizza</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'glarizza',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("glarizza", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/glarizza" class="twitter-follow-button" data-show-count="false">Follow @glarizza</a>
+  
+</section>
+
+
+
+<section class="googleplus">
+  <h1>
+    <a href="https://plus.google.com/ccshots?rel=author">
+      <img src="http://www.google.com/images/icons/ui/gprofile_button-32.png" width="32" height="32">
+      Google+
+    </a>
+  </h1>
+</section>
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Gary larizza -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
