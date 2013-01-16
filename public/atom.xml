@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Shit Gary Says]]></title>
+  <link href="http://glarizza.github.com/atom.xml" rel="self"/>
+  <link href="http://glarizza.github.com/"/>
+  <updated>2013-01-16T09:38:01-08:00</updated>
+  <id>http://glarizza.github.com/</id>
+  <author>
+    <name><![CDATA[Gary larizza]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+</feed>
