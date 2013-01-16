@@ -4,7 +4,7 @@
   <title><![CDATA[Shit Gary Says]]></title>
   <link href="http://glarizza.github.com/atom.xml" rel="self"/>
   <link href="http://glarizza.github.com/"/>
-  <updated>2013-01-16T15:19:27-08:00</updated>
+  <updated>2013-01-16T15:44:34-08:00</updated>
   <id>http://glarizza.github.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -177,6 +177,397 @@
 <p>That&#8217;s it for now - I just wanted to get something online to show people how to setup and poke around in the VM.  Later I can show you how to manipulate and manage the VM with Puppet, which is pretty fun.  Your VM should get you started and let you play around locally, but if you want to test out Netboot and the like then you&#8217;ll need an externally-accessible IP address (as apposed to the 192.168.x.x IP, which is only accessible from your Laptop).  You can change the settings in VMware Fusion to enable that (like we did in step 2).</p>
 
 <p>Hope this helped you out!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Using Git for Mac Sysadmins]]></title>
+    <link href="http://glarizza.github.com/blog/2012/01/24/using-git-for-mac-sysadmins/"/>
+    <updated>2012-01-24T15:25:00-08:00</updated>
+    <id>http://glarizza.github.com/blog/2012/01/24/using-git-for-mac-sysadmins</id>
+    <content type="html"><![CDATA[<p>As a former Mac Sysadmin, I frequently felt like I had one toe in the world in which Linux Sysadmins frequently found themselves, but was surrounded by a culture of GUI-Clickery that either feared, scorned, or flat-out avoided tools that were command-line based (or, as many will point out, used the GUI (Graphic User Interface) tools because &#8216;they worked&#8217; and that was all they needed).  This sucked because Linux Sysadmins have some tools that, as a current colleague would say, &#8216;are kind-of awesome.&#8217;</p>
+
+<p>One of those tools is Git, which is a Distributed Version Control System (or, DVCS).  Git, in a TOTAL nutshell, is a tool that allows you to create multiple &#8216;what-if scenarios&#8217; with very little cost and the ability to save yourself from&#8230;well, yourself.</p>
+
+<h2>Yes - You&#8217;re Going to Use the Command Line</h2>
+
+<p>Like I mentioned before, the GUI is ingrained in the culture of the Mac.  It wasn&#8217;t until OS X that Mac Sysadmins finally had a proper command-line (which I will refer to as the CLI, which is short for Command Line Interface.  If you&#8217;re not familiar with that terminology, I&#8217;m speaking about the interface you get when you run /Applications/Utilities/Terminal.app), so we&#8217;re a bit &#8216;new&#8217; to the whole idea.  I can help you if you fear or avoid the CLI; there&#8217;s always room for learning and I&#8217;ll try to hold your hand as much as possible.  For those that downright refuse to use the CLI&#8230;well, I&#8217;m sorry?</p>
+
+<h2>What IS Git?</h2>
+
+<p>Git is relatively new in the DVCS world (being initially released in 2005).  Developers have been using DVCS for MANY years with tools like CVS, Subversion, Git, Mercurial, and others.  For a team of developers who ALL need to make contributions to a SINGLE project or code base, it&#8217;s vital that they have a way to modify a file without breaking something that someone else is doing.  That&#8217;s what DVCS tools do - allow you to take something as large as a code base like OS X 10.7 (or something as small as a directory with a couple of files) and make changes without affecting everyone else who&#8217;s working on the SAME code base (or files in the directory).</p>
+
+<p>So why am I choosing to talk about Git instead of, say, Subversion?  That&#8217;s easy: lightweight branching and merging.  Git allows you to easily create a &#8216;topic branch&#8217; (or, using the metaphor above, a &#8216;what-if scenario&#8217;), make changes, and see if your changes are favorable or if they downright stink. If your changes are desirable, you can then &#8216;merge&#8217; your topic branch back in with your master branch (or, the original state the files were in when you created the topic branch in the first place).  If the changes don&#8217;t work well, you can just delete the topic branch and &#8216;no-harm, no-foul&#8217;; your original files remain unchanged and in the pristine condition that they existed when you first created the topic branch.  True, Subversion could do the same thing, but Git allows MANY people to do the same thing and then EASILY merge in EVERYONE&#8217;S changes without having to fight Subversion (just trust me on this if you&#8217;ve never used Subversion).</p>
+
+<p>And why am I choosing to talk about Git instead of Mercurial?  Easy - Git is what I learned :)  As I understand it Mercurial functions similarly, and I truly don&#8217;t have the experience with Mercurial to tell you the differences.  I&#8217;m talking about Git because Git is what I use and Git is what my company uses.</p>
+
+<h2>So what does this have to do with me as a Mac Sysadmin?</h2>
+
+<p>Good question.  Mac Sysadmins are more frequently finding themselves having to use the CLI to tune their clients and servers.  Also, many Mac Sysadmins are finding that certain CLI tools are working better for their teams (in terms of simplicity, responsibility, and visibility).  As they dip their toes into this CLI world, they&#8217;re finding that they want the same features they had in the GUI: the ability to do a &#8216;save-as&#8217;, to create &#8216;versions&#8217;, and to have the ability to have a rollback function similar to Time Machine.  Git gives you this through the CLI (or, yes, even through the GUI as I will mention later in the article).</p>
+
+<p>If you&#8217;re ready to take that step then follow me&hellip;</p>
+
+<h2>A note on Git and Github</h2>
+
+<p>You might have heard of <a href="http://www.github.com">Github</a>.  Github is a free (they have a free tier and plenty of subscription tiers of service) service that allows you to &#8216;push&#8217; your git repositories up to them for storage in &#8216;the cloud&#8217;.  Github is basically centralized-storage for your git repositories and is NOT NECESSARY for you to use git as a tool.  In reality, you CAN use Github or setup something like Gitolite on a local server in your environment to get most of the benefits of Github without having to push your repositories to Github&#8217;s servers.</p>
+
+<p>The bottom line: Github and git (the tool) are two different things.  Github didn&#8217;t create git, and git doesn&#8217;t need Github to work properly.  Keep that in mind as you read through.</p>
+
+<h2>Installing Git</h2>
+
+<p>Git can be installed in a variety of ways.  First and foremost, you can download the latest package from <a href="http://code.google.com/p/git-osx-installer/">Git&#8217;s Googlecode Page</a>.  You can also choose to install git through Macports or Homebrew as long as you have them installed (both of which require the Developer Tools&#8230;but so does The Luggage, the tool we&#8217;ll be using later).  Simply download the package from <a href="http://code.google.com/p/git-osx-installer/">Git&#8217;s Googlecode Page</a>, install it, and you should be good to go!</p>
+
+<p>If you&#8217;re using Macports, make sure the Developer Tools are installed, Macports is installed, and then do the following from the command line (<strong>PLEASE NOTE: The dollar sign is a prompt - you SHOULDN&#8217;T type it.  Lines BEGINNING with a dollar sign, or a prompt, should be typed by you.  Lines that DON&#8217;T begin with a prompt represent the output you receive from typing the command.  If you don&#8217;t see a line that DOESN&#8217;T begin with a prompt, then I&#8217;m not listing the output.  Got it?  Good!</strong>):</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ sudo port install git-core</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If you&#8217;re using Homebrew, make sure the Developer Tools are installed, Homebrew is installed, and then do the following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ sudo brew install git</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To check to see where and what version of git is installed, execute the following commands :</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ which git
+</span><span class='line'>$ git --version</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You should receive the path to where git is installed after you run the first command, and you should receive the version of git that&#8217;s currently installed on your system.  Any version of Git greater-than or equal to 1.7 is probably ideal, though most of the commands we&#8217;ll be using will probably work just fine with previous versions.</p>
+
+<h2>Your first Git repo</h2>
+
+<p>I find it&#8217;s easier to understand Git if I describe an actual scenario instead of talking in terms of &#8216;git can do&#8230;&#8217;.  I&#8217;m going to talk about using git with <a href="http://github.com/unixorn/luggage">The Luggage</a>.  <a href="http://glarizza.posterous.com/an-intro-to-using-the-luggage-for-packaging">I&#8217;ve written about The Luggage in several articles on this site</a>, so feel free to familiarize yourself with it if you haven&#8217;t used the tool before.  As a quick review, The Luggage is a tool that lets you create plain text Makefiles that can be used to build packages to install files, deploy scripts, and basically distribute &#8216;things&#8217; to the users in your organization.  Auditing HOW a package is made can be incredibly difficult for a team of sysadmins, but The Luggage helps you with this by using plain text Makefiles.  Git will give you the ability to track WHO made changes, WHEN they were made, and ROLLBACK the changes if you notice something undesirable happening.  Git and The Luggage are a perfect combo if you&#8217;re a sysadmin.</p>
+
+<p>Incidentally, The Luggage exists as a Github repository, so we have to CLONE it (or download it) from Github first before we can start playing with it.  I recommend creating a directory in your home directory (/Users/-username-) and cloning your repositories there - that way you retain ownership of the files and can work on them at will.  I put all my git repositories in ~/src, but if you&#8217;re using something like Mobile Home Directories or even Network Home Directories, then you&#8217;ll want to make sure that you&#8217;re not syncing these directories back to some central location and burning up your quota in some fashion.  Let&#8217;s create our repositories directory and clone The Luggage source code with these steps:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ mkdir -p ~/src
+</span><span class='line'>$ cd ~/src
+</span><span class='line'>$ git clone git://github.com/unixorn/luggage.git</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Doing this will create the ~/src directory where we&#8217;re putting all our repositories and download The Luggage source code to ~/src/luggage.  As you might be able to infer, git clone will clone an existing git repository from its location on another server (we call that the remote location, or just remote for short) down to a local directory.  This is usually how many sysadmins first encounter git - by needing to download something from Github or a remote server.  Let&#8217;s look and see what git knows about this repo by doing the following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git remote -v
+</span><span class='line'>origin  git://github.com/unixorn/luggage.git (fetch)
+</span><span class='line'>origin  git://github.com/unixorn/luggage.git (push)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This command will list all the remote repositories that we&#8217;re tracking.  By default, you will get a remote by the name of &#8216;origin&#8217; that lists the location where you originally cloned the repository (in our case, this is Github).</p>
+
+<p>Why is it listed twice?  Well, with git, you can pull down, or fetch, changes from a remote repository as well as push up changes from your LOCAL repository to the remote repository.  Frequently these paths will be the same, but in our case these links are to the READ-ONLY version of this repository, so trying to push changes will always fail because we don&#8217;t have access.  We&#8217;ll talk later about how you can push up changes, but for now let&#8217;s create our OWN repository instead of working with someone ELSE&#8217;S.</p>
+
+<h2>Creating your OWN git repo</h2>
+
+<p>The Luggage has a directory called Examples, but it&#8217;s absent of any actual examples.  We want to create our own directory where we can store our Luggage Examples.  For the purposes of this demo, I&#8217;m going to create a directory called luggage_examples that will contain our&#8230;well&#8230; Luggage examples:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cd ~/src
+</span><span class='line'>$ mkdir luggage_examples</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now that we have a directory, we need to make sure that git is tracking our changes so that we can create those &#8216;what if&#8217; scenarios and save our work.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cd ~/src/luggage_examples
+</span><span class='line'>$ git init
+</span><span class='line'>Initialized empty Git repository in /Users/gary/src/luggage_examples/.git/</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Git created a new empty repository at ~/src/luggage_examples and created a .git directory inside luggage_examples.  This .git directory is where git stores all its dynamic data that&#8217;s pertinent to your repository, so MAKE SURE not to delete it or modify any files in there (without knowing what you&#8217;re doing).</p>
+
+<p>That&#8217;s it!  We&#8217;ve created a repository!  Now let&#8217;s actually see how git works locally on your machine.</p>
+
+<h2>Working with Files</h2>
+
+<p>As I mentioned before, you don&#8217;t NEED Github to use git.  Git functions as a mechanism to &#8216;version&#8217; your files so you can rollback to a previous version or create our &#8216;what-if&#8217; scenarios and then accept (merge) or deny (destroy) them depending on our needs.  You can easily create a git repository on your local computer ONLY, but of course you lose the ability to restore your work if your hard drive malfunctions.  This is what Github gives us, and we&#8217;ll look at that functionality later.</p>
+
+<p>The example I&#8217;m going to use is based on the previous blog post I wrote on <a href="http://glarizza.posterous.com/using-googles-crankd-application-tracking-cod">Using the Google Mac Sysops Crankd Code</a>  Let&#8217;s create a directory for this example and create a starter Makefile:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ mkdir -p ~/src/luggage_examples/crankd_google
+</span><span class='line'>$ cd ~/src/luggage_examples/crankd_google
+</span><span class='line'>$ vim Makefile</span></code></pre></td></tr></table></div></figure>
+
+
+<p>I use vi or vim to edit files from the Terminal.  Feel free to use any text editor you like (nano, emacs, Textmate, TextWrangler, etc&#8230;), but CREATE a file called &#8216;Makefile&#8217; (note the capital M) and put it in ~/src/luggage_examples/crankd_google.  Here&#8217;s what I&#8217;ll put into this file:</p>
+
+<figure class='code'><figcaption><span>Crankd Luggage Example  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="c">    # Title:       Crankd-Google Example</span>
+</span><span class='line'><span class="c">    # Author:      Gary Larizza</span>
+</span><span class='line'><span class="c">    # Description: Something so Marnin doesn&#39;t kill me w/ postinstalls :)</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">    include /Users/gary/src/luggage/luggage.make</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="nv">TITLE</span><span class="o">=</span>Crankd-Google
+</span><span class='line'>    <span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.googlecode
+</span><span class='line'>    <span class="nv">PAYLOAD</span><span class="o">=</span>pack-crankd
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Great, so we have our skeleton of a file!  The file is saved in our folder, but we haven&#8217;t actually told git to track the file (and so git is AWARE that the file EXISTS, but it isn&#8217;t tracking its changes&#8230;yet).  This is a good time to explain the three states in which files can exist in a git repository.</p>
+
+<h2>The Three Stages of Files: Working Tree, Index, and Repository</h2>
+
+<p>Git has three &#8216;locations&#8217; by which a file can exist (even though it technically exists, in our case, in ~/src/luggage_examples/crankd_google).  These three locations are called the working tree, the index, and the repository</p>
+
+<h2>The Working Tree</h2>
+
+<p>When you put a file in a directory that&#8217;s being managed by git, but you haven&#8217;t told git to track the files changes, then this file is said to be in the working tree.  Our file we just created, Makefile, exists in the working tree currently.  Git knows that the file EXISTS, but it hasn&#8217;t saved the file&#8217;s &#8216;state&#8217; so we can rollback the file if need be.</p>
+
+<h2>The Index</h2>
+
+<p>The index is also known as the cache or the staging area, and it&#8217;s a place to put files before you&#8217;re ready to make a &#8216;commit&#8217; (which is something of a &#8216;milestone&#8217; or a version).  A commit is a representation of a point in time in the history of your git repository.  Think of it as a snapshot of your repository - &#8216;this is how our files looked at this specific time&#8217;.  With commits, you can always rollback to a specific &#8216;commit&#8217; (or even advance to a future commit if you had rolled-back to an earlier commit).  In order to rollback to a specific version of a file, though, you need to make a commit, and in order to make a commit you need to tell git what FILES will comprise our commit.  As I mentioned, a commit is just a point in time&#8230;but it doesn&#8217;t HAVE to be a point in time for a SINGLE file.  A commit can represent a specific point in time for a NUMBER of files all at once.  To make life easier for everyone, though, if you make a commit comprised of multiple files, then you want to make sure that the changes to the multiple files all represent a single functional change (for example, say we wanted to change a file that existed in our crankd_google folder that was being copied into a package, but we ALSO had to change the Makefile to change WHERE this file was to be put in the final package.  These two changes are related and comprise a single functional change, so you would want to make a commit with the changes to both files at once.).</p>
+
+<p>Our Makefile exists in the working tree currently, but we want to put it in the index because we&#8217;re ready to make a commit (no, our Makefile functionally doesn&#8217;t DO anything yet, but we want to make a commit so we can rollback to this point in time should we mess up anything).  Understand that the locations of the &#8216;working tree&#8217; and &#8216;index&#8217; are relative to git ONLY.  Yes, this file lives in ~/src/luggage_examples, and it will CONTINUE to exist in that directory (as far as the OS X filesystem is concerned), but to git it currently exists in the working tree.  How do we know that the file is in the working tree and NOT in the index?  Use the git status command to show you that info:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git status
+</span><span class='line'>
+</span><span class='line'># On branch master
+</span><span class='line'>#
+</span><span class='line'># Initial commit
+</span><span class='line'>#
+</span><span class='line'># Untracked files:
+</span><span class='line'>#   (use "git add ..." to include in what will be committed)
+</span><span class='line'>#
+</span><span class='line'># Makefile
+</span><span class='line'>nothing added to commit but untracked files present (use "git add" to track)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Anything listed under &#8216;Untracked files:&#8217; is in the working tree.  You can add a file to the index by doing the following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git add Makefile
+</span><span class='line'>$ git status
+</span><span class='line'>
+</span><span class='line'># On branch master
+</span><span class='line'>#
+</span><span class='line'># Initial commit
+</span><span class='line'>#
+</span><span class='line'># Changes to be committed:
+</span><span class='line'>#   (use "git rm --cached ..." to unstage)
+</span><span class='line'>#
+</span><span class='line'># new file:   Makefile
+</span><span class='line'>#</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Great, the file is in the index!  Notice that the file is listed under &#8216;Changes to be committed:&#8217; meaning that it&#8217;s in the index but NOT YET committed (or, &#8216;in the repository&#8217;).</p>
+
+<h2>The Repository</h2>
+
+<p>The Repository is where your files exist once they&#8217;ve been made part of a commit.  As I mentioned before, files must be committed before we can roll back their states (and their states can only be rolled back to individual commits).  You can never rollback a file&#8217;s state UNLESS it&#8217;s tied to a commit.  If you made a commit to a file last week and haven&#8217;t made another since, but wanted to revert a file to how it existed three days ago, you would be out of luck.  Git ONLY rolls back to specific commits (this is why it&#8217;s important to make frequent commits).  Before we make a commit, however, we need to make sure to identify ourself to git (if you haven&#8217;t previously set this up).  The user.email and user.name settings are the most important settings as they will be used to trace back what code you committed.  If you&#8217;re not sure of how git is setup, use the following command to list the git config settings:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git config -l
+</span><span class='line'>user.name=Gary Larizza
+</span><span class='line'>user.email=gary@puppetlabs.com</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>Should the user.name and user.email settings NOT be configured, you can configure them with the following commands:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git config user.name 'Your name'
+</span><span class='line'>$ git config user.email your@email.com</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now that you&#8217;ve been identified (so we can lay the blame on you in the future), let&#8217;s actually commit some code.  The <strong>git commit</strong> command allows git to commit all staged files to the repository in one fell swoop.</p>
+
+<p>Every commit has three things: the list of files and CONTENT of the files that should be committed, a SHA1 hash value representing the commit itself (essentially, a unique identifier for the commit so it can be tracked), and the commit message describing the what and why of the commit.</p>
+
+<p><strong>Creating a commit message seems insignificant but should NOT be taken lightly.</strong>  Great commit messages usually consist of a title line containing no more than 60 characters followed by a paragraph describing the changes.  Because many people may potentially need to trace your code and commits, it&#8217;s important to list how your code functioned previously, the reasoning behind the change, and what specifically was changed.  Don&#8217;t skimp with your commit messages!  Always assume that the next person to maintain your code owns many dangerous weapons and knows where you sleep, so do that person a favor and be as kind to them (in the form of great commit messages) as possible!</p>
+
+<p>Let&#8217;s begin the process of making a commit by issuing the following command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>git commit</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Executing <strong>git commit</strong> will drop you into the default text editor (which is vim by default - you can change this by running <strong>git config core.editor /path/to/your/editor</strong> before doing git commit) and show the following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># Please enter the commit message for your changes. Lines starting
+</span><span class='line'># with '#' will be ignored, and an empty message aborts the commit.
+</span><span class='line'># On branch master
+</span><span class='line'>#
+</span><span class='line'># Initial commit
+</span><span class='line'>#
+</span><span class='line'># Changes to be committed:
+</span><span class='line'>#   (use "git rm --cached ..." to unstage)
+</span><span class='line'>#
+</span><span class='line'># new file:   Makefile
+</span><span class='line'>#</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that everything that begins with a hash ( # ) is solely for YOUR benefit and will be stripped out of the commit message, so don&#8217;t worry about it being included.  Here&#8217;s an example of a commit message I would use in this instance:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Initial commit for crankd_google code
+</span><span class='line'>
+</span><span class='line'>Previously we didn't have an example for creating a package of the 
+</span><span class='line'>Google Mac Sysops code.  This commit adds the shell for the Makefile and
+</span><span class='line'>includes the luggage.make file in ~/src/luggage.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Great!  When you save and close your editor, you should see something that looks like this:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>[master (root-commit) f423ac6] Initial commit for crankd_google code
+</span><span class='line'> 1 files changed, 9 insertions(+), 0 deletions(-)
+</span><span class='line'> create mode 100644 Makefile</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This tells us that we made a commit on the master branch with a SHA1 hash ID beginning in f423ac6 being attributed to this commit.  In most cases, the first 7 digits of the hash are all you need for uniqueness when you refer to this commit, and that&#8217;s usually all that git will provide you in THIS instance.  YOUR SHA1 hash won&#8217;t match the hash provided above (hence a unique ID), so don&#8217;t panic if it doesn&#8217;t match up for you.  And that&#8217;s it!  We&#8217;ve done it!  Now what?</p>
+
+<h2>Examining your Work</h2>
+
+<p>Git tracks the ENTIRE history of a repository, and thus will track any and every commit made.  To display this history, run the following command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git log
+</span><span class='line'>commit f423ac6e9548d93f53b15d1154723c5abcd69738
+</span><span class='line'>Author: Gary Larizza 
+</span><span class='line'>Date:   Sun Jan 22 23:27:31 2012 -0500
+</span><span class='line'>
+</span><span class='line'>    Initial commit for crankd_google code
+</span><span class='line'>
+</span><span class='line'>    Previously we didn't have an example for creating a package of the
+</span><span class='line'>    Google Mac Sysops code.  This commit adds the shell for the Makefile and
+</span><span class='line'>    includes the luggage.make file in ~/src/luggage.</span></code></pre></td></tr></table></div></figure>
+
+
+<p>By default, git log will show ALL information about ALL of your commits (including the full commit message).  There&#8217;s a LARGE number of arguments that git log will accept that allows you to format the output for ANY purpose.  One of the common lists of arguments that I like to employ is the following (long) command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git log --pretty=format:'%C(yellow)%h%C(reset) %s %C(cyan)%cr%C(reset) %C(blue)%an%C(reset) %C(green)%d%C(reset)' --graph --date-order
+</span><span class='line'>* f423ac6 Initial commit for crankd_google code 10 minutes ago Gary Larizza  (HEAD, master)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This format both colorizes the output for readability and also shows a nice graph of commits as you do things like branching and merging.  Here&#8217;s an example of this command (with line length chopped for brevity) being run on a repository with many commits:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>* 72a2fe0 (#5445) Create /var/lib/puppet in OS X Package 26 hours ago Gary Larizza  (HEAD, gary/bug/2.7.x/5445_crea
+</span><span class='line'>*   c6667c5 Merge pull request #324 from glarizza/bug/2.7.x/2273_launchd_dashw 12 days ago Daniel Pittman  (origin/
+</span><span class='line'>|\  
+</span><span class='line'>* \   bc6c642 Merge pull request #318 from glarizza/bug/2.7.x/11202_apple_rake 12 days ago Michael Stahnke 
+</span><span class='line'>|\ \  
+</span><span class='line'>| * | 6c14a28 Build a Rake task for building Apple Packages 12 days ago Gary Larizza  (gary/bug/2.7.x/11202_apple_r
+</span><span class='line'>* | |   5ec5657 Merge pull request #127 from adrienthebo/ticket/2.7.x/8341-prevent_duplicate_loading_of_facts 12 da
+</span><span class='line'>|\ \ \  
+</span><span class='line'>* \ \ \   450da6a Merge pull request #92 from duritong/tickets/2.7.x/1886 12 days ago Daniel Pittman 
+</span><span class='line'>|\ \ \ \  
+</span><span class='line'>| | | | * d5bef5e (#2773) Use launchctl load -w in launchd provider 12 days ago Gary Larizza  (gary/bug/2.7.x/2273_
+</span><span class='line'>* | | | |   1cb2b6a Merge branch 'ticket/2.7.x/11714-envpuppet' into 2.7.x 12 days ago Josh Cooper 
+</span><span class='line'>|\ \ \ \ \  
+</span><span class='line'>| |_|_|_|/  
+</span><span class='line'>|/| | | |   
+</span><span class='line'>| * | | | 5accc69 (#11714) Use **%~dp0** to resolve bat file's install directory 12 days ago Josh Cooper 
+</span><span class='line'>* | | | |   fe79537 Merge pull request #323 from glarizza/bug/2.7.x/fix_launchd_spec 12 days ago Jeff McCune 
+</span><span class='line'>|\ \ \ \ \  
+</span><span class='line'>| * | | | | c865a80 Clean up launchd spec tests 12 days ago Gary Larizza  (gary/bug/2.7.x/fix_launchd_spec, bug/2.7
+</span><span class='line'>|/ / / / /</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As you can see, git log is powerful and handy to list out what&#8217;s happened to your repository.  You&#8217;ll also notice that it lists WHO made the changes, which is handy if you have MANY people contributing to the same code base.</p>
+
+<h2>That&#8217;s it for now</h2>
+
+<p>Hey , what gives?! We haven&#8217;t really DONE anything!  Git has a tremendous amount of power, and it&#8217;s important to know WHAT&#8217;S happening before I can progress and show you the power of git.  This article is ALREADY quite long, so I&#8217;ve broken it up for &#8216;easier&#8217; reading.  Rest assured, in parts 2 and beyond we will modify files, create topic branches, merge topic branches, use Github (for backup AND to allow others to contribute to your project), and much more.  Stay tuned for the following article(s) and as always, put any questions in the comments or email me directly!</p>
 ]]></content>
   </entry>
   
