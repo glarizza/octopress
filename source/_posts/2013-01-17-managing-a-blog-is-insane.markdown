@@ -45,7 +45,7 @@ The answer, it turns out, was right in front of my face the whole time.
 [Github Pages][ghp] has always been available to host web content or [Jekyll
 sites][jekyll] - I'm just late to the damn party.
 
-{% img left /images/blog_blog/left.png 300 300 %}
+[{% img left /images/blog_blog/left.png 300 300 %}](http://glarizza.github.com/images/blog_blog/left.png)
 
 Hosting static web content was out; like I said before, I don't really want to
 'manage' this thing. Jekyll, however, intrigued me. Jekyll is essentially

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: octopress | Shit Gary Says]]></title>
   <link href="http://glarizza.github.com/blog/categories/octopress/atom.xml" rel="self"/>
   <link href="http://glarizza.github.com/"/>
-  <updated>2013-01-17T16:09:09-08:00</updated>
+  <updated>2013-01-17T16:28:27-08:00</updated>
   <id>http://glarizza.github.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -58,7 +58,7 @@ action for my taste.</p>
 <a href="http://pages.github.com/">Github Pages</a> has always been available to host web content or <a href="https://github.com/mojombo/jekyll">Jekyll
 sites</a> - I'm just late to the damn party.</p>
 
-<p><img class="left" src="/images/blog_blog/left.png" width="300" height="300"></p>
+<p><a href="http://glarizza.github.com/images/blog_blog/left.png"><img class="left" src="/images/blog_blog/left.png" width="300" height="300"></a></p>
 
 <p>Hosting static web content was out; like I said before, I don't really want to
 'manage' this thing. Jekyll, however, intrigued me. Jekyll is essentially
