@@ -1,0 +1,501 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Using the Google Macops Crankd and Facter Code - Shit Gary Says</title>
+  <meta name="author" content="Gary larizza">
+
+  
+  <meta name="description" content="On December 21st, the MacOps team at Google released a Googlecode repository containing a couple of scripts that they use for managing Macs. The &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://glarizza.github.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="Shit Gary Says" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-37766331-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shit Gary Says</a></h1>
+  
+    <h2>...things I don't want to forget</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:glarizza.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Using the Google Macops Crankd and Facter Code</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2011-12-31T00:00:00-08:00" pubdate data-updated="true">Dec 31<span>st</span>, 2011</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>On December 21st, the MacOps team at Google released a Googlecode repository containing a couple of scripts that they use for managing Macs.  The scripts provided interface with <a href="http://code.google.com/p/pymacadmin/">crankd (available in the Pymacadmin code suite)</a> and <a href="http://puppetlabs.com/puppet/related-projects/facter/">Facter</a>, which are a couple of tools with which you MIGHT not be familiar.</p>
+
+<p>I saw a couple of questions on the ##osx-server IRC channel about how these scripts work, and I decided to do a quick writeup on how you would implement the scripts in your environment.  This is meant to be a walkthrough to getting their scripts up-and-running, but please READ EVERYTHING FIRST before implementing.</p>
+
+<h2>Prepare Crankd:</h2>
+
+<p>Crankd is a vital part of the Google MacOps puzzle.  Crankd essentially executes Python code in response to System/Network events on your system.  I have MUCH MORE information on crankd <a href="http://glarizza.posterous.com/using-crankd-to-react-to-network-events">in a guide I posted a while back</a>, but I&#8217;m going to give you the &#8216;quick version&#8217; for those looking to get started quickly:</p>
+
+<ul>
+<li>Clone or download the Pymacadmin Github repo.  If you have git installed you can accomplish that by doing the following from the command line:</li>
+</ul>
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>git clone https://github.com/acdha/pymacadmin.git</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If you DON&#8217;T have git on your machine just visit <a href="https://github.com/acdha/pymacadmin">https://github.com/acdha/pymacadmin</a>, click on the Downloads tab, and download the .tar.gz or .zip version of the repo.  Next, double-click on the resultant file to expand it into a folder.</p>
+
+<ul>
+<li>Change to the pymacadmin folder and run the install-crankd.sh script which will install crankd.py into /usr/local/sbin and create /Library/Application Support/crankd  Once you&#8217;ve changed to the pymacadmin source directory, run the following from the command line:</li>
+</ul>
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo ./install-crankd.sh</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>OR&#8230;</h2>
+
+<p>If you already have a Puppet environment configured, I&#8217;ve written a <a href="http://github.com/glarizza/puppetlabs-crankd">module that will install crankd for you.</a> The upside is that this module should work out of the box, but the downside is that I&#8217;ve copied the source to the module&#8217;s files/ directory.  Since Pymacadmin hasn&#8217;t been changed since 2009, though, this shouldn&#8217;t pose a big issue.  Simply copy this module to your modulepath and declare it with the following line in your node declarations:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kn">include</span> <span class="nc">crankd</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Download the Google-macops source code</h2>
+
+<p>You can download the source by using subversion with the following command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>svn checkout http://google-macops.googlecode.com/svn/trunk/ google-macops-read-only</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will create a folder called &#8216;google-macops-read-only&#8217; in the current directory.</p>
+
+<h2>Copy the Python crankd files</h2>
+
+<p>Change to the directory where you downloaded the Google-macops source code and you will notice two folders: crankd and facter.  Change to the crankd directory and copy all of the python files to /Library/Application Support/crankd with the following command from the command line:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo cp *.py /Library/Application\ Support/crankd/</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This copies two files into /Library/Application Support/crankd: ApplicationUsage.py and NSWorkspaceHandler.py.  The ApplicationUsage.py file contains most of the magic.  In a nutshell, it will create a SQLite database file called /var/db/application_usage.sqlite containing information on applications that are launched and quit (we will inspect this information later), and it will update the database any time an application is (you guessed it) launched or quit.  Crankd provides the mechanism by which the code is run any time an application is launched/quit and these Python files actually update the database with the pertinent information.</p>
+
+<h2>Copy the provided crankd plist to /Library/Preferences</h2>
+
+<p>Changing to the crankd directory in the google-macops-read-only directory you should find a file called &#8216;com.googlecode.pymacadmin.crankd.plist&#8217; which is a sample plist for utilizing Google&#8217;s code that tracks application usage via crankd.  It&#8217;s up to you to merge these Python methods into your existing crankd setup, or utilize the plist they&#8217;ve provided.  The plist essentially says that any time an application is LAUNCHED, you should call the &#8216;OnApplicationLaunch&#8217; method in the NSWorkspaceHandler class, and any time an application is QUIT, you should call the &#8216;OnApplicationQuit&#8217; method in the NSWorkspaceHandler class.  Let&#8217;s accept these conditions and copy their plist into /Library/Preferences (assuming that we don&#8217;t have an existing crankd setup) with the following command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>cp com.googlecode.pymacadmin.crankd.plist /Library/Preferences</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Test out crankd from the command line</h2>
+
+<p>With crankd.py installed, the Python methods copied to /Library/Application Support/crankd, and the com.googlecode.pymacadmin.crankd.plist plist copied to /Library/Preferences, we can finally test out the code to see how it works.  Start crankd with the following command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo /usr/local/sbin/crankd.py --config=/Library/Preferences/com.googlecode.pymacadmin.crankd.plist</span></code></pre></td></tr></table></div></figure>
+
+
+<p>After entering your password, you should see the following in your terminal:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>INFO: Loading configuration from /Library/Preferences/com.googlecode.pymacadmin.crankd.plist
+</span><span class='line'>INFO: Listening for these NSWorkspace notifications:  NSWorkspaceWillLaunchApplicationNotification, NSWorkspaceDidTerminateApplicationNotification</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now, let&#8217;s launch a couple of applications and see how we track their usage through the sqlite database.  Do this by starting Safari and TextEdit, and then closing them (note that you MUST start them fresh - if they&#8217;re already opened make sure to close them, then open them, and THEN close them again).  You should see something that looks like the following in the terminal:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>INFO: Application Launched: bundle_id: com.apple.Safari version: 6534.52.7 path: /Applications/Safari.app
+</span><span class='line'>INFO: Application Launched: bundle_id: com.apple.TextEdit version: 264 path: /Applications/TextEdit.app
+</span><span class='line'>INFO: Application Quit: bundle_id: com.apple.TextEdit version: 264 path: /Applications/TextEdit.app
+</span><span class='line'>INFO: Application Quit: bundle_id: com.apple.Safari version: 6534.52.7 path: /Applications/Safari.app</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Finally, you can quit crankd from the terminal by holding the control button down and pressing the &#8216;c&#8217; key on your keyboard.</p>
+
+<h2>Inspect the application_usage.sqlite database</h2>
+
+<p>If you&#8217;re proficient in SQL, feel free to browse through the contents of the database.  To keep things simple, let&#8217;s download an app called <a href="http://sourceforge.net/projects/sqlitebrowser/files/latest/download">SQLite Database Browser</a> from the following link.  Launch SQLite Database Browser, go to File -&gt; Open Database, hold the Shift and Command buttons down on your keyboard and then press the &#8216;g&#8217; button to bring up the &#8216;Go to the folder:&#8217; dialog box, type in /var/db/application_usage.sqlite in the box and press return, and then finally click the open button to open the database.  If you click the &#8216;Browse Data&#8217; tab near the top of the window, you should be able to see the raw data in the database.  It should list the last time (in epoch time), bundle id, version, path, and number of times that the application has been launched (note that you can use an <a href="http://www.onlineconversion.com/unix_time.htm">online utility</a> to convert from epoch time to regular time).</p>
+
+<h2>Inspect the Facter fact</h2>
+
+<p><a href="http://puppetlabs.com/puppet/related-projects/facter/">If you&#8217;re not familiar with Facter</a>, you should click on the link and check it out.  Facter is an awesome binary designed to gather information about your system and report it back in the form of a &#8216;fact&#8217;, which is essentially a key =&gt; value pair (for example, the &#8216;operatingsystem&#8217; fact will return a value of &#8216;Darwin&#8217; on Macs running OS X or &#8216;RedHat&#8217; on machines running RedHat Linux).  Google has provided a custom Facter fact that will report a fact NAME that corresponds with an application you&#8217;ve launched on your system (such as &#8216;app_lastrun_com.apple.safari&#8217; or &#8216;app_lastrun_com.apple.textedit&#8217;) and a VALUE with the epoch time or the last time that application was run.  The output will ultimately look like this:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>app_lastrun_com.apple.safari =&gt; 1325203354
+</span><span class='line'>app_lastrun_com.apple.textedit =&gt; 1325203357</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>NOTE:</strong> This Facter fact requires the SQLite database that is created by the crankd code from above, so make sure you&#8217;ve followed the previous steps or you might have problems getting fact values.</p>
+
+<p>We&#8217;ll need to install Facter.  <a href="http://downloads.puppetlabs.com/mac">You can download a copy of Facter from Puppet Labs directly</a>.  Simply download the DMG, expand it, and run the package installer inside.</p>
+
+<p>To test out the fact, we will need the full path to the folder containing the google-macops code we downloaded in step two above.  I downloaded the source to a path of /Users/gary/Desktop/google-macops-read-only and so that&#8217;s the path I&#8217;m going to use in the next step.</p>
+
+<p>Facter is designed to work with <a href="http://puppetlabs.com/puppet/puppet-enterprise/">Puppet</a>, but you can also run it independently.  Facter is ALSO designed to be plug-able with custom facts, and that&#8217;s what Google has shipped us.  In order to TEST these custom facts, we need to set the RUBYLIB environment variable (as Facter will look for a custom facts inside a &#8216;facter&#8217; directory that&#8217;s located inside the path returned by the RUBYLIB environment variable).  RUBYLIB should be set to the path of the downloaded google-macops source, so in my case I would run the following from the command line:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">export </span><span class="nv">RUBYLIB</span><span class="o">=</span>/Users/gary/Desktop/google-macops-read-only
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>NOTE:</strong>  make sure RUBYLIB is in capital letters.  If you downloaded the google-macops source to a different path, substitute your path for &#8216;/Users/gary/Desktop/google-macops-read-only&#8217;.</p>
+
+<p>Next, we need to make sure we have the &#8216;sqlite3&#8217; ruby library installed on our system as the custom fact requires this library for correct operation.  One way to install sqlite3 is by using Rubygems with the following command from the command line:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo gem install sqlite3</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>NOTE:</strong> If you have troubles using Rubygems to install sqlite3, you can either build it from source (which is beyond the scope of this article), or you can use Macports (if you have it installed) to install it with the following command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo port install sqlite3</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The last step is to actually run Facter to test out the fact.  You may have a problem TESTING this fact if you installed sqlite3 via Rubygems - the reason is because the custom fact doesn&#8217;t actually load Rubygems before it tries to load sqlite3 (this isn&#8217;t a problem if you use the fact with Puppet as Puppet loads Rubygems.  It&#8217;s ALSO not a problem if you&#8217;re running version 1.9 or greater of ruby, as you no longer need to load Rubygems BEFORE trying to include a ruby library with ruby 1.9 or greater).  To remedy this problem, let&#8217;s add a single line to the custom fact.  Notice the line that says the following:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="nb">require</span> <span class="s1">&#39;sqlite3&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This line is where the custom fact loads the sqlite3 library.  Now, the line BEFORE this line we need to add a single line:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="nb">require</span> <span class="s1">&#39;rubygems&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This line will load Rubygems so that it knows where to access the sqlite3 library.  Note that this line is unnecessary if you use this custom fact with Puppet as, like I mentioned before, Puppet already loads Rubygems.  For the purpose of our testing, though, we will need this line.</p>
+
+<p>Finally, let&#8217;s test the fact by running Facter from the command line:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>facter</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You SHOULD get a list of ALL your Facter facts, but up at the top you should have a couple of facts that begin with &#8216;app_lastrun_&#8217; and then end with the bundle_id of the application that was launched.  These are the custom facts that have been created.</p>
+
+<p>You&#8217;ll note that the time reported is in epoch time.  If you&#8217;d prefer a date/time string that&#8217;s more legible, you&#8217;ll need to modify the apps.rb file in the facter directory.  Line 39 in the file (or, line 40 if you added the require &#8216;rubygems&#8217; line previously) should say &#8216;appdate&#8217; but change it to say the following:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="no">Time</span><span class="o">.</span><span class="n">at</span><span class="p">(</span><span class="n">appdate</span><span class="o">.</span><span class="n">to_i</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Running facter again (like above) will give you a more legible date:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>app_lastrun_com.apple.safari =&gt; Thu Dec 29 19:02:34 -0500 2011
+</span><span class='line'>app_lastrun_com.apple.textedit =&gt; Thu Dec 29 19:02:37 -0500 2011</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>???</h2>
+
+<h2>Profit!</h2>
+
+<p>Now that you know how the code works, you&#8217;re free to modify, extend, and improve it as you see fit!  The one thing that&#8217;s missing here is a LaunchDaemon that keeps crankd running in the background.  Since you&#8217;re maintaining your environment, I&#8217;ll leave that up to you (though I walk you through this step in <a href="http://glarizza.posterous.com/using-crankd-to-react-to-network-events">&#8216;Step 5.  A LaunchDaemon to keep crankd running&#8217; in my previous crankd writeup</a>).  Feel free to check out my other writeups on Facter, Puppet, and Crankd to see how I used to manage hundreds of Macs in an educational environment!</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Gary larizza</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2011-12-31T00:00:00-08:00" pubdate data-updated="true">Dec 31<span>st</span>, 2011</time>
+      
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://glarizza.github.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/" data-via="glarizza" data-counturl="http://glarizza.github.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2011/03/11/using-run-stages-with-puppet/" title="Previous Post: Using Run Stages with Puppet">&laquo; Using Run Stages with Puppet</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2012/01/24/using-git-for-mac-sysadmins/" title="Next Post: Using Git for Mac Sysadmins">Using Git for Mac Sysadmins &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/01/17/managing-a-blog-is-insane/">Managing a blog is insane; Octopress FTW!</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/02/06/jamf-netsus-appliance/">JAMF NetSUS Appliance</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/01/24/using-git-for-mac-sysadmins/">Using Git for Mac Sysadmins</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/">Using the Google Macops Crankd and Facter Code</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/03/11/using-run-stages-with-puppet/">Using Run Stages with Puppet</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/glarizza">@glarizza</a> on GitHub
+  
+  <script type="text/javascript">
+    $.domReady(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'glarizza',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("glarizza", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/glarizza" class="twitter-follow-button" data-show-count="false">Follow @glarizza</a>
+  
+</section>
+
+
+
+
+
+<section>
+  <h1>Coderwall Badges</h1>
+  <ul id="cw_badges">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <p id="badges"></p>
+  <script type="text/javascript">
+    function show_achievements(args) {
+      var badges = args["data"]["badges"];
+      var achievements = "";
+      for (var i = 0; i < badges.length; i++) {
+        var alt_text = badges[i]["name"];
+        var title_text = badges[i]["name"] + ' - ' + badges[i]["description"];
+        achievements += '<a href="http://coderwall.com/glarizza/"><img src="'
+          + badges[i]["badge"]
+          + '" width="48" height="48" alt="' + alt_text
+          + '" title="' + title_text
+          + '" style="margin-top: 7px;margin-right: 4px;"'
+          + '"/></a>';
+      };
+      document.getElementById("cw_badges").style.display = "none";
+      document.getElementById("badges").innerHTML = achievements;
+    }
+  </script>
+  <script src="http://coderwall.com/glarizza.json?callback=show_achievements"></script>
+  
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Gary larizza -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shitgarysays';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://glarizza.github.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/';
+        var disqus_url = 'http://glarizza.github.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
