@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: git | Shit Gary Says]]></title>
-  <link href="http://glarizza.github.com/blog/categories/git/atom.xml" rel="self"/>
-  <link href="http://glarizza.github.com/"/>
-  <updated>2013-01-19T11:44:50-08:00</updated>
-  <id>http://glarizza.github.com/</id>
+  <link href="http://garylarizza.com/blog/categories/git/atom.xml" rel="self"/>
+  <link href="http://garylarizza.com/"/>
+  <updated>2013-01-19T11:54:12-08:00</updated>
+  <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Managing a blog is insane; Octopress FTW!]]></title>
-    <link href="http://glarizza.github.com/blog/2013/01/17/managing-a-blog-is-insane/"/>
+    <link href="http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/"/>
     <updated>2013-01-17T00:00:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2013/01/17/managing-a-blog-is-insane</id>
+    <id>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane</id>
     <content type="html"><![CDATA[<p>Masochists are everywhere. Managing a system by hand appeals to a certain subset
 of the population, but I joined <a href="http://www.puppetlabs.com">Puppet Labs</a> because
 I was a fan of automating the shit out of menial tasks. I have no burning desire
@@ -363,9 +363,9 @@ if you can EDIT A TEXT FILE then you can 'maintain' a blog.</p>
   
   <entry>
     <title type="html"><![CDATA[Using Git for Mac Sysadmins]]></title>
-    <link href="http://glarizza.github.com/blog/2012/01/24/using-git-for-mac-sysadmins/"/>
+    <link href="http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins/"/>
     <updated>2012-01-24T15:25:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2012/01/24/using-git-for-mac-sysadmins</id>
+    <id>http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins</id>
     <content type="html"><![CDATA[<p>As a former Mac Sysadmin, I frequently felt like I had one toe in the world in which Linux Sysadmins frequently found themselves, but was surrounded by a culture of GUI-Clickery that either feared, scorned, or flat-out avoided tools that were command-line based (or, as many will point out, used the GUI (Graphic User Interface) tools because 'they worked' and that was all they needed).  This sucked because Linux Sysadmins have some tools that, as a current colleague would say, 'are kind-of awesome.'</p>
 
 <p>One of those tools is Git, which is a Distributed Version Control System (or, DVCS).  Git, in a TOTAL nutshell, is a tool that allows you to create multiple 'what-if scenarios' with very little cost and the ability to save yourself from...well, yourself.</p>

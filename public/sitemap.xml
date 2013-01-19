@@ -1,45 +1,45 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>
     <url>
-        <loc>http://glarizza.github.com/blog/2010/12/21/getting-started-with-the-luggage/</loc>
+        <loc>http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage/</loc>
         <lastmod>2013-01-16T12:59:38-08:00</lastmod>
     </url>
     <url>
-        <loc>http://glarizza.github.com/blog/2011/03/11/using-run-stages-with-puppet/</loc>
+        <loc>http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet/</loc>
         <lastmod>2013-01-16T12:59:58-08:00</lastmod>
     </url>
     <url>
         <loc>
-            http://glarizza.github.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/
+            http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/
         </loc>
         <lastmod>2013-01-17T19:58:22-08:00</lastmod>
     </url>
     <url>
-        <loc>http://glarizza.github.com/blog/2012/01/24/using-git-for-mac-sysadmins/</loc>
+        <loc>http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins/</loc>
         <lastmod>2013-01-16T15:44:30-08:00</lastmod>
     </url>
     <url>
-        <loc>http://glarizza.github.com/blog/2012/02/06/jamf-netsus-appliance/</loc>
+        <loc>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/</loc>
         <lastmod>2013-01-16T13:00:28-08:00</lastmod>
     </url>
     <url>
-        <loc>http://glarizza.github.com/blog/2013/01/17/managing-a-blog-is-insane/</loc>
+        <loc>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/</loc>
         <lastmod>2013-01-17T17:15:05-08:00</lastmod>
     </url>
     <url>
-        <loc>http://glarizza.github.com/about/</loc>
+        <loc>http://garylarizza.com/about/</loc>
         <lastmod>2013-01-16T15:52:09-08:00</lastmod>
     </url>
     <url>
-        <loc>http://glarizza.github.com/blog/archives/</loc>
+        <loc>http://garylarizza.com/blog/archives/</loc>
         <lastmod>2013-01-17T19:58:22-08:00</lastmod>
     </url>
     <url>
-        <loc>http://glarizza.github.com/</loc>
+        <loc>http://garylarizza.com/</loc>
         <lastmod>2013-01-17T19:58:22-08:00</lastmod>
     </url>
     <url>
-        <loc>http://glarizza.github.com/robots.txt</loc>
+        <loc>http://garylarizza.com/robots.txt</loc>
         <lastmod>2013-01-16T09:32:41-08:00</lastmod>
     </url>
 </urlset>

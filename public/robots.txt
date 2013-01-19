@@ -1,4 +1,4 @@
 User-agent: *
 Disallow: 
 
-Sitemap: http://glarizza.github.com/sitemap.xml 
+Sitemap: http://garylarizza.com/sitemap.xml 

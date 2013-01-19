@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: runstages | Shit Gary Says]]></title>
-  <link href="http://glarizza.github.com/blog/categories/runstages/atom.xml" rel="self"/>
-  <link href="http://glarizza.github.com/"/>
-  <updated>2013-01-19T11:44:50-08:00</updated>
-  <id>http://glarizza.github.com/</id>
+  <link href="http://garylarizza.com/blog/categories/runstages/atom.xml" rel="self"/>
+  <link href="http://garylarizza.com/"/>
+  <updated>2013-01-19T11:54:12-08:00</updated>
+  <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Using Run Stages with Puppet]]></title>
-    <link href="http://glarizza.github.com/blog/2011/03/11/using-run-stages-with-puppet/"/>
+    <link href="http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet/"/>
     <updated>2011-03-11T11:34:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2011/03/11/using-run-stages-with-puppet</id>
+    <id>http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet</id>
     <content type="html"><![CDATA[<p>As of version 2.6, Puppet introduced a feature called "Run Stages" that will allow you to better control the order that Puppet configures your system.  The problem with Run Stages (as of right now) is that there's not that much good Documentation out there.  Hopefully this document helps someone else out there who wants to setup Run Stages in their own environment.</p>
 
 <h2>A NOTE ON SYNTAX!!!</h2>

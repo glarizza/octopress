@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: os x and linux | Shit Gary Says]]></title>
-  <link href="http://glarizza.github.com/blog/categories/os-x-and-linux/atom.xml" rel="self"/>
-  <link href="http://glarizza.github.com/"/>
-  <updated>2013-01-19T11:44:50-08:00</updated>
-  <id>http://glarizza.github.com/</id>
+  <link href="http://garylarizza.com/blog/categories/os-x-and-linux/atom.xml" rel="self"/>
+  <link href="http://garylarizza.com/"/>
+  <updated>2013-01-19T11:54:12-08:00</updated>
+  <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[JAMF NetSUS Appliance]]></title>
-    <link href="http://glarizza.github.com/blog/2012/02/06/jamf-netsus-appliance/"/>
+    <link href="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/"/>
     <updated>2012-02-06T11:22:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2012/02/06/jamf-netsus-appliance</id>
+    <id>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance</id>
     <content type="html"><![CDATA[<h2>JAMF's NetSUS Appliance - Netboot in a Box</h2>
 
 <p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">Today, JAMF released a new appliance VM</a> based on Ubuntu 10.04 LTS (Lucid) that, for once, provides an 'out of the box' implementation of Netboot and Software Update Service WITHOUT requiring OS X hardware (based on <a href="http://github.com/wdas/reposado">Reposado</a>) and <a href="http://twitpic.com/8glygw">other open-source technologies.</a></p>

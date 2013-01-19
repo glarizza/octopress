@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Shit Gary Says]]></title>
-  <link href="http://glarizza.github.com/atom.xml" rel="self"/>
-  <link href="http://glarizza.github.com/"/>
-  <updated>2013-01-19T11:44:50-08:00</updated>
-  <id>http://glarizza.github.com/</id>
+  <link href="http://garylarizza.com/atom.xml" rel="self"/>
+  <link href="http://garylarizza.com/"/>
+  <updated>2013-01-19T11:54:12-08:00</updated>
+  <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Managing a blog is insane; Octopress FTW!]]></title>
-    <link href="http://glarizza.github.com/blog/2013/01/17/managing-a-blog-is-insane/"/>
+    <link href="http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/"/>
     <updated>2013-01-17T00:00:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2013/01/17/managing-a-blog-is-insane</id>
+    <id>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane</id>
     <content type="html"><![CDATA[<p>Masochists are everywhere. Managing a system by hand appeals to a certain subset
 of the population, but I joined <a href="http://www.puppetlabs.com">Puppet Labs</a> because
 I was a fan of automating the shit out of menial tasks. I have no burning desire
@@ -58,7 +58,7 @@ action for my taste.</p>
 <a href="http://pages.github.com/">Github Pages</a> has always been available to host web content or <a href="https://github.com/mojombo/jekyll">Jekyll
 sites</a> - I&#8217;m just late to the damn party.</p>
 
-<p><a href="http://glarizza.github.com/images/blog_blog/left.png"><img class="left" src="http://glarizza.github.com/images/blog_blog/left.png" width="300" height="300"></a></p>
+<p><a href="http://glarizza.github.com/images/blog_blog/left.png"><img class="left" src="http://garylarizza.com/images/blog_blog/left.png" width="300" height="300"></a></p>
 
 <p>Hosting static web content was out; like I said before, I don&#8217;t really want to
 &#8216;manage&#8217; this thing. Jekyll, however, intrigued me. Jekyll is essentially
@@ -374,9 +374,9 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   
   <entry>
     <title type="html"><![CDATA[JAMF NetSUS Appliance]]></title>
-    <link href="http://glarizza.github.com/blog/2012/02/06/jamf-netsus-appliance/"/>
+    <link href="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/"/>
     <updated>2012-02-06T11:22:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2012/02/06/jamf-netsus-appliance</id>
+    <id>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance</id>
     <content type="html"><![CDATA[<h2>JAMF&#8217;s NetSUS Appliance - Netboot in a Box</h2>
 
 <p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">Today, JAMF released a new appliance VM</a> based on Ubuntu 10.04 LTS (Lucid) that, for once, provides an &#8216;out of the box&#8217; implementation of Netboot and Software Update Service WITHOUT requiring OS X hardware (based on <a href="http://github.com/wdas/reposado">Reposado</a>) and <a href="http://twitpic.com/8glygw">other open-source technologies.</a></p>
@@ -541,9 +541,9 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   
   <entry>
     <title type="html"><![CDATA[Using Git for Mac Sysadmins]]></title>
-    <link href="http://glarizza.github.com/blog/2012/01/24/using-git-for-mac-sysadmins/"/>
+    <link href="http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins/"/>
     <updated>2012-01-24T15:25:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2012/01/24/using-git-for-mac-sysadmins</id>
+    <id>http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins</id>
     <content type="html"><![CDATA[<p>As a former Mac Sysadmin, I frequently felt like I had one toe in the world in which Linux Sysadmins frequently found themselves, but was surrounded by a culture of GUI-Clickery that either feared, scorned, or flat-out avoided tools that were command-line based (or, as many will point out, used the GUI (Graphic User Interface) tools because &#8216;they worked&#8217; and that was all they needed).  This sucked because Linux Sysadmins have some tools that, as a current colleague would say, &#8216;are kind-of awesome.&#8217;</p>
 
 <p>One of those tools is Git, which is a Distributed Version Control System (or, DVCS).  Git, in a TOTAL nutshell, is a tool that allows you to create multiple &#8216;what-if scenarios&#8217; with very little cost and the ability to save yourself from&#8230;well, yourself.</p>
@@ -932,9 +932,9 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   
   <entry>
     <title type="html"><![CDATA[Using the Google Macops Crankd and Facter Code]]></title>
-    <link href="http://glarizza.github.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/"/>
+    <link href="http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/"/>
     <updated>2011-12-31T00:00:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code</id>
+    <id>http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code</id>
     <content type="html"><![CDATA[<p>On December 21st, the MacOps team at Google released a Googlecode repository containing a couple of scripts that they use for managing Macs.  The scripts provided interface with <a href="http://code.google.com/p/pymacadmin/">crankd (available in the Pymacadmin code suite)</a> and <a href="http://puppetlabs.com/puppet/related-projects/facter/">Facter</a>, which are a couple of tools with which you MIGHT not be familiar.</p>
 
 <p>I saw a couple of questions on the ##osx-server IRC channel about how these scripts work, and I decided to do a quick writeup on how you would implement the scripts in your environment.  This is meant to be a walkthrough to getting their scripts up-and-running, but please READ EVERYTHING FIRST before implementing.</p>
@@ -1120,9 +1120,9 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   
   <entry>
     <title type="html"><![CDATA[Using Run Stages with Puppet]]></title>
-    <link href="http://glarizza.github.com/blog/2011/03/11/using-run-stages-with-puppet/"/>
+    <link href="http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet/"/>
     <updated>2011-03-11T11:34:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2011/03/11/using-run-stages-with-puppet</id>
+    <id>http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet</id>
     <content type="html"><![CDATA[<p>As of version 2.6, Puppet introduced a feature called &#8220;Run Stages&#8221; that will allow you to better control the order that Puppet configures your system.  The problem with Run Stages (as of right now) is that there&#8217;s not that much good Documentation out there.  Hopefully this document helps someone else out there who wants to setup Run Stages in their own environment.</p>
 
 <h2>A NOTE ON SYNTAX!!!</h2>
@@ -1246,9 +1246,9 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   
   <entry>
     <title type="html"><![CDATA[Getting Started with The Luggage]]></title>
-    <link href="http://glarizza.github.com/blog/2010/12/21/getting-started-with-the-luggage/"/>
+    <link href="http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage/"/>
     <updated>2010-12-21T09:47:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2010/12/21/getting-started-with-the-luggage</id>
+    <id>http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage</id>
     <content type="html"><![CDATA[<p>With the current movement in the Mac Community toward modular imaging strategies, there&#8217;s a spike in the need for properly formed package installers. Apple&#8217;s package format is well documented for its benefits and flaws and there are a string of applications that will help you create your perfect package (from Apple&#8217;s Packagemaker to the many third-party applications).  While all the various package creation applications will ultimately create a desirable package in the end, very few of them have the triple-threat of easy code-review, replication, and portability.  This is where The Luggage comes in.</p>
 
 <p><a href="http://github.com/unixorn/luggage">The Luggage</a> is a packaging system based on GNU&#8217;s make command that is found on most every *nix-based operating system (OS X included).  Joe Block, the author, open-sourced the project based on an internal Google tool for creating packages with Makefiles.  By using Makefiles, every member of your team can quickly glance at the file and see exactly what is being inserted into a package.  Changes can be made and committed quickly, errors can be squashed without tearing apart .pkg files, and you can reproduce packages quickly and efficiently without wading through many GUI windows.</p>

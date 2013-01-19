@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: packaging | Shit Gary Says]]></title>
-  <link href="http://glarizza.github.com/blog/categories/packaging/atom.xml" rel="self"/>
-  <link href="http://glarizza.github.com/"/>
-  <updated>2013-01-19T11:44:50-08:00</updated>
-  <id>http://glarizza.github.com/</id>
+  <link href="http://garylarizza.com/blog/categories/packaging/atom.xml" rel="self"/>
+  <link href="http://garylarizza.com/"/>
+  <updated>2013-01-19T11:54:12-08:00</updated>
+  <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Getting Started with The Luggage]]></title>
-    <link href="http://glarizza.github.com/blog/2010/12/21/getting-started-with-the-luggage/"/>
+    <link href="http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage/"/>
     <updated>2010-12-21T09:47:00-08:00</updated>
-    <id>http://glarizza.github.com/blog/2010/12/21/getting-started-with-the-luggage</id>
+    <id>http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage</id>
     <content type="html"><![CDATA[<p>With the current movement in the Mac Community toward modular imaging strategies, there's a spike in the need for properly formed package installers. Apple's package format is well documented for its benefits and flaws and there are a string of applications that will help you create your perfect package (from Apple's Packagemaker to the many third-party applications).  While all the various package creation applications will ultimately create a desirable package in the end, very few of them have the triple-threat of easy code-review, replication, and portability.  This is where The Luggage comes in.</p>
 
 <p><a href="http://github.com/unixorn/luggage">The Luggage</a> is a packaging system based on GNU's make command that is found on most every *nix-based operating system (OS X included).  Joe Block, the author, open-sourced the project based on an internal Google tool for creating packages with Makefiles.  By using Makefiles, every member of your team can quickly glance at the file and see exactly what is being inserted into a package.  Changes can be made and committed quickly, errors can be squashed without tearing apart .pkg files, and you can reproduce packages quickly and efficiently without wading through many GUI windows.</p>
