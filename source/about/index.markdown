@@ -1,7 +1,7 @@
 ---
 layout: page
 #title: "Gary Larizza"
-comments: true
+comments: false
 sharing: true
 footer: true
 ---
@@ -9,5 +9,8 @@ footer: true
 # Gary Larizza
 
 I'm a professional services engineer for a little company called [Puppet Labs](http://www.puppetlabs.com)
-in Portland, Oregon.  You'll find me flying around talking about Puppet, Ruby, workflow, git, and
-whatever else makes me happy.
+in Portland, Oregon. You'll find me flying around talking about Puppet, OS X, Ruby, workflow, git, and
+whatever else makes me happy. [Occasionally I engage in Norwegian axe-throwing.][andmyaxe]
+
+[andmyaxe]: https://plus.google.com/photos/114502915670925053360/albums/5623727347198247985/5623727729058608466
+
