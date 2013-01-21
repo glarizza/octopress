@@ -4,7 +4,7 @@
   <title><![CDATA[Category: vm | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/vm/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2013-01-21T09:16:48-08:00</updated>
+  <updated>2013-01-21T09:26:35-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -195,7 +195,106 @@ necessary to prepare the ISO and drop it into the <code>iso</code> directory we 
 the <code>definitions/osx-vm</code> folder. By default, this script will install
 VMware tools, setup Vagrant keys, download the XCode Command Line Tools, and
 install Puppet via Rubygems. Because this is all outlined in the <code>postinstall.sh</code>
-script, you're free to modify this code or add your own steps.</p>
+script, you're free to modify this code or add your own steps. Here's the
+current <code>postinstall.sh</code> script as of this posting:</p>
+
+<p><div class='bogus-wrapper'><notextile><figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>date &gt; /etc/vagrant_box_build_time
+</span><span class='line'><span class="nv">OSX_VERS</span><span class="o">=</span><span class="k">$(</span>sw_vers -productVersion | awk -F <span class="s2">&quot;.&quot;</span> <span class="s1">&#39;{print $2}&#39;</span><span class="k">)</span>&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;Install VMware tools <span class="k">if </span>we were built with VMware&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;if <span class="o">[</span> -e .vmfusion_version <span class="o">]</span>; <span class="k">then</span>
+</span><span class='line'><span class="k">  </span><span class="nv">TMPMOUNT</span><span class="o">=</span>&lt;code&gt;/usr/bin/mktemp -d /tmp/vmware-tools.XXXX&lt;/code&gt;
+</span><span class='line'>  hdiutil attach darwin.iso -mountpoint <span class="s2">&quot;$TMPMOUNT&quot;</span>
+</span><span class='line'>  installer -pkg <span class="s2">&quot;$TMPMOUNT/Install VMware Tools.app/Contents/Resources/VMware Tools.pkg&quot;</span> -target /
+</span><span class='line'>  <span class="c"># This usually fails</span>
+</span><span class='line'>  hdiutil detach <span class="s2">&quot;$TMPMOUNT&quot;</span>
+</span><span class='line'>  rm -rf <span class="s2">&quot;$TMPMOUNT&quot;</span>
+</span><span class='line'><span class="k">fi</span>&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;Installing vagrant keys&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;mkdir /Users/vagrant/.ssh
+</span><span class='line'>chmod 700 /Users/vagrant/.ssh
+</span><span class='line'>curl -k <span class="s1">&#39;https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub&#39;</span> &gt; /Users/vagrant/.ssh/authorized_keys
+</span><span class='line'>chmod 600 /Users/vagrant/.ssh/authorized_keys
+</span><span class='line'>chown -R vagrant /Users/vagrant/.ssh&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;Get Xcode CLI tools <span class="k">for </span>Lion <span class="o">(</span>at least to build Chef<span class="o">)</span>&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;TOOLS<span class="o">=</span>clitools.dmg
+</span><span class='line'><span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;$OSX_VERS&quot;</span> -eq 7 <span class="o">]</span>; <span class="k">then</span>
+</span><span class='line'><span class="k">  </span><span class="nv">DMGURL</span><span class="o">=</span>http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg
+</span><span class='line'><span class="k">elif</span> <span class="o">[</span> <span class="s2">&quot;$OSX_VERS&quot;</span> -eq 8 <span class="o">]</span>; <span class="k">then</span>
+</span><span class='line'><span class="k">  </span><span class="nv">DMGURL</span><span class="o">=</span>http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg
+</span><span class='line'><span class="k">fi</span>
+</span><span class='line'>curl <span class="s2">&quot;$DMGURL&quot;</span> -o <span class="s2">&quot;$TOOLS&quot;</span>
+</span><span class='line'><span class="nv">TMPMOUNT</span><span class="o">=</span>&lt;code&gt;/usr/bin/mktemp -d /tmp/clitools.XXXX&lt;/code&gt;
+</span><span class='line'>hdiutil attach <span class="s2">&quot;$TOOLS&quot;</span> -mountpoint <span class="s2">&quot;$TMPMOUNT&quot;</span>
+</span><span class='line'>installer -pkg <span class="s2">&quot;$(find $TMPMOUNT -name &#39;*.mpkg&#39;)&quot;</span> -target /
+</span><span class='line'>hdiutil detach <span class="s2">&quot;$TMPMOUNT&quot;</span>
+</span><span class='line'>rm -rf <span class="s2">&quot;$TMPMOUNT&quot;</span>
+</span><span class='line'>rm <span class="s2">&quot;$TOOLS&quot;</span>&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;Get gems - we should really be installing rvm instead, since we can<span class="err">&#39;</span>t even compile Chef or have a Ruby dev environment..&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;gem update --system
+</span><span class='line'>gem install puppet --no-ri --no-rdoc&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;gem install chef --no-ri --no-rdoc&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;exit
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <h4>Build the VM</h4>
 
@@ -211,7 +310,9 @@ following command:</p>
 
 <p>This process takes the longest - you should see VMware Fusion fire up, a new VM
 get created, and follow the process of OS X being installed into the VM. When
-it completes, your VM will have been created</p>
+it completes, your VM will have been created. Just like most Vagrant workflows,
+the resultant vm will have a <code>vagrant</code> user whose password is also <code>vagrant</code>.
+Feel free to login and ensure that everything looks good.</p>
 
 <h2>Now what?</h2>
 

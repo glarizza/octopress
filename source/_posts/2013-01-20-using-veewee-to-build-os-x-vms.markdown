@@ -166,7 +166,52 @@ Veewee supports post-installation tasks through the `postinstall.sh` script in
 the `definitions/osx-vm` folder. By default, this script will install
 VMware tools, setup Vagrant keys, download the XCode Command Line Tools, and
 install Puppet via Rubygems. Because this is all outlined in the `postinstall.sh`
-script, you're free to modify this code or add your own steps.
+script, you're free to modify this code or add your own steps. Here's the
+current `postinstall.sh` script as of this posting:
+
+{% codeblock lang:bash %}
+date > /etc/vagrant_box_build_time
+OSX_VERS=$(sw_vers -productVersion | awk -F "." '{print $2}')
+# Install VMware tools if we were built with VMware
+if [ -e .vmfusion_version ]; then
+  TMPMOUNT=`/usr/bin/mktemp -d /tmp/vmware-tools.XXXX`
+  hdiutil attach darwin.iso -mountpoint "$TMPMOUNT"
+  installer -pkg "$TMPMOUNT/Install VMware Tools.app/Contents/Resources/VMware Tools.pkg" -target /
+  # This usually fails
+  hdiutil detach "$TMPMOUNT"
+  rm -rf "$TMPMOUNT"
+fi
+
+# Installing vagrant keys
+mkdir /Users/vagrant/.ssh
+chmod 700 /Users/vagrant/.ssh
+curl -k 'https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub' > /Users/vagrant/.ssh/authorized_keys
+chmod 600 /Users/vagrant/.ssh/authorized_keys
+chown -R vagrant /Users/vagrant/.ssh
+
+# Get Xcode CLI tools for Lion (at least to build Chef)
+# https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex
+TOOLS=clitools.dmg
+if [ "$OSX_VERS" -eq 7 ]; then
+  DMGURL=http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg
+elif [ "$OSX_VERS" -eq 8 ]; then
+  DMGURL=http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg
+fi
+curl "$DMGURL" -o "$TOOLS"
+TMPMOUNT=`/usr/bin/mktemp -d /tmp/clitools.XXXX`
+hdiutil attach "$TOOLS" -mountpoint "$TMPMOUNT"
+installer -pkg "$(find $TMPMOUNT -name '*.mpkg')" -target /
+hdiutil detach "$TMPMOUNT"
+rm -rf "$TMPMOUNT"
+rm "$TOOLS"
+
+# Get gems - we should really be installing rvm instead, since we can't even compile Chef or have a Ruby dev environment..
+gem update --system
+gem install puppet --no-ri --no-rdoc
+# gem install chef --no-ri --no-rdoc
+exit
+{% endcodeblock %}
+
 
 #### Build the VM
 
@@ -181,7 +226,9 @@ $ bundle exec veewee fusion build osx-vm
 
 This process takes the longest - you should see VMware Fusion fire up, a new VM
 get created, and follow the process of OS X being installed into the VM. When
-it completes, your VM will have been created
+it completes, your VM will have been created. Just like most Vagrant workflows,
+the resultant vm will have a `vagrant` user whose password is also `vagrant`.
+Feel free to login and ensure that everything looks good.
 
 
 ## Now what?
