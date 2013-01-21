@@ -9,9 +9,8 @@
   <meta name="author" content="Gary larizza">
 
   
-  <meta name="description" content="Masochists are everywhere. Managing a system by hand appeals to a certain subset
-of the population, but I joined Puppet Labs because
-I was a fan of &hellip;">
+  <meta name="description" content="I hate Tim Sutton in the same way I hate Steven Singer. I hate Tim
+because he actually IMPLEMENTS some of the things on my list of &#8216;shit to &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -79,6 +78,258 @@ I was a fan of &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/01/20/using-veewee-to-build-os-x-vms/">Using Veewee to Build OS X VMs</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-20T19:36:00-08:00" pubdate data-updated="true">Jan 20<span>th</span>, 2013</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>I hate <a href="http://github.com/timsutton">Tim Sutton</a> in the same way I hate <a href="http://ihatestevensinger.com/">Steven Singer</a>. I hate Tim
+because he actually IMPLEMENTS some of the things on my list of &#8216;shit to tinker
+with when you get some free time&#8217; instead of just TALKING about them. He and
+<a href="https://twitter.com/bruienne">Pepijn Bruienne</a> have been working on some code for <a href="http://github.com/jedi4ever/veewee">Veewee</a> that
+will allow you to automate the creation of OS X VMs in VMware Fusion. For those
+who are interested, you can <a href="https://github.com/jedi4ever/veewee/issues/481">check out the pull request containing this code</a>
+and comment/help them out. For everyone else, read on and entertain the idea&#8230;</p>
+
+<h2>Prerequisites:</h2>
+
+<ol>
+<li>OS X</li>
+<li>VMware Fusion</li>
+<li>Git</li>
+<li>Ruby 1.9.3 and rbenv</li>
+<li>Mountain Lion (10.8) installer application</li>
+</ol>
+
+
+<h4>OS X</h4>
+
+<p>This walkthrough assumes that you&#8217;re running OS X on your development
+workstation. That&#8217;s what I use, and it&#8217;s the workflow I know.</p>
+
+<h4>VMware Fusion</h4>
+
+<p>If you&#8217;ve used <a href="http://github.com/jedi4ever/veewee">Veewee</a> before, odds are good that you MIGHT have used
+it to build baseboxes for <a href="http://www.vagrantup.com/">Vagrant</a> and/or Virtualbox. Veewee
++ Vagrant is a post for ANOTHER time, but in short it&#8217;s an awesome workflow for
+testing automation like <a href="http://www.puppetlabs.com">Puppet</a> on Linux or
+Windows. When I originally tried using Veewee to build OS X VMs, I had
+absentmindedly tried to do this using Virtualbox&#8230;which isn&#8217;t supported. As
+such, VMware Fusion is the only virtualization platform (as of this posting
+date) that is supported with this method. I&#8217;m using VMware Fusion 5 pro, but
+YMMV.</p>
+
+<h4>Git</h4>
+
+<p>Because the code that supports OS X only exists in Tim&#8217;s fork of Veewee (as of
+this posting date), we&#8217;re going to have to install/use Veewee from source. That
+introduces a bit more complexity, but hold my hand - we&#8217;ll get through this
+together. Git comes with the XCode Command Line Tools or can be <a href="http://git-scm.com/download/mac">installed with native packages</a>.</p>
+
+<h4>Ruby 1.9.3 and rbenv</h4>
+
+<p>Veewee uses the <code>gssapi</code> gem which requires Ruby 1.9.1 or higher. The problem,
+though, is that the version of Ruby that comes with OS X is 1.8.7. There are
+typically two camps when it comes to getting a development version of Ruby on
+OS X: <a href="http://octopress.org/docs/setup/rbenv/">rbenv</a> or <a href="http://octopress.org/docs/setup/rvm/">RVM</a>. I recommend <a href="http://octopress.org/docs/setup/rbenv/">rbenv</a> because it
+doesn&#8217;t screw with your path and it&#8217;s a bit more lightweight, so that&#8217;s the
+path I&#8217;m going to take in this writeup. <a href="http://octopress.org/docs/setup/rbenv/">Octopress has instructions</a>
+for getting <a href="http://octopress.org/docs/setup/rbenv/">rbenv</a> on your machine - so make sure to check those out
+for this step. The instructions describe using rbenv to install Ruby version
+1.9.3 - and that&#8217;s the version we&#8217;ll use here.</p>
+
+<h4>Mountain Lion installer application</h4>
+
+<p>This workflow supports creating a VM for Mountain Lion (10.8), but it SHOULD
+also work for Lion (10.7). The final piece of our whole puzzle is the installer
+application from the App Store. Get that application somehow and drop it in the
+<code>/Applications</code> directory (that&#8217;s where the App store puts it by default). We
+REALLY only need a single disk image from the installer, and we&#8217;ll get that
+next.</p>
+
+<h2>Some assembly required&#8230;</h2>
+
+<p>Now that you have all the pieces, let&#8217;s tie this FrankenVM up with some code
+and ugly bash, shall we? Splendid.</p>
+
+<h4>Copy out the installation disk image</h4>
+
+<p>In the last step, we downloaded the <code>Install OS X Mountain Lion.app</code> file from
+the App Store to <code>/Applications</code>, but we&#8217;ll want to extract the main
+installation disk image somewhere where we can work with it. I&#8217;m going to make
+a copy on the Desktop so we don&#8217;t screw up the main installer:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>cp /Applications/Install<span class="se">\ </span>OS<span class="se">\ </span>X<span class="se">\ </span>Mountain<span class="se">\ </span>Lion.app/Contents/SharedSupport/InstallESD.dmg ~/Desktop
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Beautiful. This should take a minute as it&#8217;s a sizeable file, but in the end
+you&#8217;ll have the installation disk image on your Desktop. For now this is fine,
+but we&#8217;ll be revisiting it later&#8230;</p>
+
+<h4>Clone Tim&#8217;s fork of Veewee</h4>
+
+<p>As if the writing of this blog post, the code you need is ONLY in Tim&#8217;s fork,
+so let&#8217;s pull that down to somewhere where we can work with it:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c">## I prefer to work with code out of a &#39;src&#39; directory in my home directory</span>
+</span><span class='line'><span class="nv">$ </span>mkdir ~/src
+</span><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>git clone http://github.com/timsutton/veewee
+</span><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>Install Gems for veewee</h4>
+
+<p>We now have the Veewee source in <code>~/src/veewee</code>, but we need to ensure all the
+Rubygems necessary to make Veewee work have been installed. We&#8217;re going to do
+this with <a href="http://gembundler.com/">Bundler</a>. Let&#8217;s switch to Ruby 1.9.3 and get Bundler
+installed:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
+</span><span class='line'><span class="nv">$ </span>rbenv <span class="nb">local </span>1.9.3
+</span><span class='line'><span class="nv">$ </span>gem install bundler
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Next, let&#8217;s use <a href="http://gembundler.com/">bundler</a> to install the rest of the gems we need to
+use Veewee:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>bundle install
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Once that command completes, Bundler will have installed all the necessary gems
+for Veewee and we can move on.</p>
+
+<h4>Define your new VM</h4>
+
+<p>Veewee has templates for most operatingsystems that can be used to spin up
+a &#8216;vanilla&#8217; VM. Tim&#8217;s code provides a template called &#8216;OSX-10.8.2&#8217; containing
+the necessary scaffolding for building a vanilla 10.8.2 VM. Let&#8217;s create a new
+VM project based on this template called &#8216;osx-vm&#8217; with the following:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
+</span><span class='line'><span class="nv">$ </span>bundle <span class="nb">exec </span>veewee fusion define <span class="s1">&#39;osx-vm&#39;</span> <span class="s1">&#39;OSX-10.8.2&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will create <code>definitions/osx-vm</code> inside the Veewee directory with the
+template code from <code>templates/OSX-10.8.2</code>. We&#8217;re almost ready to let Veewee
+create our VM, but we need an installation &#8216;ISO&#8217; first&#8230;</p>
+
+<h4>Prepare an &#8216;ISO&#8217; for OS X</h4>
+
+<p>The <code>prepare_veewee_iso.sh</code> script in Veewee&#8217;s <code>templates/OSX-10.8.2/prepare_veewee_iso</code>
+directory provides awesome detail as to why we can&#8217;t use the vanilla InstallESD.dmg
+file to install 10.8 in our new VM. Feel free to open that file and read
+through the detail, or <a href="https://github.com/timsutton/veewee/blob/feature/osx-guest/templates/OSX-10.8.2/prepare_veewee_iso/prepare_veewee_iso.sh">check out the details online</a> for more
+information. Let&#8217;s use that script and prepare an installation &#8216;ISO&#8217; for our
+new VM:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
+</span><span class='line'><span class="nv">$ </span>mkdir iso
+</span><span class='line'><span class="nv">$ </span>sudo templates/OSX-10.8.2/prepare_veewee_iso/prepare_veewee_iso.sh ~/Desktop/InstallESD.dmg iso/
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You&#8217;ll need to be root to do this, but the script should handle everything
+necessary to prepare the ISO and drop it into the <code>iso</code> directory we created.</p>
+
+<h4>Define any additional post-installation tasks</h4>
+
+<p>Veewee supports post-installation tasks through the <code>postinstall.sh</code> script in
+the <code>definitions/osx-vm</code> folder. By default, this script will install
+VMware tools, setup Vagrant keys, download the XCode Command Line Tools, and
+install Puppet via Rubygems. Because this is all outlined in the <code>postinstall.sh</code>
+script, you&#8217;re free to modify this code or add your own steps.</p>
+
+<h4>Build the VM</h4>
+
+<p>Everything we&#8217;ve done has all been for this step. With the ISO built, the VM
+defined, and all necessary Gems installed, we can finally BUILD the vm with the
+following command:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
+</span><span class='line'><span class="nv">$ </span>bundle <span class="nb">exec </span>veewee fusion build osx-vm
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This process takes the longest - you should see VMware Fusion fire up, a new VM
+get created, and follow the process of OS X being installed into the VM. When
+it completes, your VM will have been created</p>
+
+<h2>Now what?</h2>
+
+<p>At this point, I would snapshot the VM before making any changes. Because
+Virtualbox isn&#8217;t yet supported with Veewee for building OS X VMs (and Vagrant
+doesn&#8217;t currently include VMware Fusion support for its workflow), this VM
+isn&#8217;t going to fit into a Vagrant workflow&#8230;yet. What you have, though, is
+a vanilla OS X VM that can be built on-demand (or reverted to a snapshot) to
+test whatever configuration changes you need to make (all 11.36 Gb worth of
+it).</p>
+
+<p>As you would expect, this is all pretty experimental for the moment. If you&#8217;re
+a Ruby developer who needs an OS X VM for testing purposes but have never
+managed OS X and it&#8217;s &#8216;quirky&#8217; imaging process, this workflow is for you. For
+everyone else, it&#8217;s probably an academic proof-of-concept that&#8217;s more
+interesting from the point of view of &#8220;Look what you can do&#8221; versus &#8220;Let&#8217;s make
+this my primary testing workflow.&#8221;</p>
+
+<p>Credit goes to <a href="https://twitter.com/patrickdebois">Patrick Dubois</a> for creating and managing the Veewee
+project, and to <a href="http://github.com/timsutton">Tim Sutton</a> and <a href="https://twitter.com/bruienne">Pepijn Bruienne</a> - like I mentioned
+before - for the work they&#8217;ve done on this. You can speak with them directly in
+the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
+</div>
+  
+  
+
+
+    </article>
   
   
     <article>
@@ -2004,6 +2255,10 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2013/01/20/using-veewee-to-build-os-x-vms/">Using Veewee to build OS X VMs</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2013/01/17/managing-a-blog-is-insane/">Managing a blog is insane; Octopress FTW!</a>
       </li>
     
@@ -2017,10 +2272,6 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
     
       <li class="post">
         <a href="/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/">Using the Google Macops Crankd and Facter Code</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2011/03/11/using-run-stages-with-puppet/">Using Run Stages with Puppet</a>
       </li>
     
   </ul>
