@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Repeatable Puppet development with Vagrant"
-date: 2013-01-30 09:21
+date: 2013-02-01
 comments: true
 categories: ['vagrant', 'puppet', 'devops', 'automation']
 ---
