@@ -169,8 +169,7 @@ version.
 This code [came from Mitchell's puppet-bootstrap repo][shell] where he
 maintains a list of scripts that will bootstrap Puppet onto many of the common
 operating systems out there. This code was current as of the initial posting
-date of this blog with ONE minor addition [for which I've filed a pull request][pull]
-(feel free to check the link for the reasoning behind my change).  If you're
+date of this blog, but make sure to check that repo for any updates.  If you're
 maintaining your OWN provisioning script, consider filing pull requests against
 Mitchell's repo so we can ALL benefit from good code and don't have to keep
 creating 'another wheel' just to provision Puppet on VMs!
