@@ -4,7 +4,7 @@
   <title><![CDATA[Shit Gary Says]]></title>
   <link href="http://garylarizza.com/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2013-02-01T06:12:13-07:00</updated>
+  <updated>2013-11-25T17:06:58-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -14,9 +14,1618 @@
 
   
   <entry>
+    <title type="html"><![CDATA[Fun with Puppet Providers - Part 1 of Whatever]]></title>
+    <link href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/"/>
+    <updated>2013-11-25T20:47:00-08:00</updated>
+    <id>http://garylarizza.com/blog/2013/11/25/fun-with-providers</id>
+    <content type="html"><![CDATA[<p>I don&#8217;t know why I write blog posts - everybody in open-source software knows
+that the code <em>IS</em> the documentation. If you&#8217;ve ever tried to write a Puppet
+type/provider, you know this fact better than ANYONE. To this day, when someone
+asks me for the definitive source on this activity I usually refer them first
+to <a href="http://www.amazon.com/Puppet-Types-Providers-Dan-Bode/dp/1449339328">Nan Liu and Dan Bode&#8217;s awesome Types and Providers
+book</a>
+(which REALLY is a fair bit of quality information), and THEN to the source
+code for Puppet. Everything else falls in-between those sources (sadly).</p>
+
+<p>As someone who truly came from knowing absolute fuckall about Ruby and only
+marginally more than that about Puppet, I&#8217;ve walked through the valley of the
+shadow of self.instances and have survived to tell the tale. That&#8217;s what this
+post is about - hopefully some GOOD information if you want to start writing
+your own Puppet type and provider. I also wrote this because this knowledge
+has been passed down from Puppet employee to Puppet employee, and I wanted
+to break the priesthood being held on type and provider magic. If you don&#8217;t
+hear from me after tomorrow, well, then you know what happened&#8230;</p>
+
+<h2>Because 20 execs in a defined type&#8230;</h2>
+
+<p>What would drive someone to write a custom type and provider for Puppet anyhow?
+Afterall, you can do ANYTHING IMAGINABLE in the Puppet DSL*! After drawing
+back my sarcasm a bit, let me explain where the Puppet DSL tends to fall over
+and the idea of a custom type and provider starts becoming more than just an
+incredibly vivid dream:</p>
+
+<ul>
+<li>You have more than a couple of exec statements in a single class/defined type that have multiple conditional
+properties like &#8216;onlyif&#8217; and/or &#8216;unless&#8217;.</li>
+<li>You need to use pure Ruby to manipulate data and parse it through a system binary</li>
+<li>Your defined type has more conditional logic than your pre-nuptual agreement</li>
+<li>Any combination of similar arguments related to the above</li>
+</ul>
+
+
+<p>If the above sounds familiar to you, then you&#8217;re probably ready to build your own custom Puppet type and provider.
+Do note that custom types and providers are written in Ruby and not the Puppet DSL. This can initially feel
+very scary, but get over it (there are much scarier things coming).</p>
+
+<p><em>* Just because you can doesn&#8217;t mean you don&#8217;t, in fact, suck.</em></p>
+
+<h2>I&#8217;m not your Type</h2>
+
+<p>This blog post is going to focus on types and type-interaction, while later
+posts will focus on providers and ultimately dirty provider tricks to win
+friends and influence others.  Type and provider interaction can be totally
+daunting for newcomers, let ALONE just naming files correctly due to Puppet&#8217;s
+predictable (note: anytime I write the word &#8220;predictable&#8221;, just substitute the
+phrase &#8220;annoying pain in the ass&#8221;) naming pattern.  Let&#8217;s break it down a bit
+for you - somebody que Dre&#8230;</p>
+
+<p>(NOTE: I&#8217;m going to ASSUME you understand the fundamentals of a Puppet run already. If you&#8217;re pretty hazy
+on that concept, checkout <a href="http://docs.puppetlabs.com">docs.puppetlabs.com</a> for more information)</p>
+
+<h2>Types are concerned about your looks</h2>
+
+<p>The type file defines all the <em>properties</em> and <em>parameters</em> that can be used by your new custom resource.
+Think of the type file like the opening stanza to a new Puppet class - we&#8217;re describing all the tweakable
+knobs and buttons to the new thing we&#8217;re creating. The type file also gives you some added validation
+abilities, which is very handy.</p>
+
+<p>It&#8217;s important to understand that there is a BIG difference between a &#8216;property&#8217; and a &#8216;parameter&#8217; with regard
+to a type (even though they&#8217;re both assigned values identically in a resource declaration).  Think of it this
+way: a property is something that can be inspected and changed by Puppet, while a parameter is just helper data
+that Puppet uses to do its job.  A property would be something like a file&#8217;s mode.  You can inspect a file and
+determine its mode, and you can even CHANGE a file&#8217;s mode on disk. The file resource type also has a parameter
+called &#8216;backup&#8217;.  Its sole job is to tell Puppet whether to backup the file to the filebucket before making
+changes. This data is useful for Puppet during a run, but you can&#8217;t inspect a file on disk and know definitively
+whether Puppet is going to back it up or not (and it goes without saying that if you can&#8217;t determine this aspect
+about a file on disk just by inspecting it, than you also can&#8217;t CHANGE this aspect about a file on disk either).
+You&#8217;ll see later where the property/parameter distinction becomes very important.</p>
+
+<p>Recently I built a type modeling the setting of proxy data for network interfaces on OS X, so we&#8217;ll use that as
+a demonstration of a type.  It looks like the following:</p>
+
+<figure class='code'><figcaption><span>lib/puppet/type/mac_web_proxy.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Type</span><span class="o">.</span><span class="n">newtype</span><span class="p">(</span><span class="ss">:mac_web_proxy</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>  <span class="n">desc</span> <span class="s2">&quot;Puppet type that models a network interface on OS X&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">ensurable</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:name</span><span class="p">,</span> <span class="ss">:namevar</span> <span class="o">=&gt;</span> <span class="kp">true</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Interface name - currently must be &#39;friendly&#39; name (e.g. Ethernet)&quot;</span>
+</span><span class='line'>    <span class="n">munge</span> <span class="k">do</span> <span class="o">|</span><span class="n">value</span><span class="o">|</span>
+</span><span class='line'>      <span class="n">value</span><span class="o">.</span><span class="n">downcase</span>
+</span><span class='line'>    <span class="k">end</span>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">insync?</span><span class="p">(</span><span class="n">is</span><span class="p">)</span>
+</span><span class='line'>      <span class="n">is</span><span class="o">.</span><span class="n">downcase</span> <span class="o">==</span> <span class="n">should</span><span class="o">.</span><span class="n">downcase</span>
+</span><span class='line'>    <span class="k">end</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_server</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:authenticated_username</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Username for proxy authentication&quot;</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:authenticated_password</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Password for proxy authentication&quot;</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_authenticated</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
+</span><span class='line'>    <span class="n">newvalues</span><span class="p">(</span><span class="ss">:true</span><span class="p">,</span> <span class="ss">:false</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_port</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
+</span><span class='line'>    <span class="n">newvalues</span><span class="p">(</span><span class="sr">/^\d+$/</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>First note the type file&#8217;s path in the grey titlebar of the graphic: <code>lib/puppet/type/mac_web_proxy.rb</code>
+This path is relative to the module that you&#8217;re building, and it&#8217;s VERY important that it be named
+EXACTLY this way to appease Puppet&#8217;s predictable naming pattern.  The name of the file directly correllates
+to the name of the type listed in the <code>Puppet::Type.newtype()</code> method.</p>
+
+<p>Next, let&#8217;s look at a sample parameter declaration - for starters, let&#8217;s look at the &#8216;authenticated_password&#8217;
+parameter declaration on line 24 of the above type.  The <code>newparam()</code> method is called and the lone argument
+passed is the symbolized name of our parameter (i.e. it&#8217;s prepended with a colon).  This parameter
+provides the password to use when setting up an authenticated web proxy on OS X.
+It&#8217;s a parameter because as far as I know, there&#8217;s no way for me to query the system for this password
+(it&#8217;s obfuscated in the GUI and I&#8217;m not entirely certain where it&#8217;s stored on-disk).
+If there were a way for us to query this value from the system, then we could turn it
+into a property (since we could both &#8216;GET&#8217; as well as &#8216;SET&#8217; the value). As of right
+now, it exists as helper data for when I need to setup an authenticated proxy.</p>
+
+<p>Having seen a parameter, let&#8217;s look at the &#8216;proxy_server&#8217; property that&#8217;s declared on
+line 16 of the type file above. We&#8217;re able to both query the system for this value,
+as well as change/set the value by using the <code>networksetup</code> binary, so it&#8217;s able to
+be &#8216;synchronized&#8217; (according to Puppet). Because of this, it must be a property.</p>
+
+<h2>Just enough validation</h2>
+
+<p>The second major function of the type file is to provide methods to validate property
+and parameter data that is being passed. There are two methods to validate this data,
+and one method that allows you to massage the data into an acceptable format (which
+is called &#8216;munging&#8217;).</p>
+
+<h3>validate()</h3>
+
+<p>The first method, named &#8216;validate&#8217;, is widely believed to be the only successfully-named
+method in the entire Puppet codebase. Validate accepts a block and allows you to perform
+free-form validation in any way you prefer.  For example:</p>
+
+<figure class='code'><figcaption><span>lib/puppet/type/user.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">validate</span> <span class="k">do</span> <span class="o">|</span><span class="n">value</span><span class="o">|</span>
+</span><span class='line'>  <span class="k">raise</span> <span class="no">ArgumentError</span><span class="p">,</span> <span class="s2">&quot;Passwords cannot include &#39;:&#39;&quot;</span> <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">is_a?</span><span class="p">(</span><span class="nb">String</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span><span class="o">.</span><span class="n">include?</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This example, pulled straight from the Puppet codebase, will raise an error if a
+password contains a colon. In this case, we&#8217;re looking for a specific exception
+and are raising errors accordingly.</p>
+
+<h3>newvalues()</h3>
+
+<p>The second method, named &#8216;newvalues&#8217;, accepts a regex that property/parameter values
+need to match (if you&#8217;re one of the 8 people in the world that speak regex fluently),
+or a list of acceptable values. From the example above:</p>
+
+<figure class='code'><figcaption><span>lib/puppet/type/mac_web_proxy.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_authenticated</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
+</span><span class='line'>    <span class="n">newvalues</span><span class="p">(</span><span class="ss">:true</span><span class="p">,</span> <span class="ss">:false</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_port</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
+</span><span class='line'>    <span class="n">newvalues</span><span class="p">(</span><span class="sr">/^\d+$/</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>munge()</h3>
+
+<p>The final method, named &#8216;munge&#8217; accepts a block like <code>newvalues</code> but allows you to
+convert an unacceptable value into an acceptable value. Again, this is from the example above:</p>
+
+<figure class='code'><figcaption><span>lib/puppet/type/mac_web_proxy.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">munge</span> <span class="k">do</span> <span class="o">|</span><span class="n">value</span><span class="o">|</span>
+</span><span class='line'>  <span class="n">value</span><span class="o">.</span><span class="n">downcase</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In this case, we want to ensure that the parameter value is lower case. It&#8217;s not
+necessary to throw an error, but rather it&#8217;s acceptable to &#8216;munge&#8217; the value to
+something that is more acceptable without alerting the user.</p>
+
+<h2>Important type considerations</h2>
+
+<p>You could write half a book just on how types work (and, again, check out the book
+referenced above which DOES just that), but there are a couple of final considerations
+that will prove helpful when developing your type.</p>
+
+<h3>Defaulting values</h3>
+
+<p>The <code>defaultto</code> method provides a default value should the user not provide one for
+your property/parameter. It&#8217;s a pretty simple construct, but it&#8217;s important to
+remember when you write spec tests for your type (which you ARE doing, right?) that
+there will ALWAYS be values for properties/parameters that utilize <code>defaultto</code>. Here&#8217;s a quick example:</p>
+
+<figure class='code'><figcaption><span>Defaultto example  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newparam</span><span class="p">(</span><span class="ss">:enable_lacp</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>  <span class="n">defaultto</span> <span class="ss">:true</span>
+</span><span class='line'>  <span class="n">newvalues</span><span class="p">(</span><span class="ss">:true</span><span class="p">,</span> <span class="ss">:false</span><span class="p">)</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Ensurable types</h3>
+
+<p>A resource is considered &#8216;ensurable&#8217; when its presence can be verified (i.e. it
+exists on the system), it can be created when it doesn&#8217;t exist and it SHOULD, and
+it can be destroyed when it exists and it SHOULDN&#8217;T. The simplest way to tell
+Puppet that a resource type is ensurable is to call the <code>ensurable</code> method within
+the body of the type (i.e. outside of any property/parameter declarations). Doing
+this will automatically create an &#8216;ensure&#8217; property that accepts values of &#8216;absent&#8217;
+and &#8216;present&#8217; that are automatically wired to the &#8216;exists?&#8217;, &#8216;create&#8217; and &#8216;destroy&#8217;
+methods of the provider (something I&#8217;ll write about in the next post). Optionally,
+you can choose to pass a block to the <code>ensurable</code> method and define acceptable
+property values as well as the methods of the provider that are to be called. That
+would look something like this:</p>
+
+<figure class='code'><figcaption><span>lib/puppet/type/package.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">ensurable</span> <span class="k">do</span>
+</span><span class='line'>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:present</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">provider</span><span class="o">.</span><span class="n">install</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:absent</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">provider</span><span class="o">.</span><span class="n">uninstall</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:purged</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">provider</span><span class="o">.</span><span class="n">purge</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:held</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">provider</span><span class="o">.</span><span class="n">hold</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This means that instead of calling the <code>create</code> method to create a new resource that
+SHOULD exist (but doesn&#8217;t), Puppet is going to call the <code>install</code> method. Conversely,
+it will call the <code>uninstall</code> method to destroy a resource based on this type. The
+ensure property will also accept values of &#8216;purged&#8217; and &#8216;held&#8217; which will be wired up
+to the <code>purge</code> and <code>hold</code> methods respectively.</p>
+
+<h3>Namevars are unique little snowflakes</h3>
+
+<p>Puppet has a <a href="http://docs.puppetlabs.com/puppet/2.7/reference/lang_resources.html#namenamevar">concept known as the &#8216;namevar&#8217; for a resource.</a>
+If you&#8217;re hazy about the concept check out the documentation, but basically it&#8217;s the parameter
+that describes the form of uniqueness for a resource type on the system. For the package resource
+type, the &#8216;name&#8217; parameter is the namevar because the way you tell one package from another is
+its name. For the file resource, it&#8217;s the &#8216;path&#8217; parameter, because you can differentiate unique
+files from each other according to their path (and not necessarily their filename, since filenames
+don&#8217;t have to be unique on systems).</p>
+
+<p>When designing a type, it&#8217;s important to consider WHICH parameter will be the namevar (i.e. how
+can you tell unique resources from one another). To make a parameter the namevar, you simply
+set the <code>:namevar</code> attribute to <code>:true</code> like below:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newparam</span><span class="p">(</span><span class="ss">:name</span><span class="p">,</span> <span class="ss">:namevar</span> <span class="o">=&gt;</span> <span class="ss">:true</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>  <span class="c1"># Type declaration attributes here...</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Handling array values</h3>
+
+<p>Nearly every property/parameter value that is declared for a resource is &#8216;stringified&#8217;, or
+cast to a string. Sometimes, however, it&#8217;s necessary to accept an array of elements as the
+value for a property/parameter. To do this, you have to explicitly tell Puppet that you&#8217;ll
+be passing an array by setting the <code>:array_matching</code> attribute to <code>:all</code> (if you don&#8217;t set
+this attribute, it defaults to <code>:first</code>, which means that if you pass an array as a value
+for a property/parameter, Puppet will only accept the FIRST element in that array).</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>  <span class="c1"># Type declaration attributes here... </span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If you set <code>:array_matching</code> to <code>:all</code>, EVERY value passed for that parameter/property will
+be cast to an array (which means if you pass a value of &#8216;foo&#8217;, you&#8217;ll get an array with a
+single element - the string of &#8216;foo&#8217;).</p>
+
+<h3>Documenting your property/parameter</h3>
+
+<p>It&#8217;s a best-practice to document the purpose of your property or parameter declaration, and
+this can be done by passing a string to the <code>desc</code> method within the body of the property/parameter
+declaration.</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>  <span class="n">desc</span> <span class="s2">&quot;Domains which should bypass the proxy&quot;</span>
+</span><span class='line'><span class="c1"># Type declaration attributes here...</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Synchronization tricks</h3>
+
+<p>Puppet uses a method called <code>insync?</code> to determine whether a property value is synchronized (i.e.
+if Puppet needs to change its value, or it&#8217;s set appropriately). You usually have no need to change
+the behavior of this method since most of the properties you create for a type will have string
+values (and the <code>==</code> operator does a good job of checking string equality). For structured data
+types like arrays and hashes, however, that can be a bit trickier. Arrays, for example, are
+ordered construct - they have a definitive idea of what the first element and the last element
+of the array are. Sometimes you WANT to ensure that values are in a very specific order, and
+sometimes you don&#8217;t necessarily care about the ORDER that values for a property are set - you
+just want to make sure that all of them are set.</p>
+
+<p>If the latter cases sounds like what you need, then you&#8217;ll need to override the behavior of the
+<code>insync?</code> method. Take a look at the below example:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>  <span class="n">desc</span> <span class="s2">&quot;Domains which should bypass the proxy&quot;</span>
+</span><span class='line'>  <span class="k">def</span> <span class="nf">insync?</span><span class="p">(</span><span class="n">is</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">is</span><span class="o">.</span><span class="n">sort</span> <span class="o">==</span> <span class="n">should</span><span class="o">.</span><span class="n">sort</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In this case, I&#8217;ve overridden the <code>insync?</code> method to first sort the &#8216;is&#8217; value (or, the value that
+was discovered by Puppet on the target node) and compare it with the sorted &#8216;should&#8217; value (or,
+the value that was specified in the Puppet manifest when the catalog was compiled by the Puppet
+master). You can do WHATEVER you want in here as long as <code>insync?</code> returns either a true or a
+false value.  If <code>insync?</code> returns true, then Puppet determines that everything is in sync and
+no changes are necessary, whereas if it returns false then Puppet will trigger a change.</p>
+
+<h2>And this was the EASY part!</h2>
+
+<p>Wow this went longer than I expected&#8230; and types are usually the &#8216;easier&#8217; bit
+since you&#8217;re only describing the format to be used by the Puppet admin in
+manifests. There are some hacky type tricks that I&#8217;ve not yet covered (i.e.
+features, &#8216;inheritance&#8217;, and other meta-bullshit), but those will be saved for
+a final &#8216;dirty tips and tricks&#8217; post.  In the next section, I&#8217;ll touch on
+providers (which is where all interaction with the system takes place), so
+stay tuned for more brain-dumping-goodness&#8230;</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[From the archive: Using Crankd]]></title>
+    <link href="http://garylarizza.com/blog/2013/07/10/from-the-archive-using-crankd/"/>
+    <updated>2013-07-10T09:51:00-07:00</updated>
+    <id>http://garylarizza.com/blog/2013/07/10/from-the-archive-using-crankd</id>
+    <content type="html"><![CDATA[<p>Supporting laptops in a managed environment is tricky (and doubly so if you allow them to be taken off your corporate network).  While you can be reasonably assured that your desktops will remain on and connected during the workday, it&#8217;s not uncommon for laptops to go to sleep, change wireless access points, and even change between an Ethernet or AirPort connection several times during the day.  It&#8217;s important to have a tool that can &#8220;tweak&#8221; certain settings in response to these changes.</p>
+
+<p>This is where crankd comes in.</p>
+
+<p>Crankd is a cool utility that&#8217;s part of the Pymacadmin (http://code.google.com/p/pymacadmin/) suite of tools co-authored by Chris Adams and Nigel Kersten.  Specifically crankd is a Python daemon that lets you trigger shell scripts, or execute Python methods, based upon state changes in SystemConfiguration, NSWorkspace and FSEvents.</p>
+
+<h2>Use Cases</h2>
+
+<p>It&#8217;s easier to see how crankd can help you with a couple of scenarios:</p>
+
+<ol>
+<li><p>Your laptops, like all of the other machines in your organization, are bound to your corporate LDAP servers.  When they&#8217;re on network, they will query the LDAP servers for things like authentication information.  Unless your corporate LDAP directory is accessible outside your corporate network, your laptops may exhibit the &#8220;spinning wheel of death&#8221; when they attempt to contact a suddenly-unreachable LDAP directory at the neighborhood Starbucks.  A solution to this is to remove the LDAP servers from your Search (and Contacts) path whenever the laptop is taken off-network and add the LDAP servers when you come back on-network.</p></li>
+<li><p>Perhaps you&#8217;re using Puppet, Munki, Chef, StarDeploy, Filewave, Absolute Manage, Casper, or any other configuration management system that needs to contact a centralized server for configuration information. Usually these tools will have your machine contact their servers once an hour or so, but this can be a problem if the machine is constantly sleeping and waking.  Plus if you take your machine off-network, you don&#8217;t want it trying to contact a server that might not be reachable from the outside world. It would be nice to have your laptop &#8220;phone home&#8221; when it establishes a network connection on your corporate network, and skip this step when the laptop is taken outside your organization.</p></li>
+<li><p>OS X allows you to set a preferred order for your network connections, but it would be nice to disable the AirPort when your laptop establishes an Ethernet connection.</p></li>
+<li><p>Finally, maybe you have the need to perform an action whenever your laptop sleeps (or wakes), changes a network connection, mounts a volume, or runs a specific Application (whether it&#8217;s located in the Applications directory or anywhere else on your machine).</p></li>
+</ol>
+
+
+<p>All of these situations can be made trivial through the help of crankd.</p>
+
+<h2>How do I get it working?</h2>
+
+<p>Crankd is a daemon, so it&#8217;s running in the background while you work.  It uses an XML plist file that tells it which scripts (or which Python methods) to execute in response to specific state changes (like a network connection going up or down or a volume being mounted).  Since it&#8217;s a small Python library, the files aren&#8217;t huge and the entire finished installation is around 100 Kb (or larger with your custom code/scripts).  Lets download crankd and experiment with its settings:</p>
+
+<ol>
+<li><p><strong>Download the Pymacadmin source.</strong>  You can do this through Google Code or Github - I&#8217;ll demonstrate the Github method.  Navigate to http://github.com/acdha/pymacadmin, click the Downloads button, and download either the .tar.gz or the .zip version of the source code.  Drag it to your desktop and then double-click on the file to expand it.  It should open a folder named &#8220;acdha-pymacadmin-<combination of 7 numbers and letters>&#8221;</p></li>
+<li><p><strong>Install crankd</strong>  Upon opening the pymacadmin folder, you should see a series of folders, readme files, and an &#8220;install-crankd.sh&#8221; installation script.  Let&#8217;s open Terminal.app and navigate to the pymacadmin folder that we expanded on our desktop (you can type &#8220;cd&#8221; into Terminal.app and then drag and drop the folder into the Terminal window.  Hit the Return button on your keyboard to change to the directory.).  The install-crankd.sh script is executable, so run it by typing &#8220;sudo ./install-crankd.sh&#8221; into the Terminal window and hitting Return.  Enter your password when it prompts you</p></li>
+<li><p><strong>Setup a plist file for crankd</strong>  If you&#8217;ve never worked with crankd before, it&#8217;s best to let it setup a configuration plist for you.  If you don&#8217;t specify a configuration plist with the &#8220;&#8211;config&#8221; argument, or you don&#8217;t have a com.googlecode.pymacadmin.crankd.plist file in your /Users/<username>/Library/Preferences folder, crankd will automatically create a sample plist for you.  Let&#8217;s do that by typing &#8220;/usr/local/sbin/crankd.py&#8221; into Terminal and hitting the Return button.  Take a look at the sample configuration plist file:</p></li>
+</ol>
+
+
+<p>  &lt;?xml version=&#8221;1.0&#8221; encoding=&#8221;UTF-8&#8221;?>
+  &lt;!DOCTYPE plist PUBLIC &#8220;-//Apple Computer//DTD PLIST 1.0//EN&#8221; &#8220;http://www.apple.com/DTDs/PropertyList-1.0.dtd&#8221;>
+  <plist version="1.0">
+  <dict></p>
+
+<pre><code>&lt;key&gt;NSWorkspace&lt;/key&gt;
+&lt;dict&gt;
+  &lt;key&gt;NSWorkspaceDidMountNotification&lt;/key&gt;
+  &lt;dict&gt;
+    &lt;key&gt;command&lt;/key&gt;
+    &lt;string&gt;/bin/echo "A new volume was mounted!"&lt;/string&gt;
+  &lt;/dict&gt;
+  &lt;key&gt;NSWorkspaceDidWakeNotification&lt;/key&gt;
+  &lt;dict&gt;
+    &lt;key&gt;command&lt;/key&gt;
+    &lt;string&gt;/bin/echo "The system woke from sleep!"&lt;/string&gt;
+  &lt;/dict&gt;
+  &lt;key&gt;NSWorkspaceWillSleepNotification&lt;/key&gt;
+  &lt;dict&gt;
+    &lt;key&gt;command&lt;/key&gt;
+    &lt;string&gt;/bin/echo "The system is about to go to sleep!"&lt;/string&gt;
+  &lt;/dict&gt;
+&lt;/dict&gt;
+&lt;key&gt;SystemConfiguration&lt;/key&gt;
+&lt;dict&gt;
+  &lt;key&gt;State:/Network/Global/IPv4&lt;/key&gt;
+  &lt;dict&gt;
+    &lt;key&gt;command&lt;/key&gt;
+    &lt;string&gt;/bin/echo "Global IPv4 config changed"&lt;/string&gt;
+  &lt;/dict&gt;
+&lt;/dict&gt;
+</code></pre>
+
+<p>  </dict>
+  </plist></p>
+
+<p>This XML file has two main keys - one for NSWorkspace events (such as mounted volumes and sleeping/waking your laptop), and one for SystemConfiguration events (such as network state changes).  Followed by a key for the specific event that we&#8217;re monitoring, a key specifying whether we&#8217;ll be executing a command or a Python method in response to this event, and a string (or an array of strings, as we&#8217;ll see later) specifying the actual command that&#8217;s to be executed.  For all of the events in the sample plist, we&#8217;re going to be echoing a message to the console.</p>
+
+<ol>
+<li><strong>Start crankd</strong>  Once crankd has been installed and your configuration plist file is setup, you&#8217;re ready to let crankd monitor for state changes. Let&#8217;s start crankd with the sample plist that was created in the previous step by executing the following command in Terminal &#8220;/usr/local/sbin/crankd.py &#8211;config=/Users/<username>/Library/Preferences/com.googlecode.pymacadmin.crankd.plist&#8221;  Remember to substitute your username for <username> in that command (if you don&#8217;t know your username, you can type &#8220;whoami&#8221; into Terminal and hit the Return button).  If everything was executed correctly, you should see the following lines displayed in Terminal:</li>
+</ol>
+
+
+<p>  Module directory /Users/<username>/Library/Application Support/crankd does not exist: Python handlers will need to use absolute pathnames
+  INFO: Loading configuration from /Users/<username>/Library/Preferences/com.googlecode.pymacadmin.crankd.plist
+  INFO: Listening for these NSWorkspace notifications: NSWorkspaceWillSleepNotification, NSWorkspaceDidWakeNotification, NSWorkspaceDidMountNotification
+  INFO: Listening for these SystemConfiguration events: State:/Network/Global/IPv4</p>
+
+<p>It might look like Terminal isn&#8217;t doing anything, but in all actuality crankd is listening for changes.  You can make crankd come to life by either connecting to (or disconnecting from) an AirPort network, sleeping/waking your machine, or mounting a volume (by inserting a USB memory stick, for example).  Performing any of these actions will cause crankd to echo messages to your Terminal window.  Here&#8217;s the message I received when I disconnected from an AirPort network:</p>
+
+<p>  INFO: SystemConfiguration: State:/Network/Global/IPv4: executing /bin/echo &#8220;Global IPv4 config changed&#8221;
+  Global IPv4 config changed</p>
+
+<p>To quit this sample configuration of crankd, simply hold down the control button on your keyboard and press the C key.  Congratulations, crankd is now up and running!</p>
+
+<h2>A more complex example</h2>
+
+<p>Let&#8217;s look at one of our previous situations</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Puppet + Github = laptop <3]]></title>
+    <link href="http://garylarizza.com/blog/2013/02/15/puppet-plus-github-equals-laptop-love/"/>
+    <updated>2013-02-15T00:00:00-08:00</updated>
+    <id>http://garylarizza.com/blog/2013/02/15/puppet-plus-github-equals-laptop-love</id>
+    <content type="html"><![CDATA[<p>Everybody wants to be special (I blame our moms). The price of special, when
+it comes to IT, is time. Consider how long you&#8217;ve spent on just your damn
+PROMPT and you&#8217;ll realize why automation gives any good sysadmin a case of
+the giggles. Like the cobbler&#8217;s kids, though, your laptop and development
+environment are always the last to be visited by the automation gnomes.</p>
+
+<p>Until now.</p>
+
+<div class="embed-video-container"><iframe src="http://www.youtube.com/embed/YlKXRdSAZhY "></iframe></div>
+
+
+<p><a href="http://www.youtube.com/watch?v=YlKXRdSAZhY">Will Farrington gave a great talk at Puppetconf 2012</a>
+about managing an army of developer laptops using Puppet + some Github love
+that left more than a couple of people asking for his code. That request
+has unfortunately been denied.</p>
+
+<p>Until now.</p>
+
+<h2>Boxen, and hand-tune no more</h2>
+
+<p><a href="http://boxen.github.com">Enter Boxen</a> (née &#8216;The Setup&#8217;), a full-fledged open source project from
+the guys at Github that melds Puppet with your Github credentials to create a
+framework for automating everything from applications, to dotfiles, and even
+printers and emacs extensions (that last bit&#8217;s a lie - no one should be using
+emacs).</p>
+
+<p>How does it work? Think &#8216;Masterless Puppet&#8217; (or, just a bunch of Puppet modules
+that are enforced by running <code>puppet apply</code> on your local machine). Boxen not
+only includes the framework ITSELF, but is a project on Github that hosts
+over 75 individual modules for managing things like rbenv, homebrew, git, mysql,
+postgres, riak, redis, npm, erlang, dropbox, skype, minecraft, heroku,
+1password, iterm2, and much more. Odds are there&#8217;s a module for many of the
+common things you setup on your laptop. And what about things like dotfiles
+that are intrinsically personal? You can create your own repository and manage
+them like you would any other file/directory/symlink on the file system. The
+goal is to model every little piece of your laptop that makes it &#8216;unique&#8217; from
+everyone else until you have your entire environment managed and the hardware
+becomes&#8230;well&#8230;disposable. How many times have you shied away from doing an
+upgrade because some component of your laptop required you to spend countless
+hours tinkering with it? If you&#8217;ve done the time, you should do something to
+make sure that you NEVER have to repeat that process manually ever again.</p>
+
+<p>Boxen is also very self-contained. Packages and binaries that come out of
+Homebrew are installed into <code>/opt/boxen/homebrew/bin</code>, frameworks like Ruby and
+Node are installed into <code>/opt/boxen/{rbenv,nvm}</code>, and individual versions of
+those frameworks are kept separate from your system version of those
+frameworks.  These details are important when you consider that you could purge
+the whole setup without having to rip out components scattered around your
+system.</p>
+
+<p>You may be reading this and thinking &#8220;There&#8217;s no way in hell I can use this to
+manage every laptop in my organization!&#8221;, and you&#8217;re right. The POINT of Boxen
+is that it&#8217;s a tool written by developers for developers to automate THEIR
+systems. The goal of developing is to have as little friction between the
+process of writing code and deploying that code into production. A tool like
+Boxen allows you to more quickly GET to the state where your laptop is ready
+for you to start developing. If you want a tool to completely manage and lock
+down all the laptops on your system, look to using <a href="http://www.puppetlabs.com">Puppet</a>
+in agent/master mode or to a tool like <a href="https://code.google.com/p/munki/">Munki</a>
+to manage all packages on your system. If you&#8217;re interested in giving your
+developers/users the freedom to manage their OWN &#8216;boxes&#8217; because they know best
+what works for them, then Boxen is your tool.</p>
+
+<p>There IS one catch - it&#8217;s targeted to OS X (10.8 to be exact).</p>
+
+<h2>Diary of an elitist</h2>
+
+<p>I was fortunate to have early-access to Boxen in order to kick its Ruby tyres.
+As someone who&#8217;s managed Macs with Puppet before (all the way down to the
+desktop/laptop level), I was embarrassed to admit that I had NOTHING about
+my laptop automated. <a href="http://twitter.com/wfarr">Will</a> unlocked the project and basically said &#8220;Have
+fun, break shit, fix it, and file pull requests&#8221; and away I went. To commit
+completely to the project, I did what any sane person would do.</p>
+
+<p>I reformatted my laptop and started entirely from scratch.</p>
+
+<p>(Let&#8217;s be clear here - you don&#8217;t have to do that. Initially Will reported
+problems getting Boxen running in VMs, but I never ran into an issue. I ran
+Boxen in VMware Fusion 5 a number of times to make sure the changes I made
+were going to do the right thing on a fresh install. I&#8217;d recommend going down
+THAT road if you&#8217;re hesitant of immediately throwing this on your pretty
+snowflake of a laptop.)</p>
+
+<p>Installing Boxen was pretty easy - the only prerequisite was downloading
+the <a href="http://developer.apple.com/library/ios/#documentation/DeveloperTools/Conceptual/WhatsNewXcode/Articles/xcode_4_3.html">XCode Command-Line Tools</a>
+(which included git), pulling down the Boxen repo, and running <code>script/boxen</code>.
+It was stupid simple. What you GOT, by default, was:</p>
+
+<ul>
+<li>Homebrew</li>
+<li>Git</li>
+<li>Hub</li>
+<li>DNSMasq w/ .dev resolver for localhost</li>
+<li>NVM</li>
+<li>RBenv</li>
+<li>Full Disk Encryption requirement</li>
+<li>NodeJS 0.4</li>
+<li>NodeJS 0.6</li>
+<li>NodeJS 0.8</li>
+<li>Ruby 1.8.7</li>
+<li>Ruby 1.9.2</li>
+<li>Ruby 1.9.3</li>
+<li>Ack</li>
+<li>Findutils</li>
+<li>GNU-Tar</li>
+</ul>
+
+
+<p>Remember, this is all tunable and you don&#8217;t need to pull down ALL of these
+packages, but, since it was new, I decided to install everything and sort
+it out later.  Yes, the initial setup took a good number of minutes, but
+think about everything that&#8217;s being installed. In the end, I had a full Ruby
+development environment with rbenv, multiple versions of Ruby, and a laptop
+that could be customized without much work at all.</p>
+
+<h2>Which end do I blow in?</h2>
+
+<p>The readme on <a href="http://boxen.github.com">the project page for Boxen</a> describes how to clone the
+project into <code>/opt/boxen/repo</code>, so that&#8217;s the directory we&#8217;ll be working with.
+To see what will be enforced on your machine, check out <code>manifests/site.pp</code> to
+see something that looks like this:</p>
+
+<figure class='code'><figcaption><span>manifests/site.pp  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kn">require</span> <span class="nc">boxen::environment</span>
+</span><span class='line'><span class="kn">require</span> <span class="nc">homebrew::repo</span>
+</span><span class='line'>
+</span><span class='line'><span class="nc">Exec</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nt">group</span>       <span class="p">=&gt;</span> <span class="s1">&#39;staff&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">logoutput</span>   <span class="p">=&gt;</span> <span class="ss">on_failure</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">user</span>        <span class="p">=&gt;</span> <span class="nv">$luser</span><span class="p">,</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nt">path</span> <span class="p">=&gt;</span> <span class="p">[</span>
+</span><span class='line'>    <span class="s2">&quot;</span><span class="si">${boxen::config::home}</span><span class="s2">/rbenv/shims&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;</span><span class="si">${boxen::config::home}</span><span class="s2">/homebrew/bin&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s1">&#39;/usr/bin&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s1">&#39;/bin&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s1">&#39;/usr/sbin&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s1">&#39;/sbin&#39;</span>
+</span><span class='line'>  <span class="p">],</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nt">environment</span> <span class="p">=&gt;</span> <span class="p">[</span>
+</span><span class='line'>    <span class="s2">&quot;HOMEBREW_CACHE=</span><span class="si">${homebrew::cachedir}</span><span class="s2">&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;HOME=/Users/</span><span class="si">${::luser}</span><span class="s2">&quot;</span>
+</span><span class='line'>  <span class="p">]</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nc">File</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nt">group</span> <span class="p">=&gt;</span> <span class="s1">&#39;staff&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">owner</span> <span class="p">=&gt;</span> <span class="nv">$luser</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nc">Package</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nt">provider</span> <span class="p">=&gt;</span> <span class="ss">homebrew</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">require</span>  <span class="p">=&gt;</span> <span class="nc">Class</span><span class="p">[</span><span class="s1">&#39;homebrew&#39;</span><span class="p">]</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nc">Repository</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nt">provider</span> <span class="p">=&gt;</span> <span class="ss">git</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">extra</span>    <span class="p">=&gt;</span> <span class="p">[</span>
+</span><span class='line'>    <span class="s1">&#39;--recurse-submodules&#39;</span>
+</span><span class='line'>  <span class="p">],</span>
+</span><span class='line'>  <span class="nt">require</span>  <span class="p">=&gt;</span> <span class="nc">Class</span><span class="p">[</span><span class="s1">&#39;git&#39;</span><span class="p">]</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nc">Service</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nt">provider</span> <span class="p">=&gt;</span> <span class="ss">ghlaunchd</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is largely scaffolding setting up the Boxen environment and resource
+defaults. If you&#8217;re familiar with Puppet, this should be recognizable to you,
+but for everyone else, let&#8217;s dissect one of the resource defaults:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nc">File</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nt">group</span> <span class="p">=&gt;</span> <span class="s1">&#39;staff&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">owner</span> <span class="p">=&gt;</span> <span class="nv">$luser</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This block basically means that any file you declare with Puppet should default
+to having its owner set as your username and its group set to &#8216;staff&#8217; (which is
+standard in OS X). You can override this explicitly with a file declaration by
+providing the owner or group attribute, but if you omit it then it&#8217;s going to
+default to these values.</p>
+
+<p>The rest of the defaults are customized for Boxen&#8217;s preferences (i.e. homebrew
+will be used to install all packages unless you specify otherwise, exec
+resources will log all output on failure, service resources will use githubs&#8217;s
+customized service provider, and etc&#8230;).  Now let&#8217;s look below:</p>
+
+<figure class='code'><figcaption><span>manifests/site.pp  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">node</span> <span class="s">default</span> <span class="p">{</span><span class="c-Singleline"></span>
+</span><span class='line'><span class="c-Singleline">  # core modules, needed for most things</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">dnsmasq</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">git</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">hub</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">nginx</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">nvm</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">ruby</span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # fail if FDE is not enabled</span>
+</span><span class='line'>  <span class="kr">if</span> <span class="nv">$::root_encrypted</span> <span class="o">==</span> <span class="ss">false</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nf">fail</span><span class="p">(</span><span class="s1">&#39;Please enable full disk encryption and try again&#39;</span><span class="p">)</span>
+</span><span class='line'>  }<span class="c-Singleline"></span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # node versions</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">nodejs::0-4</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">nodejs::0-6</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">nodejs::0-8</span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # default ruby versions</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">ruby::1-8-7</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">ruby::1-9-2</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">ruby::1-9-3</span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # common, useful packages</span>
+</span><span class='line'>  <span class="nc">package</span> <span class="p">{</span>
+</span><span class='line'>    <span class="p">[</span>
+</span><span class='line'>      <span class="s1">&#39;ack&#39;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s1">&#39;findutils&#39;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s1">&#39;gnu-tar&#39;</span>
+</span><span class='line'>    <span class="p">]:</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">file</span> <span class="p">{</span> <span class="s2">&quot;</span><span class="si">${boxen::config::srcdir}</span><span class="s2">/our-boxen&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">link</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">target</span> <span class="p">=&gt;</span> <span class="nv">$boxen::config::repodir</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>These are the things that Boxen has chosen to enforce &#8216;out of the box&#8217;. Knowing
+that Boxen was designed so that developers could customize their &#8216;boxes&#8217;
+THEMSELVES, it makes sense that there&#8217;s not much that&#8217;s being enforced on
+everyone. In fact, the most significant thing being &#8216;thrust&#8217; upon you is the
+fact that the machine must have full disk encryption enabled (which is a
+good idea anyways).</p>
+
+<p>If you want to pare down what Boxen gives you by default, you can choose to
+comment out lines providing, for example, nvm and nodejs versions (if you don&#8217;t
+use node.js in your environment). I&#8217;m a Ruby developer, so all the Ruby builds
+(and rbenv) are very helpful to me, but you could also remove those if you were
+so inclined. The point is that this file contains the &#8216;knobs&#8217; to dial your base
+Boxen setup up or down.</p>
+
+<h2>Customizing (or, my dotfiles are better than yours)</h2>
+
+<p>The whole point of Boxen is to customize your laptop and keep its customization
+automated. To do this, we&#8217;re going to need to make some Puppet class files.</p>
+
+<p><strong> CAUTION: PUPPET AHEAD </strong></p>
+
+<p>If you&#8217;ve not had experience with Puppet before, <a href="http://docs.puppetlabs.com/learning/">I can&#8217;t recommend the learning
+Puppet series enough</a>. In the vein of &#8220;Puppet now, learn later&#8221;,
+I&#8217;m going to give you Puppet code that works for ME and only explain the trickier
+bits.</p>
+
+<p>Boxen has some &#8216;magic&#8217; code that&#8217;s going to automatically look for a class
+called <code>people::&lt;github username&gt;</code>, and so I&#8217;m going to create a file in
+<code>modules/people/manifests</code> called <code>glarizza.pp</code>.  This file will contain Puppet
+code specific to MY laptop(s).  Here&#8217;s a snippit of that file:</p>
+
+<figure class='code'><figcaption><span>modules/people/manifests/glarizza.pp  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">class</span> <span class="nc">people::glarizza</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">notify</span> <span class="p">{</span> <span class="s1">&#39;class people::glarizza declared&#39;</span><span class="p">:</span> <span class="p">}</span><span class="c-Singleline"></span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # Changes the default shell to the zsh version we get from Homebrew</span>
+</span><span class='line'><span class="c-Singleline">  # Uses the osx_chsh type out of boxen/puppet-osx</span>
+</span><span class='line'>  <span class="nc">osx_chsh</span> <span class="p">{</span> <span class="nv">$::luser</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">shell</span>   <span class="p">=&gt;</span> <span class="s1">&#39;/opt/boxen/homebrew/bin/zsh&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="nc">Package</span><span class="p">[</span><span class="s1">&#39;zsh&#39;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">file_line</span> <span class="p">{</span> <span class="s1">&#39;add zsh to /etc/shells&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">path</span>    <span class="p">=&gt;</span> <span class="s1">&#39;/etc/shells&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">line</span>    <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${boxen::config::homebrewdir}</span><span class="s2">/bin/zsh&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="nc">Package</span><span class="p">[</span><span class="s1">&#39;zsh&#39;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span><span class="c-Singleline"></span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  ##################################</span>
+</span><span class='line'><span class="c-Singleline">  ## Facter, Puppet, and Envpuppet##</span>
+</span><span class='line'><span class="c-Singleline">  ##################################</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">repository</span> <span class="p">{</span> <span class="s2">&quot;</span><span class="si">${::boxen_srcdir}</span><span class="s2">/puppet&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">source</span> <span class="p">=&gt;</span> <span class="s1">&#39;puppetlabs/puppet&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">repository</span> <span class="p">{</span> <span class="s2">&quot;</span><span class="si">${::boxen_srcdir}</span><span class="s2">/facter&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">source</span> <span class="p">=&gt;</span> <span class="s1">&#39;puppetlabs/facter&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">file</span> <span class="p">{</span> <span class="s1">&#39;/bin/envpuppet&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>  <span class="p">=&gt;</span> <span class="ss">link</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">mode</span>    <span class="p">=&gt;</span> <span class="s1">&#39;0755&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">target</span>  <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${::boxen_srcdir}</span><span class="s2">/puppet/ext/envpuppet&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="nc">Repository</span><span class="p">[</span><span class="s2">&quot;</span><span class="si">${::boxen_srcdir}</span><span class="s2">/puppet&quot;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The notify resource is only to prove that when you run Boxen that this class
+is being declared - it only displays a message to the console when you run
+the <code>boxen</code> binary.</p>
+
+<p>The <code>osx_chsh</code> resource is a custom defined type that Github has created to
+ensure a line shows up in <code>/etc/shells</code> as an acceptable shell. Because
+Boxen installs zsh from homebrew into <code>/opt/boxen/homebrew</code>, we need to ensure
+that <code>/etc/shells</code> is correct. Note the syntax of <code>$boxen::config::homebrewdir</code>
+which refers to a variable called <code>$homebrewdir</code> in the <code>boxen::config</code> class.</p>
+
+<p>Next, I&#8217;ve setup a couple of resources to make sure the <code>puppet</code> and <code>facter</code>
+repositories are installed on my system. Github has also developed a lightweight
+<code>repository</code> resource that will simply ensure that a repo is cloned at a location
+on disk. <code>$::boxen_srcdir</code> is one of the <a href="http://docs.puppetlabs.com/guides/custom_facts.html">custom Facter facts</a> that
+Boxen provides in <code>shared/boxen/lib/facter/boxen.rb</code> in the Boxen repository.</p>
+
+<p>The file resource sets up a symlink from <code>/bin/envpuppet</code> to
+<code>/Users/glarizza/src/puppet/ext/envpuppet</code> on my system. The attributes should
+be pretty self-explanatory, but the newest attribute of <code>require</code> says that the
+<code>repository</code> resource must come BEFORE this file resource is declared. This is
+a demonstration of <a href="http://docs.puppetlabs.com/learning/ordering.html">Puppet&#8217;s ordering metaparameters</a> that are described
+in the <a href="http://docs.puppetlabs.com/learning/">Learning Puppet</a> series.</p>
+
+<p>Since we briefly touched on <code>$::boxen_srcdir</code>, what are some other custom facts
+that come out of <code>shared/boxen/lib/facter/boxen.rb</code>?</p>
+
+<figure class='code'><figcaption><span>shared/boxen/lib/facter/boxen.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="nb">require</span> <span class="s2">&quot;json&quot;</span>
+</span><span class='line'><span class="nb">require</span> <span class="s2">&quot;boxen/config&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">config</span>   <span class="o">=</span> <span class="ss">Boxen</span><span class="p">:</span><span class="ss">:Config</span><span class="o">.</span><span class="n">load</span>
+</span><span class='line'><span class="n">facts</span>    <span class="o">=</span> <span class="p">{}</span>
+</span><span class='line'><span class="n">factsdir</span> <span class="o">=</span> <span class="no">File</span><span class="o">.</span><span class="n">join</span> <span class="n">config</span><span class="o">.</span><span class="n">homedir</span><span class="p">,</span> <span class="s2">&quot;config&quot;</span><span class="p">,</span> <span class="s2">&quot;facts&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">facts</span><span class="o">[</span><span class="s2">&quot;github_login&quot;</span><span class="o">]</span>   <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">login</span>
+</span><span class='line'><span class="n">facts</span><span class="o">[</span><span class="s2">&quot;github_email&quot;</span><span class="o">]</span>   <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">email</span>
+</span><span class='line'><span class="n">facts</span><span class="o">[</span><span class="s2">&quot;github_name&quot;</span><span class="o">]</span>    <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">name</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">facts</span><span class="o">[</span><span class="s2">&quot;boxen_home&quot;</span><span class="o">]</span>     <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">homedir</span>
+</span><span class='line'><span class="n">facts</span><span class="o">[</span><span class="s2">&quot;boxen_srcdir&quot;</span><span class="o">]</span>   <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">srcdir</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">respond_to?</span> <span class="ss">:reponame</span>
+</span><span class='line'>  <span class="n">facts</span><span class="o">[</span><span class="s2">&quot;boxen_reponame&quot;</span><span class="o">]</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">reponame</span>
+</span><span class='line'><span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">facts</span><span class="o">[</span><span class="s2">&quot;luser&quot;</span><span class="o">]</span>          <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">user</span>
+</span><span class='line'>
+</span><span class='line'><span class="no">Dir</span><span class="o">[</span><span class="s2">&quot;</span><span class="si">#{</span><span class="n">config</span><span class="o">.</span><span class="n">homedir</span><span class="si">}</span><span class="s2">/config/facts/*.json&quot;</span><span class="o">].</span><span class="n">each</span> <span class="k">do</span> <span class="o">|</span><span class="n">file</span><span class="o">|</span>
+</span><span class='line'>  <span class="n">facts</span><span class="o">.</span><span class="n">merge!</span> <span class="no">JSON</span><span class="o">.</span><span class="n">parse</span> <span class="no">File</span><span class="o">.</span><span class="n">read</span> <span class="n">file</span>
+</span><span class='line'><span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">facts</span><span class="o">.</span><span class="n">each</span> <span class="p">{</span> <span class="o">|</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="o">|</span> <span class="no">Facter</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="p">{</span> <span class="n">setcode</span> <span class="p">{</span> <span class="n">v</span> <span class="p">}</span> <span class="p">}</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This file will also give you <code>$::luser</code>, which will evaluate out to your system
+username, and <code>$::github_name</code>, which is equivalent to your Github username
+(note that this is what Boxen uses to find your class file in
+<code>modules/people/manifests</code>). If you&#8217;re looking for all the other values set by
+these custom facts, check out <code>config/boxen/defaults.json</code> after you run Boxen.</p>
+
+<h2>Using modules out of the Boxen namespace</h2>
+
+<p>Not only is Boxen its own project, but it&#8217;s a <a href="http://github.com/boxen">separate organization on Github
+that hosts a number of Puppet modules</a>. Some of these modules are
+pretty simple (a single resource to install a package), but the point is that
+they&#8217;ve been provided FOR you - so use, fork, and improve them (but most of
+all, submit pull requests). The way you use them with Boxen may not be readily
+clear, so let&#8217;s walk through that with a simple module for installing Google
+Chrome.</p>
+
+<ol>
+<li>Add the module to your Puppetfile</li>
+<li>Classify the module in your Puppet setup</li>
+<li>Run Boxen</li>
+</ol>
+
+
+<h4>Add the module to your Puppetfile</h4>
+
+<p>Boxen uses a tool called <a href="https://github.com/rodjek/librarian-puppet">librarian-puppet</a> to source and install Puppet
+modules from Github. Librarian-puppet uses the <code>Puppetfile</code> file in the root of
+the Boxen repo to install modules.  Let&#8217;s look at a couple of lines in that
+file:</p>
+
+<figure class='code'><figcaption><span>Puppetfile  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">mod</span> <span class="s2">&quot;boxen&quot;</span><span class="p">,</span>    <span class="s2">&quot;0.1.8&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-boxen&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;dnsmasq&quot;</span><span class="p">,</span>  <span class="s2">&quot;0.0.1&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-dnsmasq&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;git&quot;</span><span class="p">,</span>      <span class="s2">&quot;0.0.3&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-git&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;hub&quot;</span><span class="p">,</span>      <span class="s2">&quot;0.0.1&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-hub&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;homebrew&quot;</span><span class="p">,</span> <span class="s2">&quot;0.0.17&quot;</span><span class="p">,</span> <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-homebrew&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;inifile&quot;</span><span class="p">,</span>  <span class="s2">&quot;0.0.1&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-inifile&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;nginx&quot;</span><span class="p">,</span>    <span class="s2">&quot;0.0.2&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-nginx&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;nodejs&quot;</span><span class="p">,</span>   <span class="s2">&quot;0.0.2&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-nodejs&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;nvm&quot;</span><span class="p">,</span>      <span class="s2">&quot;0.0.5&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-nvm&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;ruby&quot;</span><span class="p">,</span>     <span class="s2">&quot;0.4.0&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-ruby&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;stdlib&quot;</span><span class="p">,</span>   <span class="s2">&quot;3.0.0&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;puppetlabs/puppetlabs-stdlib&quot;</span>
+</span><span class='line'><span class="n">mod</span> <span class="s2">&quot;sudo&quot;</span><span class="p">,</span>     <span class="s2">&quot;0.0.1&quot;</span><span class="p">,</span>  <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-sudo&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This evaluates out to the following syntax:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>mod, &lt;module name&gt;, &lt;version or tag&gt;, &lt;source&gt;</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The <strong>HARDEST</strong> thing about this file is finding the version number of modules
+on Github (HINT: it&#8217;s a tag). Once you&#8217;re given that information, it&#8217;s easy to
+pull up a module on Github, look at its tags, and then fill out the file. Let&#8217;s
+do that with a line for the Chrome module:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">mod</span> <span class="s2">&quot;chrome&quot;</span><span class="p">,</span>     <span class="s2">&quot;0.0.2&quot;</span><span class="p">,</span>   <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;boxen/puppet-chrome&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h4>Classify the module in your Puppet setup</h4>
+
+<p>In the previous section, we created <code>modules/people/manifests/&lt;github
+username&gt;.pp</code>.  We COULD continue to fill this file with a ton of resources,
+but I tend to like to separate out resources into separate subclasses. <a href="http://docs.puppetlabs.com/learning/modules1.html#manifests-namespacing-and-autoloading">Puppet
+has module naming conventions to ensure that it can FIND your
+subclasses</a>, so I recommend browsing that guide before randomly
+naming files (<strong>HINT:</strong> Filenames ARE important and DO matter here). I want to
+create a <code>people::glarizza::applications</code> subclass, so I need to do the
+following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>## YES, make sure to replace YOUR USERNAME for 'glarizza'
+</span><span class='line'>$ cd /opt/boxen/repo
+</span><span class='line'>$ mkdir -p modules/people/manifests/glarizza
+</span><span class='line'>$ vim modules/people/manifests/glarizza/applications.pp</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It&#8217;s totally fine that there&#8217;s a <code>glarizza</code> directory aside the <code>glarizza.pp</code>
+file - this is intentional and desired. Puppet&#8217;s not going to automatically
+declare anything in the <code>people::glarizza::applications</code> class until we TELL it
+to, so let&#8217;s open <code>modules/people/manifests/glarizza.pp</code> and add the following
+line at the top:</p>
+
+<figure class='code'><figcaption><span>modules/people/manifests/glarizza.pp  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kn">include</span> <span class="nc">people::glarizza::applications</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That tells Puppet to find the <code>people::glarizza::applications</code> class and make
+sure it &#8216;does&#8217; everything in that file. Now, let&#8217;s create the
+<code>people::glarizza::applications</code> class:</p>
+
+<figure class='code'><figcaption><span>modules/people/manifests/glarizza/applications.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">class</span> <span class="nc">people::glarizza::applications</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kn">include</span> <span class="nc">chrome</span>
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Yep, all it takes is one line to include the module we will get from Boxen.
+Because of the way Boxen works, it will consult the Puppetfile FIRST, pull down
+any modules that are in the Puppetfile but NOT on the system, drop them into
+place so Puppet can find them, and then run Puppet normally.</p>
+
+<h4>Run Boxen</h4>
+
+<p>Once you have Boxen setup, you can just run <code>boxen</code> from the command line to
+have it enforce your configuration. By default, if there are any errors, it
+will log them as Github Issues on your fork of the main Boxen repository (this
+can be disabled with <code>boxen --no-issue</code>). As you&#8217;re just getting started,
+don&#8217;t worry about the errors. The good news is that once you fix things and
+perform a successful Boxen run, it will automatically close all open issues.
+If everything went well, you should now have Google Chrome in your
+<code>/Applications</code> directory!</p>
+
+<h2>¡Más Puppet!</h2>
+
+<p>You&#8217;ll find as you start customizing all the things that you&#8217;re usually
+managing one of the following resources:</p>
+
+<ol>
+<li>Packages</li>
+<li>Files</li>
+<li>Repositories</li>
+<li>Plist files</li>
+</ol>
+
+
+<p>We&#8217;ve covered managing a repository and a file, but let&#8217;s look at a couple of
+the other popular resources:</p>
+
+<h3>Packages are annoying</h3>
+
+<p>I would be willing to bet that most of the things you end up managing will be
+packages. Using Puppet with Boxen, you have the ability to install four
+different kinds of packages:</p>
+
+<ol>
+<li>Applications inside a DMG</li>
+<li>Installer packages inside a DMG</li>
+<li>Homebrew Packages</li>
+<li>Applications inside a .zip file</li>
+</ol>
+
+
+<p>Here&#8217;s an example of every type of package installer:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="c-Singleline">  # Application in a DMG</span>
+</span><span class='line'>  <span class="nc">package</span> <span class="p">{</span> <span class="s1">&#39;Gephi&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>   <span class="p">=&gt;</span> <span class="ss">installed</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">source</span>   <span class="p">=&gt;</span> <span class="s1">&#39;https://launchpadlibrarian.net/98903476/gephi-0.8.1-beta.dmg&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">provider</span> <span class="p">=&gt;</span> <span class="ss">appdmg</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span><span class="c-Singleline"></span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # Installer in a DMG</span>
+</span><span class='line'>  <span class="nc">package</span> <span class="p">{</span> <span class="s1">&#39;Virtualbox&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">installed</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">source</span> <span class="p">=&gt;</span> <span class="s1">&#39;http://download.virtualbox.org/virtualbox/4.1.22/VirtualBox-4.1.23-80870-OSX.dmg&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">provider</span> <span class="p">=&gt;</span> <span class="ss">pkgdmg</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span><span class="c-Singleline"></span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # Homebrew Package</span>
+</span><span class='line'>  <span class="nc">package</span> <span class="p">{</span> <span class="s1">&#39;tmux&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">installed</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span><span class="c-Singleline"></span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # Application in a .zip</span>
+</span><span class='line'>  <span class="nc">package</span> <span class="p">{</span> <span class="s1">&#39;Github for Mac&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>   <span class="p">=&gt;</span> <span class="ss">installed</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">source</span>   <span class="p">=&gt;</span> <span class="s1">&#39;https://github-central.s3.amazonaws.com/mac%2FGitHub%20for%20Mac%2069.zip&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">provider</span> <span class="p">=&gt;</span> <span class="ss">compressed_app</span>
+</span><span class='line'>  <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Notice that the only thing that changes among these resources is the <code>provider</code>
+attribute. Remember from before that Boxen sets the default package provider to
+be &#8216;homebrew&#8217;, so for &#8216;tmux&#8217; I omitted the provider attribute to utilize the
+default. Also, the <code>ensure</code> attribute is defaulted to &#8216;installed&#8217;, so
+technically I could remove it&#8230;but I tend to prefer to use it for people who
+will be reading my code later.</p>
+
+<p>There&#8217;s no provider for .pkg files. Why? Well, packages on OS X are
+either bundles or flat-packages. Bundles LOOK like individual files, but they&#8217;re
+actually folders that contain everything necessary to expand and install the
+package. Flat packages are just that - an actual file that ends in .pkg that
+can be expanded to install whatever you want. Bundle packages are pretty
+common, but they&#8217;re also hard for curl to download them (being that it&#8217;s just
+a folder full of files) - this is why most installer packages you encounter on
+OS X are going to be enclosed in a .dmg Disk Image.</p>
+
+<p>So which provider will you use? Well, if your file ends in .dmg then you&#8217;re
+going to be using either the <code>pkgdmg</code> or <code>appdmg</code> provider. How do you know
+which to use? Expand the .dmg file and look inside it. If it contains an
+application ending in .app that simply needs dragged into the <code>/Applications</code>
+folder on disk, then chose the <code>appdmg</code> provider (that&#8217;s essentially all it
+does - expand the .dmg file and ditto the .app file into <code>/Applications</code>).
+If the disk image contains a .pkg package installer, then you&#8217;ll chose the
+<code>pkgdmg</code> provider (which expands the .dmg file and uses <code>installer</code> to install
+the contents of the .pkg file silently in the background). If your file is a
+.zip file containing an Application (.app file), then you can use Github&#8217;s
+custom <code>compressed_app</code> provider that will unzip the file and ditto the app
+into <code>/Applications</code>. Finally, if you want to install a package from Homebrew,
+then the <code>homebrew</code> provider is pretty self-explanatory here.</p>
+
+<p>(NOTE: There is ONE more package provider I haven&#8217;t covered here - the <code>macports</code>
+provider. It requires <a href="http://www.macports.org">Macports</a> to be installed on your
+system, and will use it to install a package. Macports vs. Homebrew arguments
+notwithstanding, if you&#8217;re into Macports then there&#8217;s a provider for you.)</p>
+
+<h3>Plists: because why NOT XML :\</h3>
+
+<p>Apple falls somewhere between &#8220;the registry&#8221; and &#8220;config files&#8221; on the timeline
+of tweaking system settings. Most settings are locked up in plist files that
+can be managed by hand or with <code>plistbuddy</code> or <code>defaults</code>. A couple of people
+have saved their customizations in with their dotfiles (<a href="https://github.com/holman/dotfiles/blob/master/osx/set-defaults.sh">Zach Holman has an example here</a>),
+but Puppet is a great way for managing individual keys in your plist files.
+<a href="http://github.com/glarizza/puppet-property_list_key">I&#8217;ve written a module that will manage any number of keys in a plist
+file</a>.  You can modify your <code>Puppetfile</code> to
+make sure Boxen picks up my module by adding the following line:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">mod</span> <span class="s2">&quot;property_list_key&quot;</span><span class="p">,</span>  <span class="s2">&quot;0.1.0&quot;</span><span class="p">,</span>   <span class="ss">:github_tarball</span> <span class="o">=&gt;</span> <span class="s2">&quot;glarizza/puppet-property_list_key&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Next, you&#8217;ll need to add resources to your classes:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="c-Singleline">  # Disable Gatekeeper so you can install any package you want</span>
+</span><span class='line'>  <span class="nc">property_list_key</span> <span class="p">{</span> <span class="s1">&#39;Disable Gatekeeper&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">path</span>   <span class="p">=&gt;</span> <span class="s1">&#39;/var/db/SystemPolicy-prefs.plist&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">key</span>    <span class="p">=&gt;</span> <span class="s1">&#39;enabled&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">value</span>  <span class="p">=&gt;</span> <span class="s1">&#39;no&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nv">$my_homedir</span> <span class="o">=</span> <span class="s2">&quot;/Users/</span><span class="si">${::luser}</span><span class="s2">&quot;</span><span class="c-Singleline"></span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # NOTE: Dock prefs only take effect when you restart the dock</span>
+</span><span class='line'>  <span class="nc">property_list_key</span> <span class="p">{</span> <span class="s1">&#39;Hide the dock&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">path</span>       <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${my_homedir}</span><span class="s2">/Library/Preferences/com.apple.dock.plist&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">key</span>        <span class="p">=&gt;</span> <span class="s1">&#39;autohide&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">value</span>      <span class="p">=&gt;</span> <span class="ss">true</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">value_type</span> <span class="p">=&gt;</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">notify</span>     <span class="p">=&gt;</span> <span class="nc">Exec</span><span class="p">[</span><span class="s1">&#39;Restart the Dock&#39;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">property_list_key</span> <span class="p">{</span> <span class="s1">&#39;Align the Dock Left&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">path</span>       <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${my_homedir}</span><span class="s2">/Library/Preferences/com.apple.dock.plist&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">key</span>        <span class="p">=&gt;</span> <span class="s1">&#39;orientation&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">value</span>      <span class="p">=&gt;</span> <span class="s1">&#39;left&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">notify</span>     <span class="p">=&gt;</span> <span class="nc">Exec</span><span class="p">[</span><span class="s1">&#39;Restart the Dock&#39;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">property_list_key</span> <span class="p">{</span> <span class="s1">&#39;Lower Right Hotcorner - Screen Saver&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">path</span>       <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${my_homedir}</span><span class="s2">/Library/Preferences/com.apple.dock.plist&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">key</span>        <span class="p">=&gt;</span> <span class="s1">&#39;wvous-br-corner&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">value</span>      <span class="p">=&gt;</span> <span class="m">10</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">value_type</span> <span class="p">=&gt;</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">notify</span>     <span class="p">=&gt;</span> <span class="nc">Exec</span><span class="p">[</span><span class="s1">&#39;Restart the Dock&#39;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">property_list_key</span> <span class="p">{</span> <span class="s1">&#39;Lower Right Hotcorner - Screen Saver - modifier&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">path</span>       <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${my_homedir}</span><span class="s2">/Library/Preferences/com.apple.dock.plist&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">key</span>        <span class="p">=&gt;</span> <span class="s1">&#39;wvous-br-modifier&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">value</span>      <span class="p">=&gt;</span> <span class="m">0</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">value_type</span> <span class="p">=&gt;</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">notify</span>     <span class="p">=&gt;</span> <span class="nc">Exec</span><span class="p">[</span><span class="s1">&#39;Restart the Dock&#39;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">exec</span> <span class="p">{</span> <span class="s1">&#39;Restart the Dock&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">command</span>     <span class="p">=&gt;</span> <span class="s1">&#39;/usr/bin/killall -HUP Dock&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">refreshonly</span> <span class="p">=&gt;</span> <span class="ss">true</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">file</span> <span class="p">{</span> <span class="s1">&#39;Dock Plist&#39;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>  <span class="p">=&gt;</span> <span class="ss">file</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="p">[</span>
+</span><span class='line'>                 <span class="nc">Property_list_key</span><span class="p">[</span><span class="s1">&#39;Lower Right Hotcorner - Screen Saver - modifier&#39;</span><span class="p">],</span>
+</span><span class='line'>                 <span class="nc">Property_list_key</span><span class="p">[</span><span class="s1">&#39;Hide the dock&#39;</span><span class="p">],</span>
+</span><span class='line'>                 <span class="nc">Property_list_key</span><span class="p">[</span><span class="s1">&#39;Align the Dock Left&#39;</span><span class="p">],</span>
+</span><span class='line'>                 <span class="nc">Property_list_key</span><span class="p">[</span><span class="s1">&#39;Lower Right Hotcorner - Screen Saver&#39;</span><span class="p">],</span>
+</span><span class='line'>                 <span class="nc">Property_list_key</span><span class="p">[</span><span class="s1">&#39;Lower Right Hotcorner - Screen Saver - modifier&#39;</span><span class="p">],</span>
+</span><span class='line'>               <span class="p">],</span>
+</span><span class='line'>    <span class="nt">path</span>    <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${my_homedir}</span><span class="s2">/Library/Preferences/com.apple.dock.plist&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">mode</span>    <span class="p">=&gt;</span> <span class="s1">&#39;0600&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">notify</span>     <span class="p">=&gt;</span> <span class="nc">Exec</span><span class="p">[</span><span class="s1">&#39;Restart the Dock&#39;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The important attributes are:</p>
+
+<ol>
+<li><code>path</code>: The path to the plist file on disk</li>
+<li><code>key</code>: The individual KEY in the plist file you want to manage</li>
+<li><code>value</code>: The value that the key should have in the plist file</li>
+<li><code>value_type</code>: The datatype the value should be (defaults to <code>string</code>, but
+could also be <code>array</code>, <code>hash</code>, <code>boolean</code>, or <code>integer</code>)</li>
+</ol>
+
+
+<p>You MUST pass a path, key, and value or Puppet will throw an error.</p>
+
+<p>The first resource above sets Gatekeeper in 10.8 and allows you to install
+packages from the web that HAVEN&#8217;T been signed (in 10.8, Apple won&#8217;t allow you
+to install unsigned packages or anything outside of the App Store without
+enabling this setting).</p>
+
+<p>All of the other resources relate to making changes to the Dock. Because of the
+way the Dock is managed, you must <code>HUP</code> its process when making changes to your
+dock plist before they take effect. Also, the dock plist has to be owned by
+you or else the changes won&#8217;t take effect. Every dock plist resource has
+a <code>notify</code> metaparameter which means &#8220;any time this resource changes, run this
+exec resource&#8221;. That exec resource is a simple command that <code>HUP</code>s the dock
+process.  It will ONLY be run if a resource notifies it - so if no changes are
+made in a Puppet run then the command won&#8217;t fire. Finally, the file resource to
+manage the dock plist ensures that permissions are set (and notifies the exec
+in case it needs to CHANGE permissions).</p>
+
+<p>Again, this is purely dealing with Puppet - but plists are a major part of OS
+X and you&#8217;ll be dealing with them regularly!</p>
+
+<h3>But seriously, dotfiles</h3>
+
+<p>I know I&#8217;ve joked about it a couple of times, but getting your dotfiles into
+their correct location is a quick win. The secret is to lock them all up in
+a repository, and then symlink them where you need them. Let&#8217;s look at that:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="c-Singleline">  # My dotfile repository</span>
+</span><span class='line'>  <span class="nc">repository</span> <span class="p">{</span> <span class="s2">&quot;</span><span class="si">${my_sourcedir}</span><span class="s2">/dotfiles&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">source</span> <span class="p">=&gt;</span> <span class="s1">&#39;glarizza/dotfiles&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">file</span> <span class="p">{</span> <span class="s2">&quot;</span><span class="si">${my_homedir}</span><span class="s2">/.tmux.conf&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>  <span class="p">=&gt;</span> <span class="ss">link</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">mode</span>    <span class="p">=&gt;</span> <span class="s1">&#39;0644&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">target</span>  <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${my_sourcedir}</span><span class="s2">/dotfiles/tmux.conf&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="nc">Repository</span><span class="p">[</span><span class="s2">&quot;</span><span class="si">${my_sourcedir}</span><span class="s2">/dotfiles&quot;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">file</span> <span class="p">{</span> <span class="s2">&quot;/Users/</span><span class="si">${my_username}</span><span class="s2">/.zshrc&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>  <span class="p">=&gt;</span> <span class="ss">link</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">mode</span>    <span class="p">=&gt;</span> <span class="s1">&#39;0644&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">target</span>  <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${my_sourcedir}</span><span class="s2">/dotfiles/zshrc&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="nc">Repository</span><span class="p">[</span><span class="s2">&quot;</span><span class="si">${my_sourcedir}</span><span class="s2">/dotfiles&quot;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nc">file</span> <span class="p">{</span> <span class="s2">&quot;/Users/</span><span class="si">${my_username}</span><span class="s2">/.vimrc&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">link</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">mode</span>   <span class="p">=&gt;</span> <span class="s1">&#39;0644&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">target</span> <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${my_sourcedir}</span><span class="s2">/dotfiles/vimrc&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="nc">Repository</span><span class="p">[</span><span class="s2">&quot;</span><span class="si">${my_sourcedir}</span><span class="s2">/dotfiles&quot;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span><span class="c-Singleline"></span>
+</span><span class='line'>
+</span><span class='line'><span class="c-Singleline">  # Yes, oh-my-zsh. Judge me.</span>
+</span><span class='line'>  <span class="nc">file</span> <span class="p">{</span> <span class="s2">&quot;/Users/</span><span class="si">${my_username}</span><span class="s2">/.oh-my-zsh&quot;</span><span class="p">:</span>
+</span><span class='line'>    <span class="nt">ensure</span>  <span class="p">=&gt;</span> <span class="ss">link</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">target</span>  <span class="p">=&gt;</span> <span class="s2">&quot;</span><span class="si">${my_sourcedir}</span><span class="s2">/oh-my-zsh&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="nc">Repository</span><span class="p">[</span><span class="s2">&quot;</span><span class="si">${my_sourcedir}</span><span class="s2">/oh-my-zsh&quot;</span><span class="p">],</span>
+</span><span class='line'>  <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It&#8217;s worth mentioning that Puppet does not do things procedurally. Just because
+the dotfiles repository is listed before every symlink DOES NOT mean that Puppet
+will evaluate and declare it first. You&#8217;ll need to specify order here, and that&#8217;s
+what the <code>require</code> metaparameter does.</p>
+
+<p>Based on what I&#8217;ve already shown you, this code block should be very simple to
+follow. Because I&#8217;m using symlinks, the dotfiles should always be current.
+Because the dotfiles are under revision control, updating them all is as simple
+as making commits and updating your repository. If you&#8217;ve ever had to migrate
+these files to a new VM/machine, then you know how full of win this block of
+code is.</p>
+
+<h2>Don&#8217;t sweat petty (or pet sweaty)</h2>
+
+<p>When I show sysadmins/developers automation like this, they usually want to
+apply it to the HARDEST part of their day-job IMMEDIATELY. That&#8217;s a somewhat
+rational reaction, but it&#8217;s not going to give you the results you want. The
+cool thing ABOUT Boxen and Puppet is that it&#8217;s going to remove those little
+annoyances in your day that slowly sap your time. START by tackling those
+small annoyances to remove them and build your confidence (like the dotfiles
+example above). Yeah, you&#8217;ll only save a couple of minutes a day, but it
+grows exponentially. Also, when you solve a problem during the course of your
+day, MANAGE it with Boxen by putting it in your Puppet class (then, test it
+out on a VM or another machine to make sure it does what you expect).</p>
+
+<p>Don&#8217;t worry that you&#8217;re not saving the world with a massive Puppet class -
+sometimes the secret to happiness is opening iTerm on a new machine and
+seeing your finely-crafted prompt shining in its cornflower-blue glory.</p>
+
+<h2>Now show me some cool stuff</h2>
+
+<p>So that&#8217;s a quick tour of the basics of Boxen and the kinds of things you can
+do from the start.  I&#8217;m really excited for everyone to get their hands on Boxen
+and do more cool stuff with Puppet. I&#8217;ve done a bunch of work with Puppet for
+OS X, and that&#8217;s enough to know that there&#8217;s still PLENTY that can be
+improved in the codebase.  A giant THANK YOU to <a href="http://twitter.com/jbarnette">John Barnette</a>, <a href="http://twitter.com/wfarr">Will Farrington</a>,
+and the entire Github Boxen team for all their work on this
+tool (and letting me tinker with it before it hit the general public)! Feel
+free to comment below, email me (gary at puppetlabs), or <a href="http://twitter.com/glarizza">yell at me on Twitter</a>
+for more information!</p>
+]]></content>
+  </entry>
+  
+  <entry>
     <title type="html"><![CDATA[Repeatable Puppet development with Vagrant]]></title>
     <link href="http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant/"/>
-    <updated>2013-02-01T00:00:00-07:00</updated>
+    <updated>2013-02-01T00:00:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant</id>
     <content type="html"><![CDATA[<p>I miss testing code in production. In smaller organizations, &#8216;testing&#8217; and
 &#8216;development&#8217; can sometimes consist of making changes directly on a server,
@@ -759,7 +2368,7 @@ everyone at <a href="http://www.puppetlabs.com">Puppet Labs</a>!</p>
   <entry>
     <title type="html"><![CDATA[Using Veewee to build OS X VMs]]></title>
     <link href="http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms/"/>
-    <updated>2013-01-20T19:36:00-07:00</updated>
+    <updated>2013-01-20T19:36:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms</id>
     <content type="html"><![CDATA[<p>I hate <a href="http://github.com/timsutton">Tim Sutton</a> in the same way I hate <a href="http://ihatestevensinger.com/">Steven Singer</a>. I hate Tim
 because he actually IMPLEMENTS some of the things on my list of &#8216;shit to tinker
@@ -1070,7 +2679,7 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
   <entry>
     <title type="html"><![CDATA[Managing a blog is insane; Octopress FTW!]]></title>
     <link href="http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/"/>
-    <updated>2013-01-17T00:00:00-07:00</updated>
+    <updated>2013-01-17T00:00:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane</id>
     <content type="html"><![CDATA[<p>Masochists are everywhere. Managing a system by hand appeals to a certain subset
 of the population, but I joined <a href="http://www.puppetlabs.com">Puppet Labs</a> because
@@ -1280,31 +2889,7 @@ theme was pretty sexy. Let&#8217;s look at some Ruby:</p>
 (and they&#8217;re also linkable):</p>
 
 <div><script src='https://gist.github.com/3218523.js'></script>
-<noscript><pre><code>require 'puppet'
-require 'puppet/face'
-arguments = { 'image'   =&gt; 'ami-30fe7300', 
-              'keyname' =&gt; 'Your_Key', 
-              'type'    =&gt; 't1.micro',
-              'region'  =&gt; 'us-west-2' }
-list_args = { 'region' =&gt; 'us-west-2' }
-install_args = { 'login'             =&gt; 'ec2-user',
-                 'keyfile'           =&gt; 'Your_Key.pem',
-                 'install_script'    =&gt; 'puppet-enterprise-http',
-                 'installer_payload' =&gt; 'http://pm.puppetlabs.com/puppet-enterprise/2.0/puppet-enterprise-2.0-el-6-x86_64.tar.gz',
-                 'installer_answers' =&gt; '/Users/gary/Desktop/Writeups/pe-answers-agent.txt' }
-
-
-# Create an Instance
-ec2_ip = Puppet::Face[:node_aws, :current].create(arguments)
-
-# List instances
-instances = Puppet::Face[:node_aws, :current].list(list_args)
-
-# Install Puppet
-install_node = Puppet::Face[:node, :current].install(ec2_ip, install_args)  
-
-# Terminate an instance
-Puppet::Face[:node_aws, :current].terminate(ec2_ip, list_args)</code></pre></noscript></div>
+<noscript><pre><code></code></pre></noscript></div>
 
 
 <p>Want to know how much code it took to do that?  About this much:</p>
@@ -1429,7 +3014,7 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   <entry>
     <title type="html"><![CDATA[JAMF NetSUS Appliance]]></title>
     <link href="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/"/>
-    <updated>2012-02-06T11:22:00-07:00</updated>
+    <updated>2012-02-06T11:22:00-08:00</updated>
     <id>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance</id>
     <content type="html"><![CDATA[<h2>JAMF&#8217;s NetSUS Appliance - Netboot in a Box</h2>
 
@@ -1596,7 +3181,7 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   <entry>
     <title type="html"><![CDATA[Using Git for Mac Sysadmins]]></title>
     <link href="http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins/"/>
-    <updated>2012-01-24T15:25:00-07:00</updated>
+    <updated>2012-01-24T15:25:00-08:00</updated>
     <id>http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins</id>
     <content type="html"><![CDATA[<p>As a former Mac Sysadmin, I frequently felt like I had one toe in the world in which Linux Sysadmins frequently found themselves, but was surrounded by a culture of GUI-Clickery that either feared, scorned, or flat-out avoided tools that were command-line based (or, as many will point out, used the GUI (Graphic User Interface) tools because &#8216;they worked&#8217; and that was all they needed).  This sucked because Linux Sysadmins have some tools that, as a current colleague would say, &#8216;are kind-of awesome.&#8217;</p>
 
@@ -1987,7 +3572,7 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   <entry>
     <title type="html"><![CDATA[Using the Google Macops Crankd and Facter Code]]></title>
     <link href="http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/"/>
-    <updated>2011-12-31T00:00:00-07:00</updated>
+    <updated>2011-12-31T00:00:00-08:00</updated>
     <id>http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code</id>
     <content type="html"><![CDATA[<p>On December 21st, the MacOps team at Google released a Googlecode repository containing a couple of scripts that they use for managing Macs.  The scripts provided interface with <a href="http://code.google.com/p/pymacadmin/">crankd (available in the Pymacadmin code suite)</a> and <a href="http://puppetlabs.com/puppet/related-projects/facter/">Facter</a>, which are a couple of tools with which you MIGHT not be familiar.</p>
 
@@ -2175,7 +3760,7 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   <entry>
     <title type="html"><![CDATA[Using Run Stages with Puppet]]></title>
     <link href="http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet/"/>
-    <updated>2011-03-11T11:34:00-07:00</updated>
+    <updated>2011-03-11T11:34:00-08:00</updated>
     <id>http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet</id>
     <content type="html"><![CDATA[<p>As of version 2.6, Puppet introduced a feature called &#8220;Run Stages&#8221; that will allow you to better control the order that Puppet configures your system.  The problem with Run Stages (as of right now) is that there&#8217;s not that much good Documentation out there.  Hopefully this document helps someone else out there who wants to setup Run Stages in their own environment.</p>
 
@@ -2301,7 +3886,7 @@ if you can EDIT A TEXT FILE then you can &#8216;maintain&#8217; a blog.</p>
   <entry>
     <title type="html"><![CDATA[Getting Started with The Luggage]]></title>
     <link href="http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage/"/>
-    <updated>2010-12-21T09:47:00-07:00</updated>
+    <updated>2010-12-21T09:47:00-08:00</updated>
     <id>http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage</id>
     <content type="html"><![CDATA[<p>With the current movement in the Mac Community toward modular imaging strategies, there&#8217;s a spike in the need for properly formed package installers. Apple&#8217;s package format is well documented for its benefits and flaws and there are a string of applications that will help you create your perfect package (from Apple&#8217;s Packagemaker to the many third-party applications).  While all the various package creation applications will ultimately create a desirable package in the end, very few of them have the triple-threat of easy code-review, replication, and portability.  This is where The Luggage comes in.</p>
 
