@@ -4,7 +4,7 @@
   <title><![CDATA[Category: vagrant | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/vagrant/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2013-11-25T17:07:02-08:00</updated>
+  <updated>2013-11-28T14:57:19-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -250,7 +250,7 @@ Installing puppet
 warning:
 rpmts_HdrFromFdno: Header V4 RSA/SHA1 Signature, key ID 4bd6ec30: NOKEY
 Importing GPG key 0x4BD6EC30:
- Userid : Puppet Labs Release Key (Puppet Labs Release Key) <a href="&#x6d;&#97;&#x69;&#108;&#x74;&#x6f;&#58;&#x69;&#110;&#x66;&#x6f;&#x40;&#112;&#x75;&#x70;&#112;&#x65;&#x74;&#x6c;&#x61;&#98;&#x73;&#x2e;&#99;&#x6f;&#109;">&#x69;&#x6e;&#x66;&#111;&#x40;&#112;&#117;&#112;&#112;&#101;&#x74;&#108;&#x61;&#x62;&#x73;&#x2e;&#x63;&#111;&#109;</a>
+ Userid : Puppet Labs Release Key (Puppet Labs Release Key) <a href="&#x6d;&#97;&#x69;&#108;&#116;&#x6f;&#x3a;&#x69;&#x6e;&#102;&#x6f;&#x40;&#x70;&#x75;&#x70;&#112;&#x65;&#x74;&#108;&#x61;&#98;&#115;&#46;&#x63;&#x6f;&#109;">&#105;&#x6e;&#102;&#111;&#x40;&#x70;&#117;&#112;&#x70;&#101;&#116;&#108;&#97;&#x62;&#x73;&#x2e;&#99;&#111;&#109;</a>
  Package: puppetlabs-release-6-6.noarch (installed)
  From   : /etc/pki/rpm-gpg/RPM-GPG-KEY-puppetlabs
 Warning: RPMDB altered outside of yum.

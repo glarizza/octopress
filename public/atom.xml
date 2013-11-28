@@ -4,7 +4,7 @@
   <title><![CDATA[Shit Gary Says]]></title>
   <link href="http://garylarizza.com/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2013-11-25T17:06:58-08:00</updated>
+  <updated>2013-11-28T14:57:15-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -12,6 +12,673 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Who abstracted my Ruby?]]></title>
+    <link href="http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2/"/>
+    <updated>2013-11-26T16:01:00-08:00</updated>
+    <id>http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2</id>
+    <content type="html"><![CDATA[<p>Previously, on Lost, I said a lot of words about Puppet Types;
+<a href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/">you should totally check it out.</a>
+In this second installment, you&#8217;re going to find out how to actually throw
+pure Ruby at Puppet in a way that makes you feel accomplished. And useful. And elitist.
+Well, possibly just elitist. Either way, read on - there&#8217;s much thought-leadership to be done&#8230;</p>
+
+<p>In the last post, we learned that Types will essentially dictate the attributes
+that you&#8217;ll be passing in your resource declaration using the DSL. In the
+simplest and crudest explanation I could muster, types model how your
+declaration will look in the manifest. Providers are where the actual
+IMPLEMENTATION happens. If you&#8217;ve ever wondered how this:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nc">package</span> <span class="p">{</span> <span class="s1">&#39;httpd&#39;</span><span class="p">:</span>
+</span><span class='line'>  <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">installed</span><span class="p">,</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>eventually gets turned into this:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>yum install -e 0 -d 0 -y httpd
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>your answer would be &#8220;It&#8217;s in the provider file&#8221;.</p>
+
+<h2>Dirty black magic</h2>
+
+<p>I&#8217;ve seen people do the craziest shit imaginable in the Puppet DSL simply because
+they&#8217;re:</p>
+
+<ul>
+<li>Unsure how types and providers work</li>
+<li>Afraid of Ruby</li>
+<li>Confused by error messages</li>
+<li>Afraid to ask for help</li>
+</ul>
+
+
+<p>Sometimes you have a problem that can only be solved by interacting with data
+that&#8217;s returned by a binary (using some binary to get a value, and then using
+that binary to set a value, and so on&#8230;). I see people writing defined resource
+types with a SHIT TON of <code>exec</code> statements and conditional logic to model this
+data when a type and provider would not only BETTER model the problem but would
+also be shareable and re-useable by other folk. The issue is that while the DSL
+is REALLY easy to get started with, types and providers still feel like dirty
+black magic.</p>
+
+<p>The reason is because they&#8217;re dirty black magic.</p>
+
+<p>Hopefully, I can help get you over the hump and onto a working implementation. Let&#8217;s
+take a problem I had last week:</p>
+
+<h2>Do this if that, and then be done</h2>
+
+<p>I was working with a group who wanted to set a list of domains that would
+bypass their web proxy for a specific network interface on an OS X workstation.
+It sounds so simple, because it was. Due to the amount of time I had on-site,
+I wrote a class with some nasty <code>exec</code> statements, a couple of facts, and some
+conditional logic because that&#8217;s what you do when you&#8217;re in a hurry&#8230;but it
+doesn&#8217;t make it right. When I left, I hacked up a type and provider, and it&#8217;s
+a GREAT example because you probably have a similar problem.  Let&#8217;s look at the
+information we have:</p>
+
+<p>The list of network interfaces:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>└▷ networksetup -listallnetworkservices
+</span><span class='line'>An asterisk <span class="o">(</span>*<span class="o">)</span> denotes that a network service is disabled.
+</span><span class='line'>Bluetooth DUN
+</span><span class='line'>Display Ethernet
+</span><span class='line'>Ethernet
+</span><span class='line'>FireWire
+</span><span class='line'>Wi-Fi
+</span><span class='line'>iPhone USB
+</span><span class='line'>Bluetooth PAN
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Getting the list of bypass domains for an interface:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>└▷ networksetup -getproxybypassdomains Ethernet
+</span><span class='line'>www.garylarizza.com
+</span><span class='line'>*.corp.net
+</span><span class='line'>10.13.1.3/24
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The message displayed when no domains are set for an interface:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>└▷ networksetup -getproxybypassdomains FireWire
+</span><span class='line'>There aren<span class="err">&#39;</span>t any bypass domains <span class="nb">set </span>on FireWire.
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Setting the list of bypass domains for an interface:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>└▷ networksetup -setproxybypassdomains Ethernet <span class="s1">&#39;*.corp.net&#39;</span> <span class="s1">&#39;10.13.1.3/24&#39;</span> <span class="s1">&#39;www.garylarizza.com&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Perfect - all of that is done with a single binary, and it&#8217;s pretty straightforward. Let&#8217;s look at the type I ended up creating for this problem:</p>
+
+<figure class='code'><figcaption><span>lib/puppet/type/mac_proxy_bypassdomains.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Type</span><span class="o">.</span><span class="n">newtype</span><span class="p">(</span><span class="ss">:mac_proxy_bypassdomains</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>  <span class="n">desc</span> <span class="s2">&quot;Puppet type that models bypass domains for a network interface on OS X&quot;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">ensurable</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:name</span><span class="p">,</span> <span class="ss">:namevar</span> <span class="o">=&gt;</span> <span class="kp">true</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Interface name - currently must be &#39;friendly&#39; name (e.g. Ethernet)&quot;</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Domains which should bypass the proxy&quot;</span>
+</span><span class='line'>    <span class="k">def</span> <span class="nf">insync?</span><span class="p">(</span><span class="n">is</span><span class="p">)</span>
+</span><span class='line'>      <span class="n">is</span><span class="o">.</span><span class="n">sort</span> <span class="o">==</span> <span class="n">should</span><span class="o">.</span><span class="n">sort</span>
+</span><span class='line'>    <span class="k">end</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The type uses a namevar parameter called &#8216;name&#8217;, which is the name of the network interface.
+This means that we can set one list of bypass domains for every network interface.
+There&#8217;s a single property, &#8216;domains&#8217; that accepts an array of domains that should bypass
+the proxy for the network interface. I&#8217;ve overridden the <code>insync?</code> method for the domains
+property to sort the array values on both ends - this means that the ORDER of the domains
+doesn&#8217;t matter, I only care that the domains specified exist on the system. Finally, the
+type is ensurable (which means that we can create a list of domains and remove/destroy
+the list of domains for a network interface).</p>
+
+<h2>Setup the provider</h2>
+
+<p>Okay, so we&#8217;ve defined the problem, seen how to interact with the system to get us the
+data that we need, setup a type to model the data, and now the last thing left to do
+is to wire up the provider to make the binary calls we need and return the data we
+want.</p>
+
+<h3>Typos are not your friend.</h3>
+
+<p>The first thing you will encounter is &#8220;Puppet&#8217;s predictable naming pattern&#8221;
+that is used by the Puppet autoloader. Typos are not fun, and omitting a single
+letter in either the filename or the provider name will render your provider
+(emotionally) unavailable to Puppet. Our type is called &#8216;mac_proxy_bypassdomains&#8217;,
+as types are generally named along the lines of &#8216;what does this data model?&#8217; The
+provider name is generally the name of the underlying technology that&#8217;s doing
+the modeling. For the package type, the providers are named after the package
+management systems (e.g. yum, apt, pacman, zypper, pip), for the file type, the
+providers are loosely named for the operatingsystem kernel type on which files
+are to be created (e.g. windows, posix). In our example, I simply chose to name
+the provider &#8216;ruby&#8217; because, as a Puppet Labs employee, <strong>I TOO</strong> suck at naming
+things.</p>
+
+<p>Here&#8217;s a tree of my module to understand how the type and provider files are
+to be laid out:</p>
+
+<figure class='code'><figcaption><span>Module tree  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>├── Modulefile
+</span><span class='line'>├── README.markdown
+</span><span class='line'>└── lib
+</span><span class='line'>    └── puppet
+</span><span class='line'>        ├── provider
+</span><span class='line'>        │   ├── mac_proxy_bypassdomains
+</span><span class='line'>        │   │   └── ruby.rb
+</span><span class='line'>        └── <span class="nb">type</span>
+</span><span class='line'>            └── mac_proxy_bypassdomains.rb
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As you can see from above, the name of both the type and provider must <strong>EXACTLY</strong>
+match the filename of their corresponding files. Also, the provider file lives
+in a directory named after the type. There are MANY things that can be typoed here
+(filenames, foldernames, type/provider names in their files), so be absolutely sure
+that you&#8217;ve named your files correctly.</p>
+
+<p>The reason for all this naming bullshit is because of the way Puppet syncs down
+plugin files (coincidentally, with a <a href="http://docs.puppetlabs.com">process known as Pluginsync)</a>.
+Everything in the <code>lib</code> directory in a Puppet module is going to get synced down
+to your nodes inside <a href="http://docs.puppetlabs.com">the <code>vardir</code> directory</a> on
+the node itself. The <code>vardir</code> is a known library path to Puppet, and all files
+in the <code>vardir</code> are treated as if they had lived in Puppet&#8217;s source code (in
+the same relative paths).  Because the Puppet source code has all type files in
+the <code>lib/puppet/type</code> directory, all <strong>CUSTOM</strong> types must go in the module&#8217;s
+<code>lib/puppet/type</code> directory for confirmity.  This is repeated for <strong>EVERY</strong>
+custom Puppet/Facter plugin (including custom facts, custom functions, and
+etc&#8230;).</p>
+
+<h3>More scaffolding</h3>
+
+<p>Let&#8217;s layout the shell of our provider, first, to ensure that we haven&#8217;t typoed
+anything. Here&#8217;s the provider declaration:</p>
+
+<figure class='code'><figcaption><span>lib/puppet/type/mac_proxy_bypassdomains/ruby.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Type</span><span class="o">.</span><span class="n">type</span><span class="p">(</span><span class="ss">:mac_proxy_bypassdomains</span><span class="p">)</span><span class="o">.</span><span class="n">provide</span><span class="p">(</span><span class="ss">:ruby</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>  <span class="c1"># Provider work goes here</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that the name of the type and the name of the provider are symbolized (i.e.
+they&#8217;re prepended with a colon). Like I mentioned above, they must be spelled
+EXACT or Puppet will complain very loudly. You may see variants on that
+declaration line because there are multiple ways in Ruby to extend a class
+object. The method I&#8217;ve listed above is the &#8216;generally accepted best-practice&#8217;, which
+is to say it&#8217;s the way we&#8217;re doing it this month.</p>
+
+<p>Congrats! You have THE SHELL of a provider that has yet to do a single goddamn thing!
+Technically, you&#8217;re further than about 90% of other Puppet users at this point! Let&#8217;s
+go the additional 20% (since we&#8217;re basing this on a mangement metric of 110%) by
+wiring up the methods and making the damn thing work!</p>
+
+<h3>Are you (en)sure about this?</h3>
+
+<p>We&#8217;ve explained before that a type is &#8216;ensurable&#8217; when you can check for its existance
+on a system, create it when it doesn&#8217;t exist (and it SHOULD exist), and destroy it when
+it does exist (and it SHOULDN&#8217;T exist). The bare minimum amount of methods necessary
+to make a type ensurable is three, and they&#8217;re called <code>exists?</code>, <code>create</code>, and <code>destroy</code>.</p>
+
+<h3>Method: <code>exists?</code></h3>
+
+<p>The <code>exists?</code> method is a predicate method - that means it should either return
+the boolean <code>true</code> or <code>false</code> value based on whether the bypass domain list
+exists. Puppet will always call the <code>exists?</code> provider method to determine if
+that &#8216;thing&#8217; (in this case, &#8216;thing&#8217; means &#8216;a list of domains to bypass for a
+specific network interface&#8217;) exists before calling any other methods. How do we
+know if this thing exists? Like I showed before, you need to run the
+<code>networksetup -getproxybypassdomains</code> command and pass the interface name.  If
+it returns &#8216;There aren&#8217;t any bypass domains set on (interface name)&#8217;, then the
+list doesn&#8217;t exist. Let&#8217;s do some binary execution&#8230;</p>
+
+<h4>Calling binaries from Puppet</h4>
+
+<p>Puppet provides some helper syntax around basic actions that most providers
+perform. MOST providers are going to need to call out to an external binary
+(e.g. yum, apt, etc&#8230;) at some point, and so Puppet allows you to create
+your own method JUST for a system binary. The <code>commands</code> method abstracts
+all the dirtyness of making a method for each system binary you want to call.
+The way you use the <code>commands</code> method is like so:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">commands</span> <span class="ss">:networksetup</span> <span class="o">=&gt;</span> <span class="s1">&#39;networksetup&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The <code>commands</code> method accepts a hash whose key must be a symbolized name. The
+CONVENTION is to use a symbolized name that matches the binary name, but it&#8217;s
+not REQUIRED to do so. The value for that symbolized key MUST be the binary
+name. Note that I&#8217;ve not passed a full path to the binary. Why? Well, Puppet
+will automatically do a path lookup for that binary and store its full path
+for use when the binary is invoked. We don&#8217;t REQUIRE you to pass the full
+path because sometimes the same binary exists in different locations for
+different operatingsystems. Instead of creating a provider for each OS you
+manage with Puppet, we abstract away the path stuff. You <strong>CAN</strong> still
+pass a full path as a value, but if you elect to do that an the binary doesn&#8217;t
+exist at that path, Puppet will disqualify the provider and you&#8217;ll be quite
+upset.</p>
+
+<p>In the event that Puppet <strong>CANNOT</strong> find this binary, it will disqualify the
+entire provider, and you&#8217;ll get a message saying as much in the debug output
+of your Puppet run. Because of that, the <code>commands</code> method is a good way to
+confine your provider to a specific system or class of system.</p>
+
+<p>When the <code>commands</code> method is successfully invoked, you will get a new provider
+method named after the <strong>SYMBOLIZED</strong> key, and not necessarily the binary
+name (unless you made them the same). After the above command is evaluated,
+Puppet will now have a <code>networksetup()</code> method in our provider. The argument
+to the <code>networksetup</code> method should be an array of arguments that are passed
+to the binary. It&#8217;s c-style, so each element is going to be individually
+quoted. You can run into issues here if you pass values containing quotes
+as part of your argument array. Read that again - quoting your values is
+totally acceptable (e.g. [&#8216;foo&#8217;, &#8216;bar&#8217;]), but passing a value that contains
+quotes can potentially cause problems (e.g. [&#8220;&#8216;foo&#8217;&#8221;, &#8220;&#8216;bar&#8217;&#8221;]).</p>
+
+<p>You&#8217;re probably thinking &#8220;Why the hell would I go through this trouble when
+I can use the <code>%x{}</code> syntax in ruby to execute a shell command?!&#8221; And to that
+I would say &#8220;Quit yelling at me&#8221; and also &#8220;Because: testing.&#8221; When you write
+spec tests for your provider (which will be covered in a later blog post, since
+it&#8217;s its OWN path of WTF), you&#8217;re going to need to mock out calls to the system
+during your tests (i.e. sometimes you may be running the tests on a system that
+doesn&#8217;t have the binary you&#8217;re meant to be calling in your provider. You don&#8217;t
+want the tests to fail due to the absence of a binary file). The <code>%x{}</code>
+construct in Ruby is hard to mock out, but a method of our provider is a relatively
+easy thing to mock out. Also - see the path problem above. We don&#8217;t STOP you
+from doing <code>%x{}</code> in your code (it will still totally work), but we give you
+a couple of good reasons to NOT do it.</p>
+
+<h4>Objects are a provider&#8217;s best friend</h4>
+
+<p>Within your provider, you&#8217;re going to be doing lots of system calls and data
+manipulation. Often we&#8217;re asked whether you do that ugliness inside the main
+methods (i.e. inside the <code>exists?</code> method directly), or if you create a
+helper method for some of this data manipulation. The answer I usually give
+is that you should probably create a helper method if:</p>
+
+<ul>
+<li>The code is going to be called more than once</li>
+<li>The code does something that would be tricky to test (like reading from a file)</li>
+<li>Complexity would be reduced by creating a helper method</li>
+</ul>
+
+
+<p>The act of getting a list of domains for a specific interface is definitely
+going to be utilized in more than one place in our provider (we&#8217;ll use it
+in the <code>exists?</code> method as well as in a &#8216;getter&#8217; method for the <code>domains</code>
+property). Also, you could argue that it might be tricky to test since it&#8217;s
+going to be a binary call that&#8217;s going to return some data. Because of this,
+let&#8217;s create a helper method that returns a list of domains for a specific
+interface:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">int</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">begin</span>
+</span><span class='line'>    <span class="n">output</span> <span class="o">=</span> <span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-getproxybypassdomains&#39;</span><span class="p">,</span> <span class="n">int</span><span class="o">]</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">rescue</span> <span class="ss">Puppet</span><span class="p">:</span><span class="ss">:ExecutionFailure</span> <span class="o">=&gt;</span> <span class="n">e</span>
+</span><span class='line'>    <span class="no">Puppet</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;#get_proxy_bypass_domains had an error -&gt; </span><span class="si">#{</span><span class="n">e</span><span class="o">.</span><span class="n">inspect</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">return</span> <span class="kp">nil</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>  <span class="n">domains</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">sort</span>
+</span><span class='line'>  <span class="k">return</span> <span class="kp">nil</span> <span class="k">if</span> <span class="n">domains</span><span class="o">.</span><span class="n">first</span> <span class="o">=~</span> <span class="sr">/There aren\&#39;t any bypass domains set/</span>
+</span><span class='line'>  <span class="n">domains</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Ruby convention is to use underscores (i.e. versus camelCase or hyphens) in
+method names. You want to give your methods very descriptive names based on
+what it is that they DO. In this case, <code>get_proxy_bypass_domains</code> seems
+adequately descriptive. Also, you should err on the side of readability when
+you&#8217;re writing code. You can get pretty creative with Ruby metaprogramming,
+but that can quickly become hard to follow (and then you&#8217;re just a dick).
+Finally, error-handling is a good thing. If you&#8217;re going to do any error-handling,
+though, be very specific about the errors you catch/rescue. When you have a rescue
+block, make sure you catch a specific exception class (in the case above, we&#8217;re
+catching a Puppet::ExecutionFailure - which means the binary is returning a
+non-zero exit code).</p>
+
+<p>The code above will return an array containing all the domains, or it will
+return <code>nil</code> if domains aren&#8217;t found or the <code>networksetup</code> binary had an issue.</p>
+
+<p>Using the helper method above, here&#8217;s what the final <code>exists?</code> method looks like:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">exists?</span>
+</span><span class='line'>  <span class="n">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">)</span> <span class="o">!=</span> <span class="kp">nil</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>All provider methods have the ability to access the &#8216;should&#8217; values for the resource
+(and by that I mean the values that are set in the Puppet maniest on the Puppet master
+server, or locally if you&#8217;re using <code>puppet apply</code>). Those values reside in the <code>resource</code>
+method that responds with a hash. In the code above, <code>resource[:name]</code> will return the
+network interface name (e.g. Ethernet, FireWire, etc&#8230;) that was specified in the
+Puppet manifest. The exists method will return true of a list of domains exists for
+an interface, or it will return false if a list of domains does not exist (i.e.
+<code>get_proxy_bypass_domains</code> returns <code>nil</code>).</p>
+
+<h3>Method: <code>create</code></h3>
+
+<p>The <code>create</code> method is called when <code>exists?</code> returns false and a resource has an
+<code>ensure</code> value set to <code>present</code>. Because of this, you don&#8217;t need to call the <code>exists?</code>
+method explicitly in <code>create</code> - it&#8217;s already been evaluated. Remember from above that
+the <code>-setproxybypassdomains</code> argument to the <code>networksetup</code> binary will set a domain
+list, so the <code>create</code> method is going to be very short-and-sweet:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">create</span>
+</span><span class='line'>  <span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-setproxybypassdomains&#39;</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:domains</span><span class="o">]]</span><span class="p">)</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the end, the <code>create</code> method will call the <code>networksetup</code> binary with the <code>-setproxybypassdomains</code>
+argument, pass the interface name (from <code>resource[:name]</code>) and pass an array of domain values (which
+comes from <code>resource[:domains]</code>). That&#8217;s it; it&#8217;s done!</p>
+
+<h3>Method: <code>destroy</code></h3>
+
+<p>The <code>destroy</code> method is easier than the <code>create</code> method:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">destroy</span>
+</span><span class='line'>  <span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-setproxybypassdomains&#39;</span><span class="p">,</span> <span class="kp">nil</span><span class="o">]</span><span class="p">)</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here, we&#8217;re calling <code>networksetup</code> with the <code>-setproxybypassdomains</code> argument
+and passing nothing else. This will initialize the list and set it to be empty.</p>
+
+<h2>Synchronizing properties</h2>
+
+<h3>Getter method: <code>domains</code></h3>
+
+<p>At this point our type is ensurable, which means we can create and destroy resources.
+What we CAN&#8217;T do, however, is change the value of any properties that are out-of-sync. A
+property is out-of-sync when the value discovered by Puppet on the node differs from the
+value in the catalog (i.e. set by the Puppet manifest using the DSL on the Puppet master).
+Just like <code>exists?</code> is called to determine if a resource exists, Puppet needs a way to
+get the current value for a property on a node. The method that gets this value is
+called the &#8216;getter method&#8217; for a property, and its name must match the name of the
+property. Because we have a property called <code>domains</code>, the provider must have a <code>domains</code>
+method that returns a value (in this case, an array of domains to be bypassed by the
+proxy). We&#8217;ve already written a helper method that does this work for us, so the
+<code>domains</code> getter method is pretty easy:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">domains</span>
+</span><span class='line'>  <span class="n">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">)</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Tada! Just call the helper method and pass the interface name. Boom - instant array
+of values. The getter method will return the &#8216;is&#8217; value, because that&#8217;s what the value
+<strong>IS</strong> (currently on the node). Get it? Anyone? The <strong>IS</strong> value is the other side of
+the coin to the &#8216;should&#8217; value (that comes from the Puppet manifest) because that&#8217;s
+what the value <strong>SHOULD</strong> be set on the node.</p>
+
+<h3>Setter method: <code>domains=</code></h3>
+
+<p>If the getter method (e.g. <code>domains</code>) returns a value that doesn&#8217;t match the value
+in the catalog, then Puppet changes the value on the node and sets it to the value
+in the catalog. It does this by calling the &#8216;setter&#8217; method for the property, which
+is the name of the property and the equals ( = ) sign. In this case, the setter
+method for the <code>domains</code> property must be called <code>domains=</code>.  It looks like this:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">domains</span><span class="o">=</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</span><span class='line'>  <span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-setproxybypassdomains&#39;</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">,</span> <span class="n">value</span><span class="o">]</span><span class="p">)</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Setter methods are always passed a single argument - the &#8216;should&#8217; value of the property.
+In our example, we&#8217;re calling the <code>networksetup</code> binary with the <code>-setproxybypassdomains</code>
+argument, passing the name of the interface, and then passing the &#8216;should&#8217; value - or
+the array of domains. It&#8217;s easy, it&#8217;s one line, and I love it when a plan comes together</p>
+
+<h2>Putting the whole damn thing together</h2>
+
+<p>I&#8217;ve broken down the provider line by line, but here&#8217;s the entire file:</p>
+
+<figure class='code'><figcaption><span>lib/puppet/provider/mac_proxy_bypassdomains/ruby.rb  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Type</span><span class="o">.</span><span class="n">type</span><span class="p">(</span><span class="ss">:mac_proxy_bypassdomains</span><span class="p">)</span><span class="o">.</span><span class="n">provide</span><span class="p">(</span><span class="ss">:ruby</span><span class="p">)</span> <span class="k">do</span>
+</span><span class='line'>  <span class="n">commands</span> <span class="ss">:networksetup</span> <span class="o">=&gt;</span> <span class="s1">&#39;networksetup&#39;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="nf">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">int</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">begin</span>
+</span><span class='line'>      <span class="n">output</span> <span class="o">=</span> <span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-getproxybypassdomains&#39;</span><span class="p">,</span> <span class="n">int</span><span class="o">]</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">rescue</span> <span class="ss">Puppet</span><span class="p">:</span><span class="ss">:ExecutionFailure</span> <span class="o">=&gt;</span> <span class="n">e</span>
+</span><span class='line'>      <span class="no">Puppet</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;#get_proxy_bypass_domains had an error -&gt; </span><span class="si">#{</span><span class="n">e</span><span class="o">.</span><span class="n">inspect</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">return</span> <span class="kp">nil</span>
+</span><span class='line'>    <span class="k">end</span>
+</span><span class='line'>    <span class="n">domains</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">sort</span>
+</span><span class='line'>    <span class="k">return</span> <span class="kp">nil</span> <span class="k">if</span> <span class="n">domains</span><span class="o">.</span><span class="n">first</span> <span class="o">=~</span> <span class="sr">/There aren\&#39;t any bypass domains set/</span>
+</span><span class='line'>    <span class="n">domains</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="nf">exists?</span>
+</span><span class='line'>    <span class="n">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">)</span> <span class="o">!=</span> <span class="kp">nil</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="nf">destroy</span>
+</span><span class='line'>    <span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-setproxybypassdomains&#39;</span><span class="p">,</span> <span class="kp">nil</span><span class="o">]</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="nf">create</span>
+</span><span class='line'>    <span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-setproxybypassdomains&#39;</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:domains</span><span class="o">]]</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="nf">domains</span>
+</span><span class='line'>    <span class="n">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">def</span> <span class="nf">domains</span><span class="o">=</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</span><span class='line'>    <span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-setproxybypassdomains&#39;</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">,</span> <span class="n">value</span><span class="o">]</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Testing the type/provider</h2>
+
+<p>And that&#8217;s it, we&#8217;re done!  The last thing to do is to test it out.  You can
+test out your provider in one of two ways: the first is to add the module to
+the modulepath of your Puppet master and include it that way, or test it
+locally by setting the <code>$RUBYLIB</code> environmental variable to point to the <code>lib</code>
+directory of your module (which is the more preferred method since it won&#8217;t
+serve it out to all of your nodes without it being tested). Because this module
+is on my system at <code>/users/glarizza/src/puppet-mac_proxy</code>, here&#8217;s how my
+<code>$RUBYLIB</code> is set:</p>
+
+<figure class='code'> <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">export </span><span class="nv">RUBYLIB</span><span class="o">=</span>/users/glarizza/src/puppet-mac_proxy/lib
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Next, we need to create a resource declaration to try and set a couple of
+bypass domains. I&#8217;ll create a <code>tests</code> directory and simple test file in
+<code>tests/mac_proxy_bypassdomains.pp</code>:</p>
+
+<figure class='code'><figcaption><span>tests/mac_proxy_bypassdomains.pp  </span></figcaption>
+ <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nc">mac_proxy_bypassdomains</span> <span class="p">{</span> <span class="s1">&#39;Ethernet&#39;</span><span class="p">:</span>
+</span><span class='line'>  <span class="nt">ensure</span>  <span class="p">=&gt;</span> <span class="s1">&#39;present&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">domains</span> <span class="p">=&gt;</span> <span class="p">[</span><span class="s1">&#39;www.garylarizza.com&#39;</span><span class="p">,</span><span class="s1">&#39;*.puppetlabs.com&#39;</span><span class="p">,</span><span class="s1">&#39;10.13.1.3/24&#39;</span><span class="p">],</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Finally, let&#8217;s run Puppet and test it out:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>└▷ puppet apply ~/src/puppet-mac_proxy/tests/mac_proxy_bypassdomains.pp
+</span><span class='line'>Notice: Compiled catalog for satori.local in environment production in 0.06 seconds
+</span><span class='line'>Notice: /Stage[main]//Mac_proxy_bypassdomains[Ethernet]/domains: domains changed [] to 'www.garylarizza.com *.puppetlabs.com 10.13.1.3/24'
+</span><span class='line'>Notice: Finished catalog run in 3.47 seconds</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>NOTE:</strong> If you run this as a local user, you will be prompted by OS X to
+enter an administrative password for a change.  Since Puppet will ultimately be
+run as root on OS X when we&#8217;re NOT testing out code, this shouldn&#8217;t be required
+during a normal Puppet run. To test this out (i.e. that you don&#8217;t always have to
+enter an admin password in a pop-up window), you&#8217;ll need to <code>sudo -s</code> to
+change to root, set the <code>$RUBYLIB</code> as the root user, and then run Puppet again.</p>
+
+<p>And that&#8217;s it - looks like our code worked! To check and make sure it will notice a
+change, open System Preferences, then the Network pane, click on the Ethernet
+interface, then the Advanced button, then the Proxies tab, and finally note the
+&#8216;Bypass proxy settings&#8230;&#8217; text box at the bottom of the screen (now do you see
+why we automate this shit?!). Make a change to the entries in there and run
+Puppet again - it should correct it for you</p>
+
+<h2>Wait&#8230;so that was it?  Really?  We&#8217;re done?</h2>
+
+<p>Yeah, that was a whole type and provider. Granted, it has only one property and it&#8217;s
+not too complicated, but that&#8217;s the point. We&#8217;ve still got some latent bugs (the
+network interface passed must be capitalized exactly like OS X expects it, we could
+do some better error handling, etc&#8230;), and the type doesn&#8217;t work with <code>puppet resource</code>
+(yet), but we&#8217;ll handle all of these things in the next blog post (or two&#8230;or three).</p>
+
+<p>Until then, take this time to crack open a type and a provider for something that&#8217;s
+been pissing you off and FIX it!  Better yet, push it up to Github, tweet about it,
+and post it up <a href="http://forge.puppetlabs.com">on The Forge</a> so the rest of the
+community can use it!</p>
+
+<p>Like always, feel free to comment, tweet me (@glarizza), email me (gary <strong>AT</strong> puppetlabs <strong>DOT</strong> com),
+or use the social media platform of choice to get a hold of me (Snapchats may or may not
+get a response. Maybe.)  Cheers!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Fun with Puppet Providers - Part 1 of Whatever]]></title>
