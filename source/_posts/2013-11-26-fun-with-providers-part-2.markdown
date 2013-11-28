@@ -177,9 +177,9 @@ in a directory named after the type. There are MANY things that can be typoed he
 that you've named your files correctly.
 
 The reason for all this naming bullshit is because of the way Puppet syncs down
-plugin files (coincidentally, with a [process known as Pluginsync)](http://docs.puppetlabs.com).
+plugin files (coincidentally, with a [process known as Pluginsync)](http://docs.puppetlabs.com/guides/plugins_in_modules.html).
 Everything in the `lib` directory in a Puppet module is going to get synced down
-to your nodes inside [the `vardir` directory](http://docs.puppetlabs.com) on
+to your nodes inside [the `vardir` directory](http://docs.puppetlabs.com/references/latest/configuration.html#vardir) on
 the node itself. The `vardir` is a known library path to Puppet, and all files
 in the `vardir` are treated as if they had lived in Puppet's source code (in
 the same relative paths).  Because the Puppet source code has all type files in

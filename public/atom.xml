@@ -4,7 +4,7 @@
   <title><![CDATA[Shit Gary Says]]></title>
   <link href="http://garylarizza.com/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2013-11-28T14:57:15-08:00</updated>
+  <updated>2013-11-28T15:03:29-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -239,9 +239,9 @@ in a directory named after the type. There are MANY things that can be typoed he
 that you&#8217;ve named your files correctly.</p>
 
 <p>The reason for all this naming bullshit is because of the way Puppet syncs down
-plugin files (coincidentally, with a <a href="http://docs.puppetlabs.com">process known as Pluginsync)</a>.
+plugin files (coincidentally, with a <a href="http://docs.puppetlabs.com/guides/plugins_in_modules.html">process known as Pluginsync)</a>.
 Everything in the <code>lib</code> directory in a Puppet module is going to get synced down
-to your nodes inside <a href="http://docs.puppetlabs.com">the <code>vardir</code> directory</a> on
+to your nodes inside <a href="http://docs.puppetlabs.com/references/latest/configuration.html#vardir">the <code>vardir</code> directory</a> on
 the node itself. The <code>vardir</code> is a known library path to Puppet, and all files
 in the <code>vardir</code> are treated as if they had lived in Puppet&#8217;s source code (in
 the same relative paths).  Because the Puppet source code has all type files in
