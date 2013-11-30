@@ -4,7 +4,7 @@
   <title><![CDATA[Category: os x | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/os-x/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2013-11-28T15:03:35-08:00</updated>
+  <updated>2013-11-30T15:08:49-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -14,17 +14,983 @@
 
   
   <entry>
+    <title type="html"><![CDATA[Who abstracted my Ruby?]]></title>
+    <link href="http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2/"/>
+    <updated>2013-11-26T16:01:00-08:00</updated>
+    <id>http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2</id>
+    <content type="html"><![CDATA[<p>Previously, on Lost, I said a lot of words about Puppet Types;
+<a href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/">you should totally check it out.</a>
+In this second installment, you&rsquo;re going to find out how to actually throw
+pure Ruby at Puppet in a way that makes you feel accomplished. And useful. And elitist.
+Well, possibly just elitist. Either way, read on &ndash; there&rsquo;s much thought-leadership to be done&hellip;</p>
+
+<p>In the last post, we learned that Types will essentially dictate the attributes
+that you&rsquo;ll be passing in your resource declaration using the DSL. In the
+simplest and crudest explanation I could muster, types model how your
+declaration will look in the manifest. Providers are where the actual
+IMPLEMENTATION happens. If you&rsquo;ve ever wondered how this:</p>
+
+<p>{% codeblock lang:puppet %}
+package { &lsquo;httpd&rsquo;:
+  ensure => installed,
+}
+{% endcodeblock %}</p>
+
+<p>eventually gets turned into this:</p>
+
+<p>{% codeblock lang:bash %}
+yum install -e 0 -d 0 -y httpd
+{% endcodeblock %}</p>
+
+<p>your answer would be &ldquo;It&rsquo;s in the provider file&rdquo;.</p>
+
+<h2>Dirty black magic</h2>
+
+<p>I&rsquo;ve seen people do the craziest shit imaginable in the Puppet DSL simply because
+they&rsquo;re:</p>
+
+<ul>
+<li>Unsure how types and providers work</li>
+<li>Afraid of Ruby</li>
+<li>Confused by error messages</li>
+<li>Afraid to ask for help</li>
+</ul>
+
+
+<p>Sometimes you have a problem that can only be solved by interacting with data
+that&rsquo;s returned by a binary (using some binary to get a value, and then using
+that binary to set a value, and so on&hellip;). I see people writing defined resource
+types with a SHIT TON of <code>exec</code> statements and conditional logic to model this
+data when a type and provider would not only BETTER model the problem but would
+also be shareable and re-useable by other folk. The issue is that while the DSL
+is REALLY easy to get started with, types and providers still feel like dirty
+black magic.</p>
+
+<p>The reason is because they&rsquo;re dirty black magic.</p>
+
+<p>Hopefully, I can help get you over the hump and onto a working implementation. Let&rsquo;s
+take a problem I had last week:</p>
+
+<h2>Do this if that, and then be done</h2>
+
+<p>I was working with a group who wanted to set a list of domains that would
+bypass their web proxy for a specific network interface on an OS X workstation.
+It sounds so simple, because it was. Due to the amount of time I had on-site,
+I wrote a class with some nasty <code>exec</code> statements, a couple of facts, and some
+conditional logic because that&rsquo;s what you do when you&rsquo;re in a hurry&hellip;but it
+doesn&rsquo;t make it right. When I left, I hacked up a type and provider, and it&rsquo;s
+a GREAT example because you probably have a similar problem.  Let&rsquo;s look at the
+information we have:</p>
+
+<p>The list of network interfaces:</p>
+
+<p>{% codeblock lang:bash %}
+└▷ networksetup -listallnetworkservices
+An asterisk (*) denotes that a network service is disabled.
+Bluetooth DUN
+Display Ethernet
+Ethernet
+FireWire
+Wi-Fi
+iPhone USB
+Bluetooth PAN
+{% endcodeblock %}</p>
+
+<p>Getting the list of bypass domains for an interface:</p>
+
+<p>{% codeblock lang:bash %}
+└▷ networksetup -getproxybypassdomains Ethernet
+www.garylarizza.com
+*.corp.net
+10.13.1.3/24
+{% endcodeblock %}</p>
+
+<p>The message displayed when no domains are set for an interface:</p>
+
+<p>{% codeblock lang:bash %}
+└▷ networksetup -getproxybypassdomains FireWire
+There aren&rsquo;t any bypass domains set on FireWire.
+{% endcodeblock %}</p>
+
+<p>Setting the list of bypass domains for an interface:</p>
+
+<p>{% codeblock lang:bash %}
+└▷ networksetup -setproxybypassdomains Ethernet &lsquo;*.corp.net&rsquo; &lsquo;10.13.1.3/24&rsquo; &lsquo;www.garylarizza.com&rsquo;
+{% endcodeblock %}</p>
+
+<p>Perfect &ndash; all of that is done with a single binary, and it&rsquo;s pretty straightforward. Let&rsquo;s look at the type I ended up creating for this problem:</p>
+
+<p>{% codeblock lib/puppet/type/mac_proxy_bypassdomains.rb lang:ruby %}
+Puppet::Type.newtype(:mac_proxy_bypassdomains) do
+  desc &ldquo;Puppet type that models bypass domains for a network interface on OS X&rdquo;</p>
+
+<p>  ensurable</p>
+
+<p>  newparam(:name, :namevar => true) do</p>
+
+<pre><code>desc "Interface name - currently must be 'friendly' name (e.g. Ethernet)"
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:domains, :array_matching => :all) do</p>
+
+<pre><code>desc "Domains which should bypass the proxy"
+def insync?(is)
+  is.sort == should.sort
+end
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
+
+<p>The type uses a namevar parameter called &lsquo;name&rsquo;, which is the name of the network interface.
+This means that we can set one list of bypass domains for every network interface.
+There&rsquo;s a single property, &lsquo;domains&rsquo; that accepts an array of domains that should bypass
+the proxy for the network interface. I&rsquo;ve overridden the <code>insync?</code> method for the domains
+property to sort the array values on both ends &ndash; this means that the ORDER of the domains
+doesn&rsquo;t matter, I only care that the domains specified exist on the system. Finally, the
+type is ensurable (which means that we can create a list of domains and remove/destroy
+the list of domains for a network interface).</p>
+
+<h2>Setup the provider</h2>
+
+<p>Okay, so we&rsquo;ve defined the problem, seen how to interact with the system to get us the
+data that we need, setup a type to model the data, and now the last thing left to do
+is to wire up the provider to make the binary calls we need and return the data we
+want.</p>
+
+<h3>Typos are not your friend.</h3>
+
+<p>The first thing you will encounter is &ldquo;Puppet&rsquo;s predictable naming pattern&rdquo;
+that is used by the Puppet autoloader. Typos are not fun, and omitting a single
+letter in either the filename or the provider name will render your provider
+(emotionally) unavailable to Puppet. Our type is called &lsquo;mac_proxy_bypassdomains&rsquo;,
+as types are generally named along the lines of &lsquo;what does this data model?&rsquo; The
+provider name is generally the name of the underlying technology that&rsquo;s doing
+the modeling. For the package type, the providers are named after the package
+management systems (e.g. yum, apt, pacman, zypper, pip), for the file type, the
+providers are loosely named for the operatingsystem kernel type on which files
+are to be created (e.g. windows, posix). In our example, I simply chose to name
+the provider &lsquo;ruby&rsquo; because, as a Puppet Labs employee, <strong>I TOO</strong> suck at naming
+things.</p>
+
+<p>Here&rsquo;s a tree of my module to understand how the type and provider files are
+to be laid out:</p>
+
+<p>{% codeblock Module tree lang:bash %}
+├── Modulefile
+├── README.markdown
+└── lib
+    └── puppet
+        ├── provider
+        │   ├── mac_proxy_bypassdomains
+        │   │   └── ruby.rb
+        └── type
+            └── mac_proxy_bypassdomains.rb
+{% endcodeblock %}</p>
+
+<p>As you can see from above, the name of both the type and provider must <strong>EXACTLY</strong>
+match the filename of their corresponding files. Also, the provider file lives
+in a directory named after the type. There are MANY things that can be typoed here
+(filenames, foldernames, type/provider names in their files), so be absolutely sure
+that you&rsquo;ve named your files correctly.</p>
+
+<p>The reason for all this naming bullshit is because of the way Puppet syncs down
+plugin files (coincidentally, with a <a href="http://docs.puppetlabs.com/guides/plugins_in_modules.html">process known as Pluginsync)</a>.
+Everything in the <code>lib</code> directory in a Puppet module is going to get synced down
+to your nodes inside <a href="http://docs.puppetlabs.com/references/latest/configuration.html#vardir">the <code>vardir</code> directory</a> on
+the node itself. The <code>vardir</code> is a known library path to Puppet, and all files
+in the <code>vardir</code> are treated as if they had lived in Puppet&rsquo;s source code (in
+the same relative paths).  Because the Puppet source code has all type files in
+the <code>lib/puppet/type</code> directory, all <strong>CUSTOM</strong> types must go in the module&rsquo;s
+<code>lib/puppet/type</code> directory for confirmity.  This is repeated for <strong>EVERY</strong>
+custom Puppet/Facter plugin (including custom facts, custom functions, and
+etc&hellip;).</p>
+
+<h3>More scaffolding</h3>
+
+<p>Let&rsquo;s layout the shell of our provider, first, to ensure that we haven&rsquo;t typoed
+anything. Here&rsquo;s the provider declaration:</p>
+
+<p>{% codeblock lib/puppet/type/mac_proxy_bypassdomains/ruby.rb lang:ruby %}
+Puppet::Type.type(:mac_proxy_bypassdomains).provide(:ruby) do
+  # Provider work goes here
+end
+{% endcodeblock %}</p>
+
+<p>Note that the name of the type and the name of the provider are symbolized (i.e.
+they&rsquo;re prepended with a colon). Like I mentioned above, they must be spelled
+EXACT or Puppet will complain very loudly. You may see variants on that
+declaration line because there are multiple ways in Ruby to extend a class
+object. The method I&rsquo;ve listed above is the &lsquo;generally accepted best-practice&rsquo;, which
+is to say it&rsquo;s the way we&rsquo;re doing it this month.</p>
+
+<p>Congrats! You have THE SHELL of a provider that has yet to do a single goddamn thing!
+Technically, you&rsquo;re further than about 90% of other Puppet users at this point! Let&rsquo;s
+go the additional 20% (since we&rsquo;re basing this on a mangement metric of 110%) by
+wiring up the methods and making the damn thing work!</p>
+
+<h3>Are you (en)sure about this?</h3>
+
+<p>We&rsquo;ve explained before that a type is &lsquo;ensurable&rsquo; when you can check for its existance
+on a system, create it when it doesn&rsquo;t exist (and it SHOULD exist), and destroy it when
+it does exist (and it SHOULDN&rsquo;T exist). The bare minimum amount of methods necessary
+to make a type ensurable is three, and they&rsquo;re called <code>exists?</code>, <code>create</code>, and <code>destroy</code>.</p>
+
+<h3>Method: <code>exists?</code></h3>
+
+<p>The <code>exists?</code> method is a predicate method &ndash; that means it should either return
+the boolean <code>true</code> or <code>false</code> value based on whether the bypass domain list
+exists. Puppet will always call the <code>exists?</code> provider method to determine if
+that &lsquo;thing&rsquo; (in this case, &lsquo;thing&rsquo; means &lsquo;a list of domains to bypass for a
+specific network interface&rsquo;) exists before calling any other methods. How do we
+know if this thing exists? Like I showed before, you need to run the
+<code>networksetup -getproxybypassdomains</code> command and pass the interface name.  If
+it returns &lsquo;There aren&rsquo;t any bypass domains set on (interface name)&rsquo;, then the
+list doesn&rsquo;t exist. Let&rsquo;s do some binary execution&hellip;</p>
+
+<h4>Calling binaries from Puppet</h4>
+
+<p>Puppet provides some helper syntax around basic actions that most providers
+perform. MOST providers are going to need to call out to an external binary
+(e.g. yum, apt, etc&hellip;) at some point, and so Puppet allows you to create
+your own method JUST for a system binary. The <code>commands</code> method abstracts
+all the dirtyness of making a method for each system binary you want to call.
+The way you use the <code>commands</code> method is like so:</p>
+
+<p>{% codeblock lang:ruby %}
+commands :networksetup => &lsquo;networksetup&rsquo;
+{% endcodeblock %}</p>
+
+<p>The <code>commands</code> method accepts a hash whose key must be a symbolized name. The
+CONVENTION is to use a symbolized name that matches the binary name, but it&rsquo;s
+not REQUIRED to do so. The value for that symbolized key MUST be the binary
+name. Note that I&rsquo;ve not passed a full path to the binary. Why? Well, Puppet
+will automatically do a path lookup for that binary and store its full path
+for use when the binary is invoked. We don&rsquo;t REQUIRE you to pass the full
+path because sometimes the same binary exists in different locations for
+different operatingsystems. Instead of creating a provider for each OS you
+manage with Puppet, we abstract away the path stuff. You <strong>CAN</strong> still
+pass a full path as a value, but if you elect to do that an the binary doesn&rsquo;t
+exist at that path, Puppet will disqualify the provider and you&rsquo;ll be quite
+upset.</p>
+
+<p>In the event that Puppet <strong>CANNOT</strong> find this binary, it will disqualify the
+entire provider, and you&rsquo;ll get a message saying as much in the debug output
+of your Puppet run. Because of that, the <code>commands</code> method is a good way to
+confine your provider to a specific system or class of system.</p>
+
+<p>When the <code>commands</code> method is successfully invoked, you will get a new provider
+method named after the <strong>SYMBOLIZED</strong> key, and not necessarily the binary
+name (unless you made them the same). After the above command is evaluated,
+Puppet will now have a <code>networksetup()</code> method in our provider. The argument
+to the <code>networksetup</code> method should be an array of arguments that are passed
+to the binary. It&rsquo;s c-style, so each element is going to be individually
+quoted. You can run into issues here if you pass values containing quotes
+as part of your argument array. Read that again &ndash; quoting your values is
+totally acceptable (e.g. [&lsquo;foo&rsquo;, &lsquo;bar&rsquo;]), but passing a value that contains
+quotes can potentially cause problems (e.g. [&ldquo;&lsquo;foo&rsquo;&rdquo;, &ldquo;&lsquo;bar&rsquo;&rdquo;]).</p>
+
+<p>You&rsquo;re probably thinking &ldquo;Why the hell would I go through this trouble when
+I can use the <code>%x{}</code> syntax in ruby to execute a shell command?!&rdquo; And to that
+I would say &ldquo;Quit yelling at me&rdquo; and also &ldquo;Because: testing.&rdquo; When you write
+spec tests for your provider (which will be covered in a later blog post, since
+it&rsquo;s its OWN path of WTF), you&rsquo;re going to need to mock out calls to the system
+during your tests (i.e. sometimes you may be running the tests on a system that
+doesn&rsquo;t have the binary you&rsquo;re meant to be calling in your provider. You don&rsquo;t
+want the tests to fail due to the absence of a binary file). The <code>%x{}</code>
+construct in Ruby is hard to mock out, but a method of our provider is a relatively
+easy thing to mock out. Also &ndash; see the path problem above. We don&rsquo;t STOP you
+from doing <code>%x{}</code> in your code (it will still totally work), but we give you
+a couple of good reasons to NOT do it.</p>
+
+<h4>Objects are a provider&rsquo;s best friend</h4>
+
+<p>Within your provider, you&rsquo;re going to be doing lots of system calls and data
+manipulation. Often we&rsquo;re asked whether you do that ugliness inside the main
+methods (i.e. inside the <code>exists?</code> method directly), or if you create a
+helper method for some of this data manipulation. The answer I usually give
+is that you should probably create a helper method if:</p>
+
+<ul>
+<li>The code is going to be called more than once</li>
+<li>The code does something that would be tricky to test (like reading from a file)</li>
+<li>Complexity would be reduced by creating a helper method</li>
+</ul>
+
+
+<p>The act of getting a list of domains for a specific interface is definitely
+going to be utilized in more than one place in our provider (we&rsquo;ll use it
+in the <code>exists?</code> method as well as in a &lsquo;getter&rsquo; method for the <code>domains</code>
+property). Also, you could argue that it might be tricky to test since it&rsquo;s
+going to be a binary call that&rsquo;s going to return some data. Because of this,
+let&rsquo;s create a helper method that returns a list of domains for a specific
+interface:</p>
+
+<p>{% codeblock lang:ruby %}
+def get_proxy_bypass_domains(int)
+  begin</p>
+
+<pre><code>output = networksetup(['-getproxybypassdomains', int])
+</code></pre>
+
+<p>  rescue Puppet::ExecutionFailure => e</p>
+
+<pre><code>Puppet.debug("#get_proxy_bypass_domains had an error -&gt; #{e.inspect}")
+return nil
+</code></pre>
+
+<p>  end
+  domains = output.split(&ldquo;\n&rdquo;).sort
+  return nil if domains.first =~ /There aren\&rsquo;t any bypass domains set/
+  domains
+end
+{% endcodeblock %}</p>
+
+<p>Ruby convention is to use underscores (i.e. versus camelCase or hyphens) in
+method names. You want to give your methods very descriptive names based on
+what it is that they DO. In this case, <code>get_proxy_bypass_domains</code> seems
+adequately descriptive. Also, you should err on the side of readability when
+you&rsquo;re writing code. You can get pretty creative with Ruby metaprogramming,
+but that can quickly become hard to follow (and then you&rsquo;re just a dick).
+Finally, error-handling is a good thing. If you&rsquo;re going to do any error-handling,
+though, be very specific about the errors you catch/rescue. When you have a rescue
+block, make sure you catch a specific exception class (in the case above, we&rsquo;re
+catching a Puppet::ExecutionFailure &ndash; which means the binary is returning a
+non-zero exit code).</p>
+
+<p>The code above will return an array containing all the domains, or it will
+return <code>nil</code> if domains aren&rsquo;t found or the <code>networksetup</code> binary had an issue.</p>
+
+<p>Using the helper method above, here&rsquo;s what the final <code>exists?</code> method looks like:</p>
+
+<p>{% codeblock lang:ruby %}
+def exists?
+  get_proxy_bypass_domains(resource[:name]) != nil
+end
+{% endcodeblock %}</p>
+
+<p>All provider methods have the ability to access the &lsquo;should&rsquo; values for the resource
+(and by that I mean the values that are set in the Puppet maniest on the Puppet master
+server, or locally if you&rsquo;re using <code>puppet apply</code>). Those values reside in the <code>resource</code>
+method that responds with a hash. In the code above, <code>resource[:name]</code> will return the
+network interface name (e.g. Ethernet, FireWire, etc&hellip;) that was specified in the
+Puppet manifest. The exists method will return true of a list of domains exists for
+an interface, or it will return false if a list of domains does not exist (i.e.
+<code>get_proxy_bypass_domains</code> returns <code>nil</code>).</p>
+
+<h3>Method: <code>create</code></h3>
+
+<p>The <code>create</code> method is called when <code>exists?</code> returns false and a resource has an
+<code>ensure</code> value set to <code>present</code>. Because of this, you don&rsquo;t need to call the <code>exists?</code>
+method explicitly in <code>create</code> &ndash; it&rsquo;s already been evaluated. Remember from above that
+the <code>-setproxybypassdomains</code> argument to the <code>networksetup</code> binary will set a domain
+list, so the <code>create</code> method is going to be very short-and-sweet:</p>
+
+<p>{% codeblock lang:ruby %}
+def create
+  networksetup([&lsquo;-setproxybypassdomains&rsquo;, resource[:name], resource[:domains]])
+end
+{% endcodeblock %}</p>
+
+<p>In the end, the <code>create</code> method will call the <code>networksetup</code> binary with the <code>-setproxybypassdomains</code>
+argument, pass the interface name (from <code>resource[:name]</code>) and pass an array of domain values (which
+comes from <code>resource[:domains]</code>). That&rsquo;s it; it&rsquo;s done!</p>
+
+<h3>Method: <code>destroy</code></h3>
+
+<p>The <code>destroy</code> method is easier than the <code>create</code> method:</p>
+
+<p>{% codeblock lang:ruby %}
+def destroy
+  networksetup([&lsquo;-setproxybypassdomains&rsquo;, nil])
+end
+{% endcodeblock %}</p>
+
+<p>Here, we&rsquo;re calling <code>networksetup</code> with the <code>-setproxybypassdomains</code> argument
+and passing nothing else. This will initialize the list and set it to be empty.</p>
+
+<h2>Synchronizing properties</h2>
+
+<h3>Getter method: <code>domains</code></h3>
+
+<p>At this point our type is ensurable, which means we can create and destroy resources.
+What we CAN&rsquo;T do, however, is change the value of any properties that are out-of-sync. A
+property is out-of-sync when the value discovered by Puppet on the node differs from the
+value in the catalog (i.e. set by the Puppet manifest using the DSL on the Puppet master).
+Just like <code>exists?</code> is called to determine if a resource exists, Puppet needs a way to
+get the current value for a property on a node. The method that gets this value is
+called the &lsquo;getter method&rsquo; for a property, and its name must match the name of the
+property. Because we have a property called <code>domains</code>, the provider must have a <code>domains</code>
+method that returns a value (in this case, an array of domains to be bypassed by the
+proxy). We&rsquo;ve already written a helper method that does this work for us, so the
+<code>domains</code> getter method is pretty easy:</p>
+
+<p>{% codeblock lang:ruby %}
+def domains
+  get_proxy_bypass_domains(resource[:name])
+end
+{% endcodeblock %}</p>
+
+<p>Tada! Just call the helper method and pass the interface name. Boom &ndash; instant array
+of values. The getter method will return the &lsquo;is&rsquo; value, because that&rsquo;s what the value
+<strong>IS</strong> (currently on the node). Get it? Anyone? The <strong>IS</strong> value is the other side of
+the coin to the &lsquo;should&rsquo; value (that comes from the Puppet manifest) because that&rsquo;s
+what the value <strong>SHOULD</strong> be set on the node.</p>
+
+<h3>Setter method: <code>domains=</code></h3>
+
+<p>If the getter method (e.g. <code>domains</code>) returns a value that doesn&rsquo;t match the value
+in the catalog, then Puppet changes the value on the node and sets it to the value
+in the catalog. It does this by calling the &lsquo;setter&rsquo; method for the property, which
+is the name of the property and the equals ( = ) sign. In this case, the setter
+method for the <code>domains</code> property must be called <code>domains=</code>.  It looks like this:</p>
+
+<p>{% codeblock lang:ruby %}
+def domains=(value)
+  networksetup([&lsquo;-setproxybypassdomains&rsquo;, resource[:name], value])
+end
+{% endcodeblock %}</p>
+
+<p>Setter methods are always passed a single argument &ndash; the &lsquo;should&rsquo; value of the property.
+In our example, we&rsquo;re calling the <code>networksetup</code> binary with the <code>-setproxybypassdomains</code>
+argument, passing the name of the interface, and then passing the &lsquo;should&rsquo; value &ndash; or
+the array of domains. It&rsquo;s easy, it&rsquo;s one line, and I love it when a plan comes together</p>
+
+<h2>Putting the whole damn thing together</h2>
+
+<p>I&rsquo;ve broken down the provider line by line, but here&rsquo;s the entire file:</p>
+
+<p>{% codeblock lib/puppet/provider/mac_proxy_bypassdomains/ruby.rb lang:ruby %}
+Puppet::Type.type(:mac_proxy_bypassdomains).provide(:ruby) do
+  commands :networksetup => &lsquo;networksetup&rsquo;</p>
+
+<p>  def get_proxy_bypass_domains(int)</p>
+
+<pre><code>begin
+  output = networksetup(['-getproxybypassdomains', int])
+rescue Puppet::ExecutionFailure =&gt; e
+  Puppet.debug("#get_proxy_bypass_domains had an error -&gt; #{e.inspect}")
+  return nil
+end
+domains = output.split("\n").sort
+return nil if domains.first =~ /There aren\'t any bypass domains set/
+domains
+</code></pre>
+
+<p>  end</p>
+
+<p>  def exists?</p>
+
+<pre><code>get_proxy_bypass_domains(resource[:name]) != nil
+</code></pre>
+
+<p>  end</p>
+
+<p>  def destroy</p>
+
+<pre><code>networksetup(['-setproxybypassdomains', nil])
+</code></pre>
+
+<p>  end</p>
+
+<p>  def create</p>
+
+<pre><code>networksetup(['-setproxybypassdomains', resource[:name], resource[:domains]])
+</code></pre>
+
+<p>  end</p>
+
+<p>  def domains</p>
+
+<pre><code>get_proxy_bypass_domains(resource[:name])
+</code></pre>
+
+<p>  end</p>
+
+<p>  def domains=(value)</p>
+
+<pre><code>networksetup(['-setproxybypassdomains', resource[:name], value])
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
+
+<h2>Testing the type/provider</h2>
+
+<p>And that&rsquo;s it, we&rsquo;re done!  The last thing to do is to test it out.  You can
+test out your provider in one of two ways: the first is to add the module to
+the modulepath of your Puppet master and include it that way, or test it
+locally by setting the <code>$RUBYLIB</code> environmental variable to point to the <code>lib</code>
+directory of your module (which is the more preferred method since it won&rsquo;t
+serve it out to all of your nodes without it being tested). Because this module
+is on my system at <code>/users/glarizza/src/puppet-mac_proxy</code>, here&rsquo;s how my
+<code>$RUBYLIB</code> is set:</p>
+
+<p>{% codeblock lang:bash %}
+export RUBYLIB=/users/glarizza/src/puppet-mac_proxy/lib
+{% endcodeblock %}</p>
+
+<p>Next, we need to create a resource declaration to try and set a couple of
+bypass domains. I&rsquo;ll create a <code>tests</code> directory and simple test file in
+<code>tests/mac_proxy_bypassdomains.pp</code>:</p>
+
+<p>{% codeblock tests/mac_proxy_bypassdomains.pp lang:puppet %}
+mac_proxy_bypassdomains { &lsquo;Ethernet&rsquo;:
+  ensure  => &lsquo;present&rsquo;,
+  domains => [&lsquo;www.garylarizza.com&rsquo;,&lsquo;*.puppetlabs.com&rsquo;,&lsquo;10.13.1.3/24&rsquo;],
+}
+{% endcodeblock %}</p>
+
+<p>Finally, let&rsquo;s run Puppet and test it out:</p>
+
+<p>{% codeblock %}
+└▷ puppet apply ~/src/puppet-mac_proxy/tests/mac_proxy_bypassdomains.pp
+Notice: Compiled catalog for satori.local in environment production in 0.06 seconds
+Notice: /Stage[main]//Mac_proxy_bypassdomains[Ethernet]/domains: domains changed [] to &lsquo;www.garylarizza.com *.puppetlabs.com 10.13.1.3/24&rsquo;
+Notice: Finished catalog run in 3.47 seconds
+{% endcodeblock %}</p>
+
+<p><strong>NOTE:</strong> If you run this as a local user, you will be prompted by OS X to
+enter an administrative password for a change.  Since Puppet will ultimately be
+run as root on OS X when we&rsquo;re NOT testing out code, this shouldn&rsquo;t be required
+during a normal Puppet run. To test this out (i.e. that you don&rsquo;t always have to
+enter an admin password in a pop-up window), you&rsquo;ll need to <code>sudo -s</code> to
+change to root, set the <code>$RUBYLIB</code> as the root user, and then run Puppet again.</p>
+
+<p>And that&rsquo;s it &ndash; looks like our code worked! To check and make sure it will notice a
+change, open System Preferences, then the Network pane, click on the Ethernet
+interface, then the Advanced button, then the Proxies tab, and finally note the
+&lsquo;Bypass proxy settings&hellip;&rsquo; text box at the bottom of the screen (now do you see
+why we automate this shit?!). Make a change to the entries in there and run
+Puppet again &ndash; it should correct it for you</p>
+
+<h2>Wait&hellip;so that was it?  Really?  We&rsquo;re done?</h2>
+
+<p>Yeah, that was a whole type and provider. Granted, it has only one property and it&rsquo;s
+not too complicated, but that&rsquo;s the point. We&rsquo;ve still got some latent bugs (the
+network interface passed must be capitalized exactly like OS X expects it, we could
+do some better error handling, etc&hellip;), and the type doesn&rsquo;t work with <code>puppet resource</code>
+(yet), but we&rsquo;ll handle all of these things in the next blog post (or two&hellip;or three).</p>
+
+<p>Until then, take this time to crack open a type and a provider for something that&rsquo;s
+been pissing you off and FIX it!  Better yet, push it up to Github, tweet about it,
+and post it up <a href="http://forge.puppetlabs.com">on The Forge</a> so the rest of the
+community can use it!</p>
+
+<p>Like always, feel free to comment, tweet me (@glarizza), email me (gary <strong>AT</strong> puppetlabs <strong>DOT</strong> com),
+or use the social media platform of choice to get a hold of me (Snapchats may or may not
+get a response. Maybe.)  Cheers!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Fun with Puppet Providers - Part 1 of Whatever]]></title>
+    <link href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/"/>
+    <updated>2013-11-25T20:47:00-08:00</updated>
+    <id>http://garylarizza.com/blog/2013/11/25/fun-with-providers</id>
+    <content type="html"><![CDATA[<p>I don&rsquo;t know why I write blog posts &ndash; everybody in open-source software knows
+that the code <em>IS</em> the documentation. If you&rsquo;ve ever tried to write a Puppet
+type/provider, you know this fact better than ANYONE. To this day, when someone
+asks me for the definitive source on this activity I usually refer them first
+to <a href="http://www.amazon.com/Puppet-Types-Providers-Dan-Bode/dp/1449339328">Nan Liu and Dan Bode&rsquo;s awesome Types and Providers
+book</a>
+(which REALLY is a fair bit of quality information), and THEN to the source
+code for Puppet. Everything else falls in-between those sources (sadly).</p>
+
+<p>As someone who truly came from knowing absolute fuckall about Ruby and only
+marginally more than that about Puppet, I&rsquo;ve walked through the valley of the
+shadow of self.instances and have survived to tell the tale. That&rsquo;s what this
+post is about &ndash; hopefully some GOOD information if you want to start writing
+your own Puppet type and provider. I also wrote this because this knowledge
+has been passed down from Puppet employee to Puppet employee, and I wanted
+to break the priesthood being held on type and provider magic. If you don&rsquo;t
+hear from me after tomorrow, well, then you know what happened&hellip;</p>
+
+<h2>Because 20 execs in a defined type&hellip;</h2>
+
+<p>What would drive someone to write a custom type and provider for Puppet anyhow?
+Afterall, you can do ANYTHING IMAGINABLE in the Puppet DSL*! After drawing
+back my sarcasm a bit, let me explain where the Puppet DSL tends to fall over
+and the idea of a custom type and provider starts becoming more than just an
+incredibly vivid dream:</p>
+
+<ul>
+<li>You have more than a couple of exec statements in a single class/defined type that have multiple conditional
+properties like &lsquo;onlyif&rsquo; and/or &lsquo;unless&rsquo;.</li>
+<li>You need to use pure Ruby to manipulate data and parse it through a system binary</li>
+<li>Your defined type has more conditional logic than your pre-nuptual agreement</li>
+<li>Any combination of similar arguments related to the above</li>
+</ul>
+
+
+<p>If the above sounds familiar to you, then you&rsquo;re probably ready to build your own custom Puppet type and provider.
+Do note that custom types and providers are written in Ruby and not the Puppet DSL. This can initially feel
+very scary, but get over it (there are much scarier things coming).</p>
+
+<p><em>* Just because you can doesn&rsquo;t mean you don&rsquo;t, in fact, suck.</em></p>
+
+<h2>I&rsquo;m not your Type</h2>
+
+<p>This blog post is going to focus on types and type-interaction, while later
+posts will focus on providers and ultimately dirty provider tricks to win
+friends and influence others.  Type and provider interaction can be totally
+daunting for newcomers, let ALONE just naming files correctly due to Puppet&rsquo;s
+predictable (note: anytime I write the word &ldquo;predictable&rdquo;, just substitute the
+phrase &ldquo;annoying pain in the ass&rdquo;) naming pattern.  Let&rsquo;s break it down a bit
+for you &ndash; somebody que Dre&hellip;</p>
+
+<p>(NOTE: I&rsquo;m going to ASSUME you understand the fundamentals of a Puppet run already. If you&rsquo;re pretty hazy
+on that concept, checkout <a href="http://docs.puppetlabs.com">docs.puppetlabs.com</a> for more information)</p>
+
+<h2>Types are concerned about your looks</h2>
+
+<p>The type file defines all the <em>properties</em> and <em>parameters</em> that can be used by your new custom resource.
+Think of the type file like the opening stanza to a new Puppet class &ndash; we&rsquo;re describing all the tweakable
+knobs and buttons to the new thing we&rsquo;re creating. The type file also gives you some added validation
+abilities, which is very handy.</p>
+
+<p>It&rsquo;s important to understand that there is a BIG difference between a &lsquo;property&rsquo; and a &lsquo;parameter&rsquo; with regard
+to a type (even though they&rsquo;re both assigned values identically in a resource declaration).  Think of it this
+way: a property is something that can be inspected and changed by Puppet, while a parameter is just helper data
+that Puppet uses to do its job.  A property would be something like a file&rsquo;s mode.  You can inspect a file and
+determine its mode, and you can even CHANGE a file&rsquo;s mode on disk. The file resource type also has a parameter
+called &lsquo;backup&rsquo;.  Its sole job is to tell Puppet whether to backup the file to the filebucket before making
+changes. This data is useful for Puppet during a run, but you can&rsquo;t inspect a file on disk and know definitively
+whether Puppet is going to back it up or not (and it goes without saying that if you can&rsquo;t determine this aspect
+about a file on disk just by inspecting it, than you also can&rsquo;t CHANGE this aspect about a file on disk either).
+You&rsquo;ll see later where the property/parameter distinction becomes very important.</p>
+
+<p>Recently I built a type modeling the setting of proxy data for network interfaces on OS X, so we&rsquo;ll use that as
+a demonstration of a type.  It looks like the following:</p>
+
+<p>{% codeblock lib/puppet/type/mac_web_proxy.rb lang:ruby %}
+Puppet::Type.newtype(:mac_web_proxy) do
+  desc &ldquo;Puppet type that models a network interface on OS X&rdquo;</p>
+
+<p>  ensurable</p>
+
+<p>  newparam(:name, :namevar => true) do</p>
+
+<pre><code>desc "Interface name - currently must be 'friendly' name (e.g. Ethernet)"
+munge do |value|
+  value.downcase
+end
+def insync?(is)
+  is.downcase == should.downcase
+end
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:proxy_server) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+</code></pre>
+
+<p>  end</p>
+
+<p>  newparam(:authenticated_username) do</p>
+
+<pre><code>desc "Username for proxy authentication"
+</code></pre>
+
+<p>  end</p>
+
+<p>  newparam(:authenticated_password) do</p>
+
+<pre><code>desc "Password for proxy authentication"
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:proxy_authenticated) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+newvalues(:true, :false)
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:proxy_port) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+newvalues(/^\d+$/)
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
+
+<p>First note the type file&rsquo;s path in the grey titlebar of the graphic: <code>lib/puppet/type/mac_web_proxy.rb</code>
+This path is relative to the module that you&rsquo;re building, and it&rsquo;s VERY important that it be named
+EXACTLY this way to appease Puppet&rsquo;s predictable naming pattern.  The name of the file directly correllates
+to the name of the type listed in the <code>Puppet::Type.newtype()</code> method.</p>
+
+<p>Next, let&rsquo;s look at a sample parameter declaration &ndash; for starters, let&rsquo;s look at the &lsquo;authenticated_password&rsquo;
+parameter declaration on line 24 of the above type.  The <code>newparam()</code> method is called and the lone argument
+passed is the symbolized name of our parameter (i.e. it&rsquo;s prepended with a colon).  This parameter
+provides the password to use when setting up an authenticated web proxy on OS X.
+It&rsquo;s a parameter because as far as I know, there&rsquo;s no way for me to query the system for this password
+(it&rsquo;s obfuscated in the GUI and I&rsquo;m not entirely certain where it&rsquo;s stored on-disk).
+If there were a way for us to query this value from the system, then we could turn it
+into a property (since we could both &lsquo;GET&rsquo; as well as &lsquo;SET&rsquo; the value). As of right
+now, it exists as helper data for when I need to setup an authenticated proxy.</p>
+
+<p>Having seen a parameter, let&rsquo;s look at the &lsquo;proxy_server&rsquo; property that&rsquo;s declared on
+line 16 of the type file above. We&rsquo;re able to both query the system for this value,
+as well as change/set the value by using the <code>networksetup</code> binary, so it&rsquo;s able to
+be &lsquo;synchronized&rsquo; (according to Puppet). Because of this, it must be a property.</p>
+
+<h2>Just enough validation</h2>
+
+<p>The second major function of the type file is to provide methods to validate property
+and parameter data that is being passed. There are two methods to validate this data,
+and one method that allows you to massage the data into an acceptable format (which
+is called &lsquo;munging&rsquo;).</p>
+
+<h3>validate()</h3>
+
+<p>The first method, named &lsquo;validate&rsquo;, is widely believed to be the only successfully-named
+method in the entire Puppet codebase. Validate accepts a block and allows you to perform
+free-form validation in any way you prefer.  For example:</p>
+
+<p>{% codeblock lib/puppet/type/user.rb lang:ruby %}
+validate do |value|
+  raise ArgumentError, &ldquo;Passwords cannot include &lsquo;:&rsquo;&rdquo; if value.is_a?(String) and value.include?(&ldquo;:&rdquo;)
+end
+{% endcodeblock %}</p>
+
+<p>This example, pulled straight from the Puppet codebase, will raise an error if a
+password contains a colon. In this case, we&rsquo;re looking for a specific exception
+and are raising errors accordingly.</p>
+
+<h3>newvalues()</h3>
+
+<p>The second method, named &lsquo;newvalues&rsquo;, accepts a regex that property/parameter values
+need to match (if you&rsquo;re one of the 8 people in the world that speak regex fluently),
+or a list of acceptable values. From the example above:</p>
+
+<p>{% codeblock lib/puppet/type/mac_web_proxy.rb lang:ruby %}
+  newproperty(:proxy_authenticated) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+newvalues(:true, :false)
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:proxy_port) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+newvalues(/^\d+$/)
+</code></pre>
+
+<p>  end
+{% endcodeblock %}</p>
+
+<h3>munge()</h3>
+
+<p>The final method, named &lsquo;munge&rsquo; accepts a block like <code>newvalues</code> but allows you to
+convert an unacceptable value into an acceptable value. Again, this is from the example above:</p>
+
+<p>{% codeblock lib/puppet/type/mac_web_proxy.rb lang:ruby %}
+munge do |value|
+  value.downcase
+end
+{% endcodeblock %}</p>
+
+<p>In this case, we want to ensure that the parameter value is lower case. It&rsquo;s not
+necessary to throw an error, but rather it&rsquo;s acceptable to &lsquo;munge&rsquo; the value to
+something that is more acceptable without alerting the user.</p>
+
+<h2>Important type considerations</h2>
+
+<p>You could write half a book just on how types work (and, again, check out the book
+referenced above which DOES just that), but there are a couple of final considerations
+that will prove helpful when developing your type.</p>
+
+<h3>Defaulting values</h3>
+
+<p>The <code>defaultto</code> method provides a default value should the user not provide one for
+your property/parameter. It&rsquo;s a pretty simple construct, but it&rsquo;s important to
+remember when you write spec tests for your type (which you ARE doing, right?) that
+there will ALWAYS be values for properties/parameters that utilize <code>defaultto</code>. Here&rsquo;s a quick example:</p>
+
+<p>{% codeblock Defaultto example lang:ruby %}
+newparam(:enable_lacp) do
+  defaultto :true
+  newvalues(:true, :false)
+end
+{% endcodeblock %}</p>
+
+<h3>Ensurable types</h3>
+
+<p>A resource is considered &lsquo;ensurable&rsquo; when its presence can be verified (i.e. it
+exists on the system), it can be created when it doesn&rsquo;t exist and it SHOULD, and
+it can be destroyed when it exists and it SHOULDN&rsquo;T. The simplest way to tell
+Puppet that a resource type is ensurable is to call the <code>ensurable</code> method within
+the body of the type (i.e. outside of any property/parameter declarations). Doing
+this will automatically create an &lsquo;ensure&rsquo; property that accepts values of &lsquo;absent&rsquo;
+and &lsquo;present&rsquo; that are automatically wired to the &lsquo;exists?&rsquo;, &lsquo;create&rsquo; and &lsquo;destroy&rsquo;
+methods of the provider (something I&rsquo;ll write about in the next post). Optionally,
+you can choose to pass a block to the <code>ensurable</code> method and define acceptable
+property values as well as the methods of the provider that are to be called. That
+would look something like this:</p>
+
+<p>{% codeblock lib/puppet/type/package.rb lang:ruby %}
+ensurable do
+  newvalue(:present) do</p>
+
+<pre><code>provider.install
+</code></pre>
+
+<p>  end</p>
+
+<p>  newvalue(:absent) do</p>
+
+<pre><code>provider.uninstall
+</code></pre>
+
+<p>  end</p>
+
+<p>  newvalue(:purged) do</p>
+
+<pre><code>provider.purge
+</code></pre>
+
+<p>  end</p>
+
+<p>  newvalue(:held) do</p>
+
+<pre><code>provider.hold
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
+
+<p>This means that instead of calling the <code>create</code> method to create a new resource that
+SHOULD exist (but doesn&rsquo;t), Puppet is going to call the <code>install</code> method. Conversely,
+it will call the <code>uninstall</code> method to destroy a resource based on this type. The
+ensure property will also accept values of &lsquo;purged&rsquo; and &lsquo;held&rsquo; which will be wired up
+to the <code>purge</code> and <code>hold</code> methods respectively.</p>
+
+<h3>Namevars are unique little snowflakes</h3>
+
+<p>Puppet has a <a href="http://docs.puppetlabs.com/puppet/2.7/reference/lang_resources.html#namenamevar">concept known as the &lsquo;namevar&rsquo; for a resource.</a>
+If you&rsquo;re hazy about the concept check out the documentation, but basically it&rsquo;s the parameter
+that describes the form of uniqueness for a resource type on the system. For the package resource
+type, the &lsquo;name&rsquo; parameter is the namevar because the way you tell one package from another is
+its name. For the file resource, it&rsquo;s the &lsquo;path&rsquo; parameter, because you can differentiate unique
+files from each other according to their path (and not necessarily their filename, since filenames
+don&rsquo;t have to be unique on systems).</p>
+
+<p>When designing a type, it&rsquo;s important to consider WHICH parameter will be the namevar (i.e. how
+can you tell unique resources from one another). To make a parameter the namevar, you simply
+set the <code>:namevar</code> attribute to <code>:true</code> like below:</p>
+
+<p>{% codeblock lang:ruby %}
+newparam(:name, :namevar => :true) do
+  # Type declaration attributes here&hellip;
+end
+{% endcodeblock %}</p>
+
+<h3>Handling array values</h3>
+
+<p>Nearly every property/parameter value that is declared for a resource is &lsquo;stringified&rsquo;, or
+cast to a string. Sometimes, however, it&rsquo;s necessary to accept an array of elements as the
+value for a property/parameter. To do this, you have to explicitly tell Puppet that you&rsquo;ll
+be passing an array by setting the <code>:array_matching</code> attribute to <code>:all</code> (if you don&rsquo;t set
+this attribute, it defaults to <code>:first</code>, which means that if you pass an array as a value
+for a property/parameter, Puppet will only accept the FIRST element in that array).</p>
+
+<p>{% codeblock lang:ruby %}
+newproperty(:domains, :array_matching => :all) do
+  # Type declaration attributes here&hellip;
+end
+{% endcodeblock %}</p>
+
+<p>If you set <code>:array_matching</code> to <code>:all</code>, EVERY value passed for that parameter/property will
+be cast to an array (which means if you pass a value of &lsquo;foo&rsquo;, you&rsquo;ll get an array with a
+single element &ndash; the string of &lsquo;foo&rsquo;).</p>
+
+<h3>Documenting your property/parameter</h3>
+
+<p>It&rsquo;s a best-practice to document the purpose of your property or parameter declaration, and
+this can be done by passing a string to the <code>desc</code> method within the body of the property/parameter
+declaration.</p>
+
+<p>{% codeblock lang:ruby %}
+newproperty(:domains, :array_matching => :all) do
+  desc &ldquo;Domains which should bypass the proxy&rdquo;</p>
+
+<h1>Type declaration attributes here&hellip;</h1>
+
+<p>end
+{% endcodeblock %}</p>
+
+<h3>Synchronization tricks</h3>
+
+<p>Puppet uses a method called <code>insync?</code> to determine whether a property value is synchronized (i.e.
+if Puppet needs to change its value, or it&rsquo;s set appropriately). You usually have no need to change
+the behavior of this method since most of the properties you create for a type will have string
+values (and the <code>==</code> operator does a good job of checking string equality). For structured data
+types like arrays and hashes, however, that can be a bit trickier. Arrays, for example, are
+ordered construct &ndash; they have a definitive idea of what the first element and the last element
+of the array are. Sometimes you WANT to ensure that values are in a very specific order, and
+sometimes you don&rsquo;t necessarily care about the ORDER that values for a property are set &ndash; you
+just want to make sure that all of them are set.</p>
+
+<p>If the latter cases sounds like what you need, then you&rsquo;ll need to override the behavior of the
+<code>insync?</code> method. Take a look at the below example:</p>
+
+<p>{% codeblock lang:ruby %}
+newproperty(:domains, :array_matching => :all) do
+  desc &ldquo;Domains which should bypass the proxy&rdquo;
+  def insync?(is)</p>
+
+<pre><code>is.sort == should.sort
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
+
+<p>In this case, I&rsquo;ve overridden the <code>insync?</code> method to first sort the &lsquo;is&rsquo; value (or, the value that
+was discovered by Puppet on the target node) and compare it with the sorted &lsquo;should&rsquo; value (or,
+the value that was specified in the Puppet manifest when the catalog was compiled by the Puppet
+master). You can do WHATEVER you want in here as long as <code>insync?</code> returns either a true or a
+false value.  If <code>insync?</code> returns true, then Puppet determines that everything is in sync and
+no changes are necessary, whereas if it returns false then Puppet will trigger a change.</p>
+
+<h2>And this was the EASY part!</h2>
+
+<p>Wow this went longer than I expected&hellip; and types are usually the &lsquo;easier&rsquo; bit
+since you&rsquo;re only describing the format to be used by the Puppet admin in
+manifests. There are some hacky type tricks that I&rsquo;ve not yet covered (i.e.
+features, &lsquo;inheritance&rsquo;, and other meta-bullshit), but those will be saved for
+a final &lsquo;dirty tips and tricks&rsquo; post.  In the next section, I&rsquo;ll touch on
+providers (which is where all interaction with the system takes place), so
+stay tuned for more brain-dumping-goodness&hellip;</p>
+]]></content>
+  </entry>
+  
+  <entry>
     <title type="html"><![CDATA[Using Veewee to build OS X VMs]]></title>
     <link href="http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms/"/>
     <updated>2013-01-20T19:36:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms</id>
     <content type="html"><![CDATA[<p>I hate <a href="http://github.com/timsutton">Tim Sutton</a> in the same way I hate <a href="http://ihatestevensinger.com/">Steven Singer</a>. I hate Tim
-because he actually IMPLEMENTS some of the things on my list of 'shit to tinker
-with when you get some free time' instead of just TALKING about them. He and
+because he actually IMPLEMENTS some of the things on my list of &lsquo;shit to tinker
+with when you get some free time&rsquo; instead of just TALKING about them. He and
 <a href="https://twitter.com/bruienne">Pepijn Bruienne</a> have been working on some code for <a href="http://github.com/jedi4ever/veewee">Veewee</a> that
 will allow you to automate the creation of OS X VMs in VMware Fusion. For those
 who are interested, you can <a href="https://github.com/jedi4ever/veewee/issues/481">check out the pull request containing this code</a>
-and comment/help them out. For everyone else, read on and entertain the idea...</p>
+and comment/help them out. For everyone else, read on and entertain the idea&hellip;</p>
 
 <h2>Prerequisites:</h2>
 
@@ -39,26 +1005,26 @@ and comment/help them out. For everyone else, read on and entertain the idea...<
 
 <h4>OS X</h4>
 
-<p>This walkthrough assumes that you're running OS X on your development
-workstation. That's what I use, and it's the workflow I know.</p>
+<p>This walkthrough assumes that you&rsquo;re running OS X on your development
+workstation. That&rsquo;s what I use, and it&rsquo;s the workflow I know.</p>
 
 <h4>VMware Fusion</h4>
 
-<p>If you've used <a href="http://github.com/jedi4ever/veewee">Veewee</a> before, odds are good that you MIGHT have used
+<p>If you&rsquo;ve used <a href="http://github.com/jedi4ever/veewee">Veewee</a> before, odds are good that you MIGHT have used
 it to build baseboxes for <a href="http://www.vagrantup.com/">Vagrant</a> and/or Virtualbox. Veewee
-+ Vagrant is a post for ANOTHER time, but in short it's an awesome workflow for
++ Vagrant is a post for ANOTHER time, but in short it&rsquo;s an awesome workflow for
 testing automation like <a href="http://www.puppetlabs.com">Puppet</a> on Linux or
 Windows. When I originally tried using Veewee to build OS X VMs, I had
-absentmindedly tried to do this using Virtualbox...which isn't supported. As
+absentmindedly tried to do this using Virtualbox&hellip;which isn&rsquo;t supported. As
 such, VMware Fusion is the only virtualization platform (as of this posting
-date) that is supported with this method. I'm using VMware Fusion 5 pro, but
+date) that is supported with this method. I&rsquo;m using VMware Fusion 5 pro, but
 YMMV.</p>
 
 <h4>Git</h4>
 
-<p>Because the code that supports OS X only exists in Tim's fork of Veewee (as of
-this posting date), we're going to have to install/use Veewee from source. That
-introduces a bit more complexity, but hold my hand - we'll get through this
+<p>Because the code that supports OS X only exists in Tim&rsquo;s fork of Veewee (as of
+this posting date), we&rsquo;re going to have to install/use Veewee from source. That
+introduces a bit more complexity, but hold my hand &ndash; we&rsquo;ll get through this
 together. Git comes with the XCode Command Line Tools or can be <a href="http://git-scm.com/download/mac">installed with native packages</a>.</p>
 
 <h4>Ruby 1.9.3 and rbenv</h4>
@@ -67,62 +1033,62 @@ together. Git comes with the XCode Command Line Tools or can be <a href="http://
 though, is that the version of Ruby that comes with OS X is 1.8.7. There are
 typically two camps when it comes to getting a development version of Ruby on
 OS X: <a href="http://octopress.org/docs/setup/rbenv/">rbenv</a> or <a href="http://octopress.org/docs/setup/rvm/">RVM</a>. I recommend <a href="http://octopress.org/docs/setup/rbenv/">rbenv</a> because it
-doesn't screw with your path and it's a bit more lightweight, so that's the
-path I'm going to take in this writeup. <a href="http://octopress.org/docs/setup/rbenv/">Octopress has instructions</a>
-for getting <a href="http://octopress.org/docs/setup/rbenv/">rbenv</a> on your machine - so make sure to check those out
+doesn&rsquo;t screw with your path and it&rsquo;s a bit more lightweight, so that&rsquo;s the
+path I&rsquo;m going to take in this writeup. <a href="http://octopress.org/docs/setup/rbenv/">Octopress has instructions</a>
+for getting <a href="http://octopress.org/docs/setup/rbenv/">rbenv</a> on your machine &ndash; so make sure to check those out
 for this step. The instructions describe using rbenv to install Ruby version
-1.9.3 - and that's the version we'll use here.</p>
+1.9.3 &ndash; and that&rsquo;s the version we&rsquo;ll use here.</p>
 
 <h4>Mountain Lion installer application</h4>
 
 <p>This workflow supports creating a VM for Mountain Lion (10.8), but it SHOULD
 also work for Lion (10.7). The final piece of our whole puzzle is the installer
 application from the App Store. Get that application somehow and drop it in the
-<code>/Applications</code> directory (that's where the App store puts it by default). We
-REALLY only need a single disk image from the installer, and we'll get that
+<code>/Applications</code> directory (that&rsquo;s where the App store puts it by default). We
+REALLY only need a single disk image from the installer, and we&rsquo;ll get that
 next.</p>
 
-<h2>Some assembly required...</h2>
+<h2>Some assembly required&hellip;</h2>
 
-<p>Now that you have all the pieces, let's tie this FrankenVM up with some code
+<p>Now that you have all the pieces, let&rsquo;s tie this FrankenVM up with some code
 and ugly bash, shall we? Splendid.</p>
 
 <h4>Copy out the installation disk image</h4>
 
 <p>In the last step, we downloaded the <code>Install OS X Mountain Lion.app</code> file from
-the App Store to <code>/Applications</code>, but we'll want to extract the main
-installation disk image somewhere where we can work with it. I'm going to make
-a copy on the Desktop so we don't screw up the main installer:</p>
+the App Store to <code>/Applications</code>, but we&rsquo;ll want to extract the main
+installation disk image somewhere where we can work with it. I&rsquo;m going to make
+a copy on the Desktop so we don&rsquo;t screw up the main installer:</p>
 
 <p>{% codeblock lang:bash %}
 $ cp /Applications/Install\ OS\ X\ Mountain\ Lion.app/Contents/SharedSupport/InstallESD.dmg ~/Desktop
 {% endcodeblock %}</p>
 
-<p>Beautiful. This should take a minute as it's a sizeable file, but in the end
-you'll have the installation disk image on your Desktop. For now this is fine,
-but we'll be revisiting it later...</p>
+<p>Beautiful. This should take a minute as it&rsquo;s a sizeable file, but in the end
+you&rsquo;ll have the installation disk image on your Desktop. For now this is fine,
+but we&rsquo;ll be revisiting it later&hellip;</p>
 
-<h4>Clone Tim's fork of Veewee</h4>
+<h4>Clone Tim&rsquo;s fork of Veewee</h4>
 
-<p>As if the writing of this blog post, the code you need is ONLY in Tim's fork,
-so let's pull that down to somewhere where we can work with it:</p>
+<p>As if the writing of this blog post, the code you need is ONLY in Tim&rsquo;s fork,
+so let&rsquo;s pull that down to somewhere where we can work with it:</p>
 
 <p>{% codeblock lang:bash %}</p>
 
-<h2>I prefer to work with code out of a 'src' directory in my home directory</h2>
+<h2>I prefer to work with code out of a &lsquo;src&rsquo; directory in my home directory</h2>
 
 <p>$ mkdir ~/src
 $ cd ~/src</p>
 
-<p>$ git clone http://github.com/timsutton/veewee
+<p>$ git clone <a href="http://github.com/timsutton/veewee">http://github.com/timsutton/veewee</a>
 $ cd ~/src/veewee
 {% endcodeblock %}</p>
 
 <h4>Install Gems for veewee</h4>
 
 <p>We now have the Veewee source in <code>~/src/veewee</code>, but we need to ensure all the
-Rubygems necessary to make Veewee work have been installed. We're going to do
-this with <a href="http://gembundler.com/">Bundler</a>. Let's switch to Ruby 1.9.3 and get Bundler
+Rubygems necessary to make Veewee work have been installed. We&rsquo;re going to do
+this with <a href="http://gembundler.com/">Bundler</a>. Let&rsquo;s switch to Ruby 1.9.3 and get Bundler
 installed:</p>
 
 <p>{% codeblock lang:bash %}
@@ -131,7 +1097,7 @@ $ rbenv local 1.9.3
 $ gem install bundler
 {% endcodeblock %}</p>
 
-<p>Next, let's use <a href="http://gembundler.com/">bundler</a> to install the rest of the gems we need to
+<p>Next, let&rsquo;s use <a href="http://gembundler.com/">bundler</a> to install the rest of the gems we need to
 use Veewee:</p>
 
 <p>{% codeblock lang:bash %}
@@ -144,26 +1110,26 @@ for Veewee and we can move on.</p>
 <h4>Define your new VM</h4>
 
 <p>Veewee has templates for most operatingsystems that can be used to spin up
-a 'vanilla' VM. Tim's code provides a template called 'OSX-10.8.2' containing
-the necessary scaffolding for building a vanilla 10.8.2 VM. Let's create a new
-VM project based on this template called 'osx-vm' with the following:</p>
+a &lsquo;vanilla&rsquo; VM. Tim&rsquo;s code provides a template called &lsquo;OSX-10.8.2&rsquo; containing
+the necessary scaffolding for building a vanilla 10.8.2 VM. Let&rsquo;s create a new
+VM project based on this template called &lsquo;osx-vm&rsquo; with the following:</p>
 
 <p>{% codeblock lang:bash %}
 $ cd ~/src/veewee
-$ bundle exec veewee fusion define 'osx-vm' 'OSX-10.8.2'
+$ bundle exec veewee fusion define &lsquo;osx-vm&rsquo; &lsquo;OSX-10.8.2&rsquo;
 {% endcodeblock %}</p>
 
 <p>This will create <code>definitions/osx-vm</code> inside the Veewee directory with the
-template code from <code>templates/OSX-10.8.2</code>. We're almost ready to let Veewee
-create our VM, but we need an installation 'ISO' first...</p>
+template code from <code>templates/OSX-10.8.2</code>. We&rsquo;re almost ready to let Veewee
+create our VM, but we need an installation &lsquo;ISO&rsquo; first&hellip;</p>
 
-<h4>Prepare an 'ISO' for OS X</h4>
+<h4>Prepare an &lsquo;ISO&rsquo; for OS X</h4>
 
-<p>The <code>prepare_veewee_iso.sh</code> script in Veewee's <code>templates/OSX-10.8.2/prepare_veewee_iso</code>
-directory provides awesome detail as to why we can't use the vanilla InstallESD.dmg
+<p>The <code>prepare_veewee_iso.sh</code> script in Veewee&rsquo;s <code>templates/OSX-10.8.2/prepare_veewee_iso</code>
+directory provides awesome detail as to why we can&rsquo;t use the vanilla InstallESD.dmg
 file to install 10.8 in our new VM. Feel free to open that file and read
 through the detail, or <a href="https://github.com/timsutton/veewee/blob/feature/osx-guest/templates/OSX-10.8.2/prepare_veewee_iso/prepare_veewee_iso.sh">check out the details online</a> for more
-information. Let's use that script and prepare an installation 'ISO' for our
+information. Let&rsquo;s use that script and prepare an installation &lsquo;ISO&rsquo; for our
 new VM:</p>
 
 <p>{% codeblock lang:bash %}
@@ -172,7 +1138,7 @@ $ mkdir iso
 $ sudo templates/OSX-10.8.2/prepare_veewee_iso/prepare_veewee_iso.sh ~/Desktop/InstallESD.dmg iso/
 {% endcodeblock %}</p>
 
-<p>You'll need to be root to do this, but the script should handle everything
+<p>You&rsquo;ll need to be root to do this, but the script should handle everything
 necessary to prepare the ISO and drop it into the <code>iso</code> directory we created.</p>
 
 <h4>Define any additional post-installation tasks</h4>
@@ -181,63 +1147,63 @@ necessary to prepare the ISO and drop it into the <code>iso</code> directory we 
 the <code>definitions/osx-vm</code> folder. By default, this script will install
 VMware tools, setup Vagrant keys, download the XCode Command Line Tools, and
 install Puppet via Rubygems. Because this is all outlined in the <code>postinstall.sh</code>
-script, you're free to modify this code or add your own steps. Here's the
+script, you&rsquo;re free to modify this code or add your own steps. Here&rsquo;s the
 current <code>postinstall.sh</code> script as of this posting:</p>
 
 <p>{% codeblock lang:bash %}
 date > /etc/vagrant_box_build_time
-OSX_VERS=$(sw_vers -productVersion | awk -F "." '{print $2}')</p>
+OSX_VERS=$(sw_vers -productVersion | awk -F &ldquo;.&rdquo; &lsquo;{print $2}&rsquo;)</p>
 
 <h1>Install VMware tools if we were built with VMware</h1>
 
 <p>if [ -e .vmfusion_version ]; then
   TMPMOUNT=<code>/usr/bin/mktemp -d /tmp/vmware-tools.XXXX</code>
-  hdiutil attach darwin.iso -mountpoint "$TMPMOUNT"
-  installer -pkg "$TMPMOUNT/Install VMware Tools.app/Contents/Resources/VMware Tools.pkg" -target /
+  hdiutil attach darwin.iso -mountpoint &ldquo;$TMPMOUNT&rdquo;
+  installer -pkg &ldquo;$TMPMOUNT/Install VMware Tools.app/Contents/Resources/VMware Tools.pkg&rdquo; -target /
   # This usually fails
-  hdiutil detach "$TMPMOUNT"
-  rm -rf "$TMPMOUNT"
+  hdiutil detach &ldquo;$TMPMOUNT&rdquo;
+  rm -rf &ldquo;$TMPMOUNT&rdquo;
 fi</p>
 
 <h1>Installing vagrant keys</h1>
 
 <p>mkdir /Users/vagrant/.ssh
 chmod 700 /Users/vagrant/.ssh
-curl -k 'https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub' > /Users/vagrant/.ssh/authorized_keys
+curl -k &lsquo;<a href="https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub">https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub</a>&rsquo; > /Users/vagrant/.ssh/authorized_keys
 chmod 600 /Users/vagrant/.ssh/authorized_keys
 chown -R vagrant /Users/vagrant/.ssh</p>
 
 <h1>Get Xcode CLI tools for Lion (at least to build Chef)</h1>
 
-<h1>https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex</h1>
+<h1><a href="https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex">https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex</a></h1>
 
 <p>TOOLS=clitools.dmg
-if [ "$OSX_VERS" -eq 7 ]; then
-  DMGURL=http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg
-elif [ "$OSX_VERS" -eq 8 ]; then
-  DMGURL=http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg
+if [ &ldquo;$OSX_VERS&rdquo; -eq 7 ]; then
+  DMGURL=<a href="http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg">http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg</a>
+elif [ &ldquo;$OSX_VERS&rdquo; -eq 8 ]; then
+  DMGURL=<a href="http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg">http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg</a>
 fi
-curl "$DMGURL" -o "$TOOLS"
+curl &ldquo;$DMGURL&rdquo; -o &ldquo;$TOOLS&rdquo;
 TMPMOUNT=<code>/usr/bin/mktemp -d /tmp/clitools.XXXX</code>
-hdiutil attach "$TOOLS" -mountpoint "$TMPMOUNT"
-installer -pkg "$(find $TMPMOUNT -name '*.mpkg')" -target /
-hdiutil detach "$TMPMOUNT"
-rm -rf "$TMPMOUNT"
-rm "$TOOLS"</p>
+hdiutil attach &ldquo;$TOOLS&rdquo; -mountpoint &ldquo;$TMPMOUNT&rdquo;
+installer -pkg &ldquo;$(find $TMPMOUNT -name &lsquo;*.mpkg&rsquo;)&rdquo; -target /
+hdiutil detach &ldquo;$TMPMOUNT&rdquo;
+rm -rf &ldquo;$TMPMOUNT&rdquo;
+rm &ldquo;$TOOLS&rdquo;</p>
 
-<h1>Get gems - we should really be installing rvm instead, since we can't even compile Chef or have a Ruby dev environment..</h1>
+<h1>Get gems &ndash; we should really be installing rvm instead, since we can&rsquo;t even compile Chef or have a Ruby dev environment..</h1>
 
-<p>gem update --system
-gem install puppet --no-ri --no-rdoc</p>
+<p>gem update &mdash;system
+gem install puppet &mdash;no-ri &mdash;no-rdoc</p>
 
-<h1>gem install chef --no-ri --no-rdoc</h1>
+<h1>gem install chef &mdash;no-ri &mdash;no-rdoc</h1>
 
 <p>exit
 {% endcodeblock %}</p>
 
 <h4>Build the VM</h4>
 
-<p>Everything we've done has all been for this step. With the ISO built, the VM
+<p>Everything we&rsquo;ve done has all been for this step. With the ISO built, the VM
 defined, and all necessary Gems installed, we can finally BUILD the vm with the
 following command:</p>
 
@@ -246,7 +1212,7 @@ $ cd ~/src/veewee
 $ bundle exec veewee fusion build osx-vm
 {% endcodeblock %}</p>
 
-<p>This process takes the longest - you should see VMware Fusion fire up, a new VM
+<p>This process takes the longest &ndash; you should see VMware Fusion fire up, a new VM
 get created, and follow the process of OS X being installed into the VM. When
 it completes, your VM will have been created. Just like most Vagrant workflows,
 the resultant vm will have a <code>vagrant</code> user whose password is also <code>vagrant</code>.
@@ -255,23 +1221,23 @@ Feel free to login and ensure that everything looks good.</p>
 <h2>Now what?</h2>
 
 <p>At this point, I would snapshot the VM before making any changes. Because
-Virtualbox isn't yet supported with Veewee for building OS X VMs (and Vagrant
-doesn't currently include VMware Fusion support for its workflow), this VM
-isn't going to fit into a Vagrant workflow...yet. What you have, though, is
+Virtualbox isn&rsquo;t yet supported with Veewee for building OS X VMs (and Vagrant
+doesn&rsquo;t currently include VMware Fusion support for its workflow), this VM
+isn&rsquo;t going to fit into a Vagrant workflow&hellip;yet. What you have, though, is
 a vanilla OS X VM that can be built on-demand (or reverted to a snapshot) to
 test whatever configuration changes you need to make (all 11.36 Gb worth of
 it).</p>
 
-<p>As you would expect, this is all pretty experimental for the moment. If you're
+<p>As you would expect, this is all pretty experimental for the moment. If you&rsquo;re
 a Ruby developer who needs an OS X VM for testing purposes but have never
-managed OS X and it's 'quirky' imaging process, this workflow is for you. For
-everyone else, it's probably an academic proof-of-concept that's more
-interesting from the point of view of "Look what you can do" versus "Let's make
-this my primary testing workflow."</p>
+managed OS X and it&rsquo;s &lsquo;quirky&rsquo; imaging process, this workflow is for you. For
+everyone else, it&rsquo;s probably an academic proof-of-concept that&rsquo;s more
+interesting from the point of view of &ldquo;Look what you can do&rdquo; versus &ldquo;Let&rsquo;s make
+this my primary testing workflow.&rdquo;</p>
 
 <p>Credit goes to <a href="https://twitter.com/patrickdebois">Patrick Dubois</a> for creating and managing the Veewee
-project, and to <a href="http://github.com/timsutton">Tim Sutton</a> and <a href="https://twitter.com/bruienne">Pepijn Bruienne</a> - like I mentioned
-before - for the work they've done on this. You can speak with them directly in
+project, and to <a href="http://github.com/timsutton">Tim Sutton</a> and <a href="https://twitter.com/bruienne">Pepijn Bruienne</a> &ndash; like I mentioned
+before &ndash; for the work they&rsquo;ve done on this. You can speak with them directly in
 the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
 ]]></content>
   </entry>
@@ -281,23 +1247,23 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
     <link href="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/"/>
     <updated>2012-02-06T11:22:00-08:00</updated>
     <id>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance</id>
-    <content type="html"><![CDATA[<h2>JAMF's NetSUS Appliance - Netboot in a Box</h2>
+    <content type="html"><![CDATA[<h2>JAMF&rsquo;s NetSUS Appliance &ndash; Netboot in a Box</h2>
 
-<p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">Today, JAMF released a new appliance VM</a> based on Ubuntu 10.04 LTS (Lucid) that, for once, provides an 'out of the box' implementation of Netboot and Software Update Service WITHOUT requiring OS X hardware (based on <a href="http://github.com/wdas/reposado">Reposado</a>) and <a href="http://twitpic.com/8glygw">other open-source technologies.</a></p>
+<p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">Today, JAMF released a new appliance VM</a> based on Ubuntu 10.04 LTS (Lucid) that, for once, provides an &lsquo;out of the box&rsquo; implementation of Netboot and Software Update Service WITHOUT requiring OS X hardware (based on <a href="http://github.com/wdas/reposado">Reposado</a>) and <a href="http://twitpic.com/8glygw">other open-source technologies.</a></p>
 
-<p>For those people who are relatively new to Linux, I thought I'd provide an easy walkthrough of how to get started using this VM on your Laptop.  I'm going to demo this using VMware Fusion instead of VirtualBox mainly because I prefer how Fusion handles Networking.  I've used many VMs, and Fusion always tends to be much more solid and stable for me.  If you don't have Fusion or don't WANT to use Fusion, feel free to use VirtualBox.</p>
+<p>For those people who are relatively new to Linux, I thought I&rsquo;d provide an easy walkthrough of how to get started using this VM on your Laptop.  I&rsquo;m going to demo this using VMware Fusion instead of VirtualBox mainly because I prefer how Fusion handles Networking.  I&rsquo;ve used many VMs, and Fusion always tends to be much more solid and stable for me.  If you don&rsquo;t have Fusion or don&rsquo;t WANT to use Fusion, feel free to use VirtualBox.</p>
 
 <h2>Download and Convert the OVA File</h2>
 
-<p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">The appliance can be downloaded directly from JAMF</a> and comes as a VirtualBox OVA file.  <a href="http://derflounder.wordpress.com/2012/02/06/converting-jamfs-netbootsus-appliance-to-vmware/">Rich Trouton has provided a great walkthrough</a> on converting the OVA file to a VMX file, so I'll link you to that post (since he did it so well).</p>
+<p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">The appliance can be downloaded directly from JAMF</a> and comes as a VirtualBox OVA file.  <a href="http://derflounder.wordpress.com/2012/02/06/converting-jamfs-netbootsus-appliance-to-vmware/">Rich Trouton has provided a great walkthrough</a> on converting the OVA file to a VMX file, so I&rsquo;ll link you to that post (since he did it so well).</p>
 
 <h2>Start up the VM</h2>
 
-<p>Once you have your VMX file, you can open it up with Fusion and import it into your Virtual Machine Library.  There is one change we'll want to make, so click on the VM and open its Settings panel (this is different from Fusion 3.0 and 4.0 - I'll be describing the 4.0 method).  In the Settings panel, you'll want to select the Network Adapter icon and make sure the radio button next to "Share the Mac's network connection (NAT)" is selected.  This will create a local IP address so we can contact it directly from our Laptop.  Once you've done that, start the VM and get to the login screen (you'll need to click the Ok button through the message about logging into the NetSUS instance).  Feel free to login with the username 'shelluser' and the password 'shelluser'.  You should see a Message of the Day splash with one of the sections being "IP address for eth0:".  Note the IP address, we'll need it in the next section (if you don't see this, just run <code>ifconfig</code> from the command line and look for the IP address for the eth0 adapter - it should be in the format of 192.168.x.x).</p>
+<p>Once you have your VMX file, you can open it up with Fusion and import it into your Virtual Machine Library.  There is one change we&rsquo;ll want to make, so click on the VM and open its Settings panel (this is different from Fusion 3.0 and 4.0 &ndash; I&rsquo;ll be describing the 4.0 method).  In the Settings panel, you&rsquo;ll want to select the Network Adapter icon and make sure the radio button next to &ldquo;Share the Mac&rsquo;s network connection (NAT)&rdquo; is selected.  This will create a local IP address so we can contact it directly from our Laptop.  Once you&rsquo;ve done that, start the VM and get to the login screen (you&rsquo;ll need to click the Ok button through the message about logging into the NetSUS instance).  Feel free to login with the username &lsquo;shelluser&rsquo; and the password &lsquo;shelluser&rsquo;.  You should see a Message of the Day splash with one of the sections being &ldquo;IP address for eth0:&rdquo;.  Note the IP address, we&rsquo;ll need it in the next section (if you don&rsquo;t see this, just run <code>ifconfig</code> from the command line and look for the IP address for the eth0 adapter &ndash; it should be in the format of 192.168.x.x).</p>
 
 <h2>Prepare to Break Free!</h2>
 
-<p>It really sucks to work with VMs from WITHIN the VM window for various reasons (lack of Copy/Paste, loss of mouse, etc…), so we're going to setup a host entry on your local laptop so we can SSH into the VM as we need.  I'm going to give my VM a hostname of 'netsus.puppetlabs.vm' but you can name it whatever you want.  Let's first edit the /etc/hosts file on your laptop (NOT within the VM, this is ON your laptop) by running the following from the command line:</p>
+<p>It really sucks to work with VMs from WITHIN the VM window for various reasons (lack of Copy/Paste, loss of mouse, etc…), so we&rsquo;re going to setup a host entry on your local laptop so we can SSH into the VM as we need.  I&rsquo;m going to give my VM a hostname of &lsquo;netsus.puppetlabs.vm&rsquo; but you can name it whatever you want.  Let&rsquo;s first edit the /etc/hosts file on your laptop (NOT within the VM, this is ON your laptop) by running the following from the command line:</p>
 
 <p>```</p>
 
@@ -306,7 +1272,7 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
 
 <p>```</p>
 
-<p>Feel free to use pico/nano to edit /etc/hosts in case you don't have any experience with vim.  We want to add the following line in the /etc/hosts file:</p>
+<p>Feel free to use pico/nano to edit /etc/hosts in case you don&rsquo;t have any experience with vim.  We want to add the following line in the /etc/hosts file:</p>
 
 <p>```</p>
 
@@ -315,7 +1281,7 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
 
 <p>```</p>
 
-<p><strong>NOTE</strong> SUBSTITUTE 192.168.217.154 WITH THE IP ADDRESS YOU GOT FROM THE PREVIOUS STEP!  That's the IP address that was assigned on MY laptop, and it will definitely be different from the IP address you got on YOUR computer.  Also, you don't HAVE to use 'netsus.puppetlabs.vm' - you can assign it any name you want.  Save and close /etc/hosts and then let's test connectivity from the command line by doing a ping:</p>
+<p><strong>NOTE</strong> SUBSTITUTE 192.168.217.154 WITH THE IP ADDRESS YOU GOT FROM THE PREVIOUS STEP!  That&rsquo;s the IP address that was assigned on MY laptop, and it will definitely be different from the IP address you got on YOUR computer.  Also, you don&rsquo;t HAVE to use &lsquo;netsus.puppetlabs.vm&rsquo; &ndash; you can assign it any name you want.  Save and close /etc/hosts and then let&rsquo;s test connectivity from the command line by doing a ping:</p>
 
 <p>```</p>
 
@@ -324,15 +1290,15 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
 
 <p>```</p>
 
-<p>As long as we have connection, we're fine (remember, substitute your IP Address for mine).  If you DON'T have connectivity, make sure your VM is running and review your /etc/hosts file to make sure the changes were saved (also, check the IP address on your VM again).</p>
+<p>As long as we have connection, we&rsquo;re fine (remember, substitute your IP Address for mine).  If you DON&rsquo;T have connectivity, make sure your VM is running and review your /etc/hosts file to make sure the changes were saved (also, check the IP address on your VM again).</p>
 
 <h2>Snapshot Time</h2>
 
-<p>The beauty of Fusion is that you can take snapshots and revert to them should you mess things up.  Let's take a snapshot now in case we screw things up in the following steps.  I'm using VMware Fusion 4.0, so I take a snapshot by clicking on the VM window, clicking on the Virtual Machine menu at the top, and then down to Snapshots.  From there, you can click the 'Take Snapshot' button and let it do its thing.  When it's done, hit the close button and return to the VM</p>
+<p>The beauty of Fusion is that you can take snapshots and revert to them should you mess things up.  Let&rsquo;s take a snapshot now in case we screw things up in the following steps.  I&rsquo;m using VMware Fusion 4.0, so I take a snapshot by clicking on the VM window, clicking on the Virtual Machine menu at the top, and then down to Snapshots.  From there, you can click the &lsquo;Take Snapshot&rsquo; button and let it do its thing.  When it&rsquo;s done, hit the close button and return to the VM</p>
 
 <h2>Enable SSH and Login</h2>
 
-<p>By default, the VM doesn't have the SSHD process running, so we can't yet SSH in from our laptop.  Enable this by doing the following from within the VM:</p>
+<p>By default, the VM doesn&rsquo;t have the SSHD process running, so we can&rsquo;t yet SSH in from our laptop.  Enable this by doing the following from within the VM:</p>
 
 <p>```</p>
 
@@ -341,7 +1307,7 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
 
 <p>```</p>
 
-<p>Hit "Y" when it asks if it should download and install.  When it completes, switch back to your LAPTOP (i.e. NOT inside the VM), open up Terminal, and do the following:</p>
+<p>Hit &ldquo;Y&rdquo; when it asks if it should download and install.  When it completes, switch back to your LAPTOP (i.e. NOT inside the VM), open up Terminal, and do the following:</p>
 
 <p>```</p>
 
@@ -350,13 +1316,13 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
 
 <p>```</p>
 
-<p>Type yes to add the SSH key to your known_hosts file and use the password 'shelluser' to login.  Tada! Now you can work directly from Terminal and enable copy/pasting directly from your Terminal window.  You can always type <code>exit</code> to close the ssh connection when you're done.</p>
+<p>Type yes to add the SSH key to your known_hosts file and use the password &lsquo;shelluser&rsquo; to login.  Tada! Now you can work directly from Terminal and enable copy/pasting directly from your Terminal window.  You can always type <code>exit</code> to close the ssh connection when you&rsquo;re done.</p>
 
 <h2>Install Puppet</h2>
 
-<p>So, it wouldn't be one of my write-ups if I DIDN'T get Puppet installed.  Actually, if you've only managed Macs, then you might not have seen the benefit of Puppet before.  Now that we're on Linux, you'll definitely see the benefit of Puppet (especially if you're not familiar with the service/package manipulation commands).  Puppet can help abstract that for you, so we're going to enable it.</p>
+<p>So, it wouldn&rsquo;t be one of my write-ups if I DIDN&rsquo;T get Puppet installed.  Actually, if you&rsquo;ve only managed Macs, then you might not have seen the benefit of Puppet before.  Now that we&rsquo;re on Linux, you&rsquo;ll definitely see the benefit of Puppet (especially if you&rsquo;re not familiar with the service/package manipulation commands).  Puppet can help abstract that for you, so we&rsquo;re going to enable it.</p>
 
-<p>The version of Puppet that's in the main package repository is quite old (0.25 as opposed to the current 2.7.10 version we support).  Let's add Puppet Labs' Apt Repository to the list of repositories queried so we can get a recent version of Puppet.  Do that by opening up the /etc/apt/sources.list file for editing with the following:</p>
+<p>The version of Puppet that&rsquo;s in the main package repository is quite old (0.25 as opposed to the current 2.7.10 version we support).  Let&rsquo;s add Puppet Labs' Apt Repository to the list of repositories queried so we can get a recent version of Puppet.  Do that by opening up the /etc/apt/sources.list file for editing with the following:</p>
 
 <p>```</p>
 
@@ -365,7 +1331,7 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
 
 <p>```</p>
 
-<p>If it prompts you for your password, go ahead and enter it.  Also, if you're not familiar with vi or vim, I'll try and help you with the basics.  Arrow down to the line JUST above the line that begins with "deb http://" and press the i button on your keyboard to insert the following lines:</p>
+<p>If it prompts you for your password, go ahead and enter it.  Also, if you&rsquo;re not familiar with vi or vim, I&rsquo;ll try and help you with the basics.  Arrow down to the line JUST above the line that begins with &ldquo;deb <a href="http://">http://</a>&rdquo; and press the i button on your keyboard to insert the following lines:</p>
 
 <p>```</p>
 
@@ -375,9 +1341,9 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>When you're done, hit the escape key and press ZZ (hold shift and hit Z twice, you want two capital-Z's) to save and close the file.  This will add Puppet Labs' repository to the list of repos queried.</p>
+<p>When you&rsquo;re done, hit the escape key and press ZZ (hold shift and hit Z twice, you want two capital-Z&rsquo;s) to save and close the file.  This will add Puppet Labs' repository to the list of repos queried.</p>
 
-<p>Next, we'll need to add Puppet Labs' GPG key to the system so we can validate the packages that are downloaded.  From the terminal, execute the following:</p>
+<p>Next, we&rsquo;ll need to add Puppet Labs' GPG key to the system so we can validate the packages that are downloaded.  From the terminal, execute the following:</p>
 
 <p>```</p>
 
@@ -386,7 +1352,7 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>The first time you run it, it will bother you about needing to create the keyserver file and won't run correctly.  Let's execute it correctly to receive the key:</p>
+<p>The first time you run it, it will bother you about needing to create the keyserver file and won&rsquo;t run correctly.  Let&rsquo;s execute it correctly to receive the key:</p>
 
 <p>```</p>
 
@@ -404,7 +1370,7 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>Finally, let's update apt so that it knows about the repository.  Do that with this command:</p>
+<p>Finally, let&rsquo;s update apt so that it knows about the repository.  Do that with this command:</p>
 
 <p>```</p>
 
@@ -422,7 +1388,7 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>Type "Y" when it asks you if it should download and install all the dependencies.  That's it!  Puppet should be installed!  Run the following to see what version we've installed:</p>
+<p>Type &ldquo;Y&rdquo; when it asks you if it should download and install all the dependencies.  That&rsquo;s it!  Puppet should be installed!  Run the following to see what version we&rsquo;ve installed:</p>
 
 <p>```</p>
 
@@ -431,15 +1397,15 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>As of this writing, 2.7.10 is the current version.  As long as you don't have version 0.25 you should be good!</p>
+<p>As of this writing, 2.7.10 is the current version.  As long as you don&rsquo;t have version 0.25 you should be good!</p>
 
 <h2>Snapshots away</h2>
 
-<p>It would be wise to take another snapshot at this point.  Don't worry, I'll wait.</p>
+<p>It would be wise to take another snapshot at this point.  Don&rsquo;t worry, I&rsquo;ll wait.</p>
 
 <h2>Inspect the System</h2>
 
-<p>Puppet lets us see what's been installed on the VM.  Take a look at all the packages on the system by doing the following:</p>
+<p>Puppet lets us see what&rsquo;s been installed on the VM.  Take a look at all the packages on the system by doing the following:</p>
 
 <p>```</p>
 
@@ -457,7 +1423,7 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>Notice that sshd is running and other services like netatalk (that enables AFP on Linux) should also be running.  Sweet.  We'll come back to Puppet later.</p>
+<p>Notice that sshd is running and other services like netatalk (that enables AFP on Linux) should also be running.  Sweet.  We&rsquo;ll come back to Puppet later.</p>
 
 <h2>Login to the Web GUI</h2>
 
@@ -470,21 +1436,21 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>Note the httpS as we'll need to use SSL to get into the Web GUI.  When it asks if you want to accept the self-signed cert, make sure to choose Yes.  You can login with the user 'webadmin' and the password 'webadmin'</p>
+<p>Note the httpS as we&rsquo;ll need to use SSL to get into the Web GUI.  When it asks if you want to accept the self-signed cert, make sure to choose Yes.  You can login with the user &lsquo;webadmin&rsquo; and the password &lsquo;webadmin&rsquo;</p>
 
-<p>Once you're logged in, <a href="https://s3.amazonaws.com/jamfsoftware-content/downloads/NetBootSUS+Appliance_v1.0.pdf">feel free to read through JAMF's instructions for enabling their services.</a>  They do a much better job than I about walking you through that.</p>
+<p>Once you&rsquo;re logged in, <a href="https://s3.amazonaws.com/jamfsoftware-content/downloads/NetBootSUS+Appliance_v1.0.pdf">feel free to read through JAMF&rsquo;s instructions for enabling their services.</a>  They do a much better job than I about walking you through that.</p>
 
 <h2>Access to the Raw Files</h2>
 
 <p>Back in the Terminal window, you can access all the PHP/Shell magic that comprises the Web GUI in the /var/www/webadmin directory.  You can poke around through all the files (and use sudo to open some of the key bits) at your leisure.</p>
 
-<p>Note that /etc/dhcpd.conf is the main configuration file for the DHCPD service and it's got some special bits to accommodate Apple Hardware.</p>
+<p>Note that /etc/dhcpd.conf is the main configuration file for the DHCPD service and it&rsquo;s got some special bits to accommodate Apple Hardware.</p>
 
 <p>Also, /var/appliance has some magic (and the /var/appliance/configurefornetboot script has some sed statements for fixing a stock dhcpd.conf file and enabling those Apple Hardware bits).</p>
 
 <h2>More Later?</h2>
 
-<p>That's it for now - I just wanted to get something online to show people how to setup and poke around in the VM.  Later I can show you how to manipulate and manage the VM with Puppet, which is pretty fun.  Your VM should get you started and let you play around locally, but if you want to test out Netboot and the like then you'll need an externally-accessible IP address (as apposed to the 192.168.x.x IP, which is only accessible from your Laptop).  You can change the settings in VMware Fusion to enable that (like we did in step 2).</p>
+<p>That&rsquo;s it for now &ndash; I just wanted to get something online to show people how to setup and poke around in the VM.  Later I can show you how to manipulate and manage the VM with Puppet, which is pretty fun.  Your VM should get you started and let you play around locally, but if you want to test out Netboot and the like then you&rsquo;ll need an externally-accessible IP address (as apposed to the 192.168.x.x IP, which is only accessible from your Laptop).  You can change the settings in VMware Fusion to enable that (like we did in step 2).</p>
 
 <p>Hope this helped you out!</p>
 ]]></content>
@@ -495,33 +1461,33 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
     <link href="http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage/"/>
     <updated>2010-12-21T09:47:00-08:00</updated>
     <id>http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage</id>
-    <content type="html"><![CDATA[<p>With the current movement in the Mac Community toward modular imaging strategies, there's a spike in the need for properly formed package installers. Apple's package format is well documented for its benefits and flaws and there are a string of applications that will help you create your perfect package (from Apple's Packagemaker to the many third-party applications).  While all the various package creation applications will ultimately create a desirable package in the end, very few of them have the triple-threat of easy code-review, replication, and portability.  This is where The Luggage comes in.</p>
+    <content type="html"><![CDATA[<p>With the current movement in the Mac Community toward modular imaging strategies, there&rsquo;s a spike in the need for properly formed package installers. Apple&rsquo;s package format is well documented for its benefits and flaws and there are a string of applications that will help you create your perfect package (from Apple&rsquo;s Packagemaker to the many third-party applications).  While all the various package creation applications will ultimately create a desirable package in the end, very few of them have the triple-threat of easy code-review, replication, and portability.  This is where The Luggage comes in.</p>
 
-<p><a href="http://github.com/unixorn/luggage">The Luggage</a> is a packaging system based on GNU's make command that is found on most every *nix-based operating system (OS X included).  Joe Block, the author, open-sourced the project based on an internal Google tool for creating packages with Makefiles.  By using Makefiles, every member of your team can quickly glance at the file and see exactly what is being inserted into a package.  Changes can be made and committed quickly, errors can be squashed without tearing apart .pkg files, and you can reproduce packages quickly and efficiently without wading through many GUI windows.</p>
+<p><a href="http://github.com/unixorn/luggage">The Luggage</a> is a packaging system based on GNU&rsquo;s make command that is found on most every *nix-based operating system (OS X included).  Joe Block, the author, open-sourced the project based on an internal Google tool for creating packages with Makefiles.  By using Makefiles, every member of your team can quickly glance at the file and see exactly what is being inserted into a package.  Changes can be made and committed quickly, errors can be squashed without tearing apart .pkg files, and you can reproduce packages quickly and efficiently without wading through many GUI windows.</p>
 
 <h2>Why do I need to Package?</h2>
 
-<p>Many vendors already ship properly formatted package installers for their software - and for that we thank them.  There are still a couple of major software vendors that choose to use unique third-party package "wrappers" to install their software.  While this is fine if you only ever need to install that software on one machine, it makes software deployment...difficult.  Because of this, systems administrators need to re-package this software into a proper package installer that will deploy and install silently.</p>
+<p>Many vendors already ship properly formatted package installers for their software &ndash; and for that we thank them.  There are still a couple of major software vendors that choose to use unique third-party package &ldquo;wrappers&rdquo; to install their software.  While this is fine if you only ever need to install that software on one machine, it makes software deployment&hellip;difficult.  Because of this, systems administrators need to re-package this software into a proper package installer that will deploy and install silently.</p>
 
-<p>If you're a fan of open-source software, you will find that many projects do not offer their software in Apple-friendly packages.  The Luggage will help you wrap their source files into a package format that can be distributed to your machines.</p>
+<p>If you&rsquo;re a fan of open-source software, you will find that many projects do not offer their software in Apple-friendly packages.  The Luggage will help you wrap their source files into a package format that can be distributed to your machines.</p>
 
 <p>Finally, you may have a whole bevy of scripts that you use for configuration/customization of your clients.  These scripts can easily be deployed via ARD or wrapped into a payload-free package with a single postinstall script.  The Luggage will help you keep track of all your scripts and package them for distribution.</p>
 
-<p>As I've said before, there are other third-party applications out there that will create a package to your needs.  Many will use snapshotting (or fseventsd monitoring) to create a package based on what's changed on your system.  While this is lightning fast (in most cases), you will need to redo this whole process if something needs to be changed in the resultant package.</p>
+<p>As I&rsquo;ve said before, there are other third-party applications out there that will create a package to your needs.  Many will use snapshotting (or fseventsd monitoring) to create a package based on what&rsquo;s changed on your system.  While this is lightning fast (in most cases), you will need to redo this whole process if something needs to be changed in the resultant package.</p>
 
 <h2>How do we use The Luggage?</h2>
 
-<p>As we said before, The Luggage is just a giant Makefile.  Make has its own unique language, so you need to obey its syntax and formatting standards.  I've linked to the <a href="http://www.gnu.org/software/make/manual/make.html">GNU make manual here</a> so you can get a quick overview of how it works (WARNING, it's quite large), but this guide will cover all the basics you need to know to get started.</p>
+<p>As we said before, The Luggage is just a giant Makefile.  Make has its own unique language, so you need to obey its syntax and formatting standards.  I&rsquo;ve linked to the <a href="http://www.gnu.org/software/make/manual/make.html">GNU make manual here</a> so you can get a quick overview of how it works (WARNING, it&rsquo;s quite large), but this guide will cover all the basics you need to know to get started.</p>
 
-<p>Note that while it is <strong>NOT NECESSARY TO COMPLETELY UNDERSTAND MAKE TO BEGIN USING THE LUGGAGE</strong>, it will help you out tremendously as you start to create complicated packages if you DO understand make's nuances. This article may be long, but that's only to make sure that the reader understands what is going on in the background.</p>
+<p>Note that while it is <strong>NOT NECESSARY TO COMPLETELY UNDERSTAND MAKE TO BEGIN USING THE LUGGAGE</strong>, it will help you out tremendously as you start to create complicated packages if you DO understand make&rsquo;s nuances. This article may be long, but that&rsquo;s only to make sure that the reader understands what is going on in the background.</p>
 
 <h2>The luggage.make File</h2>
 
-<p>The base of everything you will do with The Luggage is a file called luggage.make.  It is by no means definitive, and you're encouraged to add to it should you encounter a situation where a recipe doesn't exist for a directory into which you want to install files (Don't worry, we'll get into this later), but it does serve as the basis for all packages you're going to be creating.</p>
+<p>The base of everything you will do with The Luggage is a file called luggage.make.  It is by no means definitive, and you&rsquo;re encouraged to add to it should you encounter a situation where a recipe doesn&rsquo;t exist for a directory into which you want to install files (Don&rsquo;t worry, we&rsquo;ll get into this later), but it does serve as the basis for all packages you&rsquo;re going to be creating.</p>
 
-<p>At the top of the file are all the variable declarations.  Anything that begins with SOMETHING=somethingelse is setting a variable that we will encounter later.  Many of these variables (such as PACKAGEMAKER, WORK_D, CP, INSTALL, and so on) are paths to various commands that we will need in our rules (setting absolute paths to common commands saves typing later and helps us avoid errors with things like PATH environment variables).  Dereferencing these variables in a Makefile is done with a syntax that looks like this -> ${CP} (this outputs the value of the CP variable, which is actually <strong>/bin/cp</strong>).  Note that you DO NOT use quotes when you set a variable (i.e. if you want to set the path to CP you do it with CP=/bin/cp and NOT by doing CP="/bin/cp") - if you DO use quotes, they will be included in the value of that variable (which will cause you all kinds of problems).</p>
+<p>At the top of the file are all the variable declarations.  Anything that begins with SOMETHING=somethingelse is setting a variable that we will encounter later.  Many of these variables (such as PACKAGEMAKER, WORK_D, CP, INSTALL, and so on) are paths to various commands that we will need in our rules (setting absolute paths to common commands saves typing later and helps us avoid errors with things like PATH environment variables).  Dereferencing these variables in a Makefile is done with a syntax that looks like this &ndash;> ${CP} (this outputs the value of the CP variable, which is actually <strong>/bin/cp</strong>).  Note that you DO NOT use quotes when you set a variable (i.e. if you want to set the path to CP you do it with CP=/bin/cp and NOT by doing CP=&ldquo;/bin/cp&rdquo;) &ndash; if you DO use quotes, they will be included in the value of that variable (which will cause you all kinds of problems).</p>
 
-<p>Next, we have the target stanzas.  A target (or a rule - I will use the word rule throughout the article) is setup to look like this:</p>
+<p>Next, we have the target stanzas.  A target (or a rule &ndash; I will use the word rule throughout the article) is setup to look like this:</p>
 
 <p>``` make</p>
 
@@ -532,7 +1498,7 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>In this case, the <strong>target</strong>, or <strong>rule</strong>, is called <strong>do-something</strong> and has dependencies based on ANOTHER rule that's called <strong>l_usr_bin</strong>.  Below this line is called our <strong>recipe</strong>, and right now there are two echo commands.  If the above code was in a blank text file called Makefile we could execute the two echo commands by running the following command from the command line:</p>
+<p>In this case, the <strong>target</strong>, or <strong>rule</strong>, is called <strong>do-something</strong> and has dependencies based on ANOTHER rule that&rsquo;s called <strong>l_usr_bin</strong>.  Below this line is called our <strong>recipe</strong>, and right now there are two echo commands.  If the above code was in a blank text file called Makefile we could execute the two echo commands by running the following command from the command line:</p>
 
 <p>``` bash</p>
 
@@ -541,7 +1507,7 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>This would in turn echo the two lines of text below the do-something rule (This is not totally true - since we haven't defined a rule for l_usr_bin it would probably error out, but I've kept that dependency in the above example to show you how a rule works.).  Looking specifically at luggage.make, the target stanzas define the behavior for The Luggage's various behaviors (make pkg, make dmg, make zip, and so on).  Note that since many of these rules have dependencies on OTHER rules, a simple command of <strong>make pkg</strong> will trigger.</p>
+<p>This would in turn echo the two lines of text below the do-something rule (This is not totally true &ndash; since we haven&rsquo;t defined a rule for l_usr_bin it would probably error out, but I&rsquo;ve kept that dependency in the above example to show you how a rule works.).  Looking specifically at luggage.make, the target stanzas define the behavior for The Luggage&rsquo;s various behaviors (make pkg, make dmg, make zip, and so on).  Note that since many of these rules have dependencies on OTHER rules, a simple command of <strong>make pkg</strong> will trigger.</p>
 
 <p>Next, you will encounter the Target directory rules.  This is the part of the luggage.make file that you may need to edit.  Joe has done a great job of defining the most popular directories into which you will install files/applications/etc. but it would be impossible for him to define EVERY location that you could possibly need.  Here is the structure of creating a Directory Rule:</p>
 
@@ -555,7 +1521,7 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
 
 <p>```</p>
 
-<p>This rule will create an /etc/puppet directory in Luggage's working directory (The variable WORK_D will be used frequently - it's the temporary directory that The Luggage creates to simulate the target volume onto which it's installing files.  Everything following ${WORK_D} will be the <strong>EXACT PATH</strong> into which files will be installed on the machine that runs your package.)  These Directory Rules become very important when we create custom Makefiles because they serve as dependencies which create the directories in The Luggage's Working Directory. In a nutshell, if you're installing files into a directory with The Luggage, you need to have a Directory Rule that creates this directory first.  Bottom Line: if you don't FIND a Directory Rule for a directory where you will be installing files, then you'll need to create one.</p>
+<p>This rule will create an /etc/puppet directory in Luggage&rsquo;s working directory (The variable WORK_D will be used frequently &ndash; it&rsquo;s the temporary directory that The Luggage creates to simulate the target volume onto which it&rsquo;s installing files.  Everything following ${WORK_D} will be the <strong>EXACT PATH</strong> into which files will be installed on the machine that runs your package.)  These Directory Rules become very important when we create custom Makefiles because they serve as dependencies which create the directories in The Luggage&rsquo;s Working Directory. In a nutshell, if you&rsquo;re installing files into a directory with The Luggage, you need to have a Directory Rule that creates this directory first.  Bottom Line: if you don&rsquo;t FIND a Directory Rule for a directory where you will be installing files, then you&rsquo;ll need to create one.</p>
 
 <p>Finally are the File Packaging Rules.  These are handy shortcut rules that will keep your makefiles very short and readable.  In a nutshell, Joe has defined some of the most common directories to which files are installed and created one-line commands that will install specific files into those directories.  For example, say you were creating a custom Makefile in a directory that also had a launchd plist called <strong>com.foo.bar.plist</strong> in it.  If ALL you needed to do was create a package that installed that launchd plist into the /Library/LaunchDaemons directory you could setup your Makefile like this:</p>
 
@@ -570,13 +1536,13 @@ PAYLOAD=pack-Library-LaunchDaemons-com.foo.bar.plist
 
 <p>```</p>
 
-<p>The PAYLOAD variable tells The Luggage which rules to execute.  In this case, it's executing the File Packaging Rule for launchd plists (pack-Library-LaunchDaemons-%) that creates the ${WORK_D}/Library/LaunchDaemons directory, installs the com.foo.bar.plist file into it, sets the correct permissions, and then executes the Packagemaker command line tool to create your package installer. Congratulations, you created a package in 5 lines of code!</p>
+<p>The PAYLOAD variable tells The Luggage which rules to execute.  In this case, it&rsquo;s executing the File Packaging Rule for launchd plists (pack-Library-LaunchDaemons-%) that creates the ${WORK_D}/Library/LaunchDaemons directory, installs the com.foo.bar.plist file into it, sets the correct permissions, and then executes the Packagemaker command line tool to create your package installer. Congratulations, you created a package in 5 lines of code!</p>
 
 <h2>Preparing for using The Luggage</h2>
 
-<p>The Luggage is fairly self contained, but it DOES use Apple's Packagemaker command line tool - and the way to install THAT is to download and install the Developer Tools for your computer's OS version (There are different Developer Tools packages for 10.6, 10.5, and so on).  The Developer Tools can be downloaded from <a href="http://developer.apple.com">Apple's Developer Site</a>, but you must create a (free) developer account first.  If you're a Mac sysadmin, you should already have all of this.</p>
+<p>The Luggage is fairly self contained, but it DOES use Apple&rsquo;s Packagemaker command line tool &ndash; and the way to install THAT is to download and install the Developer Tools for your computer&rsquo;s OS version (There are different Developer Tools packages for 10.6, 10.5, and so on).  The Developer Tools can be downloaded from <a href="http://developer.apple.com">Apple&rsquo;s Developer Site</a>, but you must create a (free) developer account first.  If you&rsquo;re a Mac sysadmin, you should already have all of this.</p>
 
-<p>Once the Developer Tools have been installed you will then need to install The Luggage.  You can use The Luggage to create an installer package for The Luggage (Weird, yes) by first <a href="http://github.com/unixorn/luggage">downloading the source code from Github.</a>  Just click on the big Downloads button in the upper right corner of the screen and download a zip version of the files.  From there, double-click on the downloaded zip file to open it, open up Terminal and change to the folder that was created which contains The Luggage's source code, and execute the following command:</p>
+<p>Once the Developer Tools have been installed you will then need to install The Luggage.  You can use The Luggage to create an installer package for The Luggage (Weird, yes) by first <a href="http://github.com/unixorn/luggage">downloading the source code from Github.</a>  Just click on the big Downloads button in the upper right corner of the screen and download a zip version of the files.  From there, double-click on the downloaded zip file to open it, open up Terminal and change to the folder that was created which contains The Luggage&rsquo;s source code, and execute the following command:</p>
 
 <p>``` bash</p>
 
@@ -585,21 +1551,21 @@ PAYLOAD=pack-Library-LaunchDaemons-com.foo.bar.plist
 
 <p>```</p>
 
-<p>This will create an installer package which can be run.  This package installs The Luggage into the /usr/local/share/luggage directory (Don't believe me? Check the Makefile for your self!).  You're now ready to use The Luggage!</p>
+<p>This will create an installer package which can be run.  This package installs The Luggage into the /usr/local/share/luggage directory (Don&rsquo;t believe me? Check the Makefile for your self!).  You&rsquo;re now ready to use The Luggage!</p>
 
-<p>Before we get into the package creation examples, we need to talk about directory structure and version control systems (svn, hg, git, etc...).  When you create new packages with The Luggage, it's necessary to create a new Makefile in a new directory.  I like to use the /usr/local/share/luggage/examples directory to create my packages.  The easiest way to begin a new package is to copy a directory that contains a working Makefile and simply tailor it to your needs.  Unless your job is SOLELY packaging (or you're a unix graybeard), you're NOT going to remember all the syntax and nuances of make.  Don't re-create the wheel - just copy and edit.</p>
+<p>Before we get into the package creation examples, we need to talk about directory structure and version control systems (svn, hg, git, etc&hellip;).  When you create new packages with The Luggage, it&rsquo;s necessary to create a new Makefile in a new directory.  I like to use the /usr/local/share/luggage/examples directory to create my packages.  The easiest way to begin a new package is to copy a directory that contains a working Makefile and simply tailor it to your needs.  Unless your job is SOLELY packaging (or you&rsquo;re a unix graybeard), you&rsquo;re NOT going to remember all the syntax and nuances of make.  Don&rsquo;t re-create the wheel &ndash; just copy and edit.</p>
 
-<p>Next, you're going to want to backup your files and/or have a versioning system.  Version control systems (like Subversion, Mercurial, Git, and the like) are becoming increasingly popular <a href="http://www.agileweboperations.com/the-state-of-devops">with the current DevOps movement</a>, so it might be a good idea to start playing with one NOW while you're learning a new skill!  If you're TOTALLY new to this concept, <a href="http://help.github.com/mac-git-installation/">I recommend using git</a>, but it's entirely up to you.  <a href="http://github.com/huronschools/luggage">I maintain a git repository of my Luggage fork</a> that's open to anyone to review and borrow.  If you decide to use something like Git, well then GOOD ON YA, MAN!  If not, make sure you have a backup of your Makefiles.  They're small files; make two backups :)</p>
+<p>Next, you&rsquo;re going to want to backup your files and/or have a versioning system.  Version control systems (like Subversion, Mercurial, Git, and the like) are becoming increasingly popular <a href="http://www.agileweboperations.com/the-state-of-devops">with the current DevOps movement</a>, so it might be a good idea to start playing with one NOW while you&rsquo;re learning a new skill!  If you&rsquo;re TOTALLY new to this concept, <a href="http://help.github.com/mac-git-installation/">I recommend using git</a>, but it&rsquo;s entirely up to you.  <a href="http://github.com/huronschools/luggage">I maintain a git repository of my Luggage fork</a> that&rsquo;s open to anyone to review and borrow.  If you decide to use something like Git, well then GOOD ON YA, MAN!  If not, make sure you have a backup of your Makefiles.  They&rsquo;re small files; make two backups :)</p>
 
 <h2>Package Creation Examples</h2>
 
-<p>Now that we've described how make works, how luggage.make works, given a quick example of how to create a package in 5 lines, and had the installation/backup talk let's walk you through some basic package creation examples. We'll create packages that install an application, create a package that installs printers and executes a postinstall script, create a package that installs source code in many directories, and finally create a complex Makefile that uses variables and bash commands.</p>
+<p>Now that we&rsquo;ve described how make works, how luggage.make works, given a quick example of how to create a package in 5 lines, and had the installation/backup talk let&rsquo;s walk you through some basic package creation examples. We&rsquo;ll create packages that install an application, create a package that installs printers and executes a postinstall script, create a package that installs source code in many directories, and finally create a complex Makefile that uses variables and bash commands.</p>
 
 <h2>An Application Package</h2>
 
-<p>The most common packages will simply install an application file into the /Applications folder on your computer.  Since .app files are actually bundles (a directory that contains subdirectories of executable code), we will need to use tar to wrap these bundles into a single file.  From there we can have The Luggage untar the application into the correct folder. <a href="https://github.com/unixorn/luggage/blob/master/examples/firefox/Makefile">Joe's Firefox example</a> does this, but he also has an added step of curling the tarred/bzipped application from a web server.  I'm going to skip that step (for now) so you understand how the basic process works, but it's a best practice to use the curl method so you can keep your applications up-to-date on your fileserver without having to copy the new files to your luggage directory every time.</p>
+<p>The most common packages will simply install an application file into the /Applications folder on your computer.  Since .app files are actually bundles (a directory that contains subdirectories of executable code), we will need to use tar to wrap these bundles into a single file.  From there we can have The Luggage untar the application into the correct folder. <a href="https://github.com/unixorn/luggage/blob/master/examples/firefox/Makefile">Joe&rsquo;s Firefox example</a> does this, but he also has an added step of curling the tarred/bzipped application from a web server.  I&rsquo;m going to skip that step (for now) so you understand how the basic process works, but it&rsquo;s a best practice to use the curl method so you can keep your applications up-to-date on your fileserver without having to copy the new files to your luggage directory every time.</p>
 
-<p>Let's first create the /usr/local/share/luggage/examples/calculator directory and then make a copy of /Applications/Calculator.app into the /usr/local/share/luggage/examples/calculator directory.  Next, lets open Terminal and change to our /usr/local/share/luggage/examples/calculator directory.  Finally, run the following command to tar.bz2 our Calculator.app:</p>
+<p>Let&rsquo;s first create the /usr/local/share/luggage/examples/calculator directory and then make a copy of /Applications/Calculator.app into the /usr/local/share/luggage/examples/calculator directory.  Next, lets open Terminal and change to our /usr/local/share/luggage/examples/calculator directory.  Finally, run the following command to tar.bz2 our Calculator.app:</p>
 
 <p>``` bash</p>
 
@@ -608,7 +1574,7 @@ PAYLOAD=pack-Library-LaunchDaemons-com.foo.bar.plist
 
 <p>```</p>
 
-<p>If you did it correctly, it should create the Calculator.app.tar.bz2 file that we need for The Luggage.  Make sure this file is in the SAME directory (and level - so don't create subfolders) as the Makefile we're going to create.  You can actually delete the Calculator.app copy that we created - we won't need it.  From there, our Makefile is simple - it should look like this:</p>
+<p>If you did it correctly, it should create the Calculator.app.tar.bz2 file that we need for The Luggage.  Make sure this file is in the SAME directory (and level &ndash; so don&rsquo;t create subfolders) as the Makefile we&rsquo;re going to create.  You can actually delete the Calculator.app copy that we created &ndash; we won&rsquo;t need it.  From there, our Makefile is simple &ndash; it should look like this:</p>
 
 <p>``` make</p>
 
@@ -621,13 +1587,13 @@ PAYLOAD=unbz2-applications-Calculator.app
 
 <p>```</p>
 
-<p>That's it!  The PAYLOAD variable is the magic variable here - it contains the rule(s) that are to be executed in creating our package.  The unbz2-applications-% File Packaging Rule is defined in our luggage.make file (which we've included at the top of our Makefile), so we don't NEED anything else in our Makefile.  <strong>MAKE SURE</strong> that the capitalization and spelling of Calculator.app in "unbz2-applications-Calculator.app" and your "Calculator.app.tar.bz2" files are IDENTICAL or this package will NOT be created (make relies on this).</p>
+<p>That&rsquo;s it!  The PAYLOAD variable is the magic variable here &ndash; it contains the rule(s) that are to be executed in creating our package.  The unbz2-applications-% File Packaging Rule is defined in our luggage.make file (which we&rsquo;ve included at the top of our Makefile), so we don&rsquo;t NEED anything else in our Makefile.  <strong>MAKE SURE</strong> that the capitalization and spelling of Calculator.app in &ldquo;unbz2-applications-Calculator.app&rdquo; and your &ldquo;Calculator.app.tar.bz2&rdquo; files are IDENTICAL or this package will NOT be created (make relies on this).</p>
 
 <h2>UPDATED: An easier Application Package</h2>
 
-<p>Joe has actually created a Ruby script that will perform all of the actions outlined in the previous example for you.  It's called app2luggage.rb and it can save you a few steps if you know how to use it.  Let's take a look and see what we need to use it.</p>
+<p>Joe has actually created a Ruby script that will perform all of the actions outlined in the previous example for you.  It&rsquo;s called app2luggage.rb and it can save you a few steps if you know how to use it.  Let&rsquo;s take a look and see what we need to use it.</p>
 
-<p>The first thing you will need to do is install the trollop rubygem as that's what app2luggage.rb uses to parse its options.  You can do this with the following command:</p>
+<p>The first thing you will need to do is install the trollop rubygem as that&rsquo;s what app2luggage.rb uses to parse its options.  You can do this with the following command:</p>
 
 <p>``` bash</p>
 
@@ -636,7 +1602,7 @@ PAYLOAD=unbz2-applications-Calculator.app
 
 <p>```</p>
 
-<p>Next, make sure the app2luggage.rb script exists in your /usr/local/share/luggage directory.  Finally, let's run the command with the following arguments:</p>
+<p>Next, make sure the app2luggage.rb script exists in your /usr/local/share/luggage directory.  Finally, let&rsquo;s run the command with the following arguments:</p>
 
 <p>``` bash</p>
 
@@ -645,10 +1611,10 @@ PAYLOAD=unbz2-applications-Calculator.app
 
 <p>```</p>
 
-<p>Here's what each argument means:</p>
+<p>Here&rsquo;s what each argument means:</p>
 
 <ol>
-<li>-a is the path to the Application we want to tar up and install with The Luggage - we're using the path to Calculator.app for now</li>
+<li>-a is the path to the Application we want to tar up and install with The Luggage &ndash; we&rsquo;re using the path to Calculator.app for now</li>
 <li>-i is the path to the folder that app2luggage.rb will create that contains our Makefile and tarred up application.  This folder SHOULD NOT EXIST or app2luggage.rb will exit (so as not to overwrite your data).</li>
 <li>-l is the path to our luggage.make file</li>
 <li>-r is the reverse domain for our organization</li>
@@ -656,19 +1622,19 @@ PAYLOAD=unbz2-applications-Calculator.app
 </ol>
 
 
-<p>There are other arguments available, simply run app2luggage.rb with the --help argument to see them all.  Once app2luggage.rb runs successfully, it will create the directory you specified in the -i argument and populate it with a Makefile and the tarred up application.  The only thing left to do is to make your pkg, zip, or dmg.</p>
+<p>There are other arguments available, simply run app2luggage.rb with the &mdash;help argument to see them all.  Once app2luggage.rb runs successfully, it will create the directory you specified in the -i argument and populate it with a Makefile and the tarred up application.  The only thing left to do is to make your pkg, zip, or dmg.</p>
 
 <h2>Installing a printer with a preinstall script</h2>
 
-<p>One of the most popular solutions I offer with using The Luggage is to create a package that will install a printer and then install a pre-configured PPD file that sets all the initial settings for the printer.  I do this with Puppet currently, and I know it's popular in Munki too.  You can also optionally install a specific driver (if the drivers for your printer aren't already on your machines).  For those people who like to skip ahead, <a href="https://github.com/huronschools/luggage/tree/master/examples/hhs_printers/Printserver%20Managed/Office_9050">I have this example on my luggage repo</a>.</p>
+<p>One of the most popular solutions I offer with using The Luggage is to create a package that will install a printer and then install a pre-configured PPD file that sets all the initial settings for the printer.  I do this with Puppet currently, and I know it&rsquo;s popular in Munki too.  You can also optionally install a specific driver (if the drivers for your printer aren&rsquo;t already on your machines).  For those people who like to skip ahead, <a href="https://github.com/huronschools/luggage/tree/master/examples/hhs_printers/Printserver%20Managed/Office_9050">I have this example on my luggage repo</a>.</p>
 
-<p>This Makefile demonstrates the use of a preinstall/preflight script (which isn't actually installed into the payload of the package).  The Luggage has a special packaging rule for this called pack-script-% that works so long as the name of your script corresponds exactly with what you write in the PAYLOAD variable.  This file also demonstrates the use of multiple rules in the PAYLOAD variable by using the \ character.  While this isn't difficult to understand, it is a necessary syntax.</p>
+<p>This Makefile demonstrates the use of a preinstall/preflight script (which isn&rsquo;t actually installed into the payload of the package).  The Luggage has a special packaging rule for this called pack-script-% that works so long as the name of your script corresponds exactly with what you write in the PAYLOAD variable.  This file also demonstrates the use of multiple rules in the PAYLOAD variable by using the \ character.  While this isn&rsquo;t difficult to understand, it is a necessary syntax.</p>
 
-<p><a href="https://github.com/huronschools/luggage/blob/master/examples/hhs_printers/Printserver%20Managed/Office_9050/preflight">My preflight script is right here</a> for those who are interested.  It's copied into the directory we create that contains our makefile and I name it preflight.  Note that it contains variables that need to be changed (all of which are at the top of the script) before you deploy this package.</p>
+<p><a href="https://github.com/huronschools/luggage/blob/master/examples/hhs_printers/Printserver%20Managed/Office_9050/preflight">My preflight script is right here</a> for those who are interested.  It&rsquo;s copied into the directory we create that contains our makefile and I name it preflight.  Note that it contains variables that need to be changed (all of which are at the top of the script) before you deploy this package.</p>
 
-<p>Next, we need to get a .ppd file that contains all the configuration data for our printer.  The easiest way to do this is to install your printer on a demo machine using the EXACT SAME SETTINGS that will be configured in your script (protip: actually RUN the script on your computer first), configure it how you want (number of trays, memory settings, type of finisher, etc...), and then open the /etc/cups/ppd directory on your model computer.  Inside should be a .ppd file for your printer containing all the settings you've just configured.  Copy this .ppd file into the folder that contains your Makefile and preflight script.  Mine (in this example) will be called psm_HHS_Office_9050.ppd</p>
+<p>Next, we need to get a .ppd file that contains all the configuration data for our printer.  The easiest way to do this is to install your printer on a demo machine using the EXACT SAME SETTINGS that will be configured in your script (protip: actually RUN the script on your computer first), configure it how you want (number of trays, memory settings, type of finisher, etc&hellip;), and then open the /etc/cups/ppd directory on your model computer.  Inside should be a .ppd file for your printer containing all the settings you&rsquo;ve just configured.  Copy this .ppd file into the folder that contains your Makefile and preflight script.  Mine (in this example) will be called psm_HHS_Office_9050.ppd</p>
 
-<p>Now, let's look at our Makefile:</p>
+<p>Now, let&rsquo;s look at our Makefile:</p>
 
 <p>{% codeblock Managed Printer Makefile lang:make %}</p>
 
@@ -688,9 +1654,9 @@ pack-hp-ppd: l_etc_cups_ppd
 
 <p>{% endcodeblock %}</p>
 
-<p>The first thing you should notice is that our PAYLOAD variable starts with a \ and has three lines.  The \ signifies that the contents of our variable spans multiple lines.  In reality, the value of PAYLOAD is actually "pack-hp-ppd pack-script-preflight" but it's formatted so it's easier to read.  Next, notice that the pack-script-preflight rule contains the word "preflight" after pack-script-.  This means that our script must be named preflight (EXACTLY - case is sensitive here).  Finally, we've also specified a pack-hp-ppd rule.  Since luggage.make DOES NOT define this rule, we've defined it in our Makefile.</p>
+<p>The first thing you should notice is that our PAYLOAD variable starts with a \ and has three lines.  The \ signifies that the contents of our variable spans multiple lines.  In reality, the value of PAYLOAD is actually &ldquo;pack-hp-ppd pack-script-preflight&rdquo; but it&rsquo;s formatted so it&rsquo;s easier to read.  Next, notice that the pack-script-preflight rule contains the word &ldquo;preflight&rdquo; after pack-script-.  This means that our script must be named preflight (EXACTLY &ndash; case is sensitive here).  Finally, we&rsquo;ve also specified a pack-hp-ppd rule.  Since luggage.make DOES NOT define this rule, we&rsquo;ve defined it in our Makefile.</p>
 
-<p>The pack-hp-ppd rule has a dependency on the l_etc_cups_ppd rule.  This rule IS defined in luggage.make (well, it is for me - I can't remember if I created it or not.  If it isn't there for you, then you'll need to create it using the other folder creation rules as a guide) - and it creates the /etc/cups/ppd folder structure that we need in our package.  Lets look at the three lines which are called our <strong>recipe</strong>*:</p>
+<p>The pack-hp-ppd rule has a dependency on the l_etc_cups_ppd rule.  This rule IS defined in luggage.make (well, it is for me &ndash; I can&rsquo;t remember if I created it or not.  If it isn&rsquo;t there for you, then you&rsquo;ll need to create it using the other folder creation rules as a guide) &ndash; and it creates the /etc/cups/ppd folder structure that we need in our package.  Lets look at the three lines which are called our <strong>recipe</strong>*:</p>
 
 <p>``` make</p>
 
@@ -701,13 +1667,13 @@ pack-hp-ppd: l_etc_cups_ppd
 
 <p>```</p>
 
-<p>The first line references the CP variable (if you remember - its value is /bin/cp) to copy the psm_HHS_Office_9050.ppd file from the directory that contains our Makefile into Luggage's working directory/etc/cups/ppd.  The second line sets its mode to 644 (to match the mode for all .ppd files in that directory), and the third line sets the owner to root and the group to _lp (note that this group is ONLY available in 10.5 and 10.6 machines - so you'll need another package for 10.4 clients or below).</p>
+<p>The first line references the CP variable (if you remember &ndash; its value is /bin/cp) to copy the psm_HHS_Office_9050.ppd file from the directory that contains our Makefile into Luggage&rsquo;s working directory/etc/cups/ppd.  The second line sets its mode to 644 (to match the mode for all .ppd files in that directory), and the third line sets the owner to root and the group to _lp (note that this group is ONLY available in 10.5 and 10.6 machines &ndash; so you&rsquo;ll need another package for 10.4 clients or below).</p>
 
-<p>That's it!  The resultant package will run the preflight script and then install the correct .ppd file after the script is run.  This package will successfully install and configure your printer in one fell swoop.</p>
+<p>That&rsquo;s it!  The resultant package will run the preflight script and then install the correct .ppd file after the script is run.  This package will successfully install and configure your printer in one fell swoop.</p>
 
 <h2>Installing files into multiple directories</h2>
 
-<p>So far our Makefiles have been pretty easy.  In fact, most of them have been a couple of lines.  Lets look at a package that installs files into multiple locations.  There's a cool open source tool called <a href="http://github.com/ripienaar/angelia">Angelia that was created by R.I Pienaar</a>.  I use it to send alerts to my iPhone and to also process Nagios Alerts.  The problem is that it's only packaged for Linux machines.  Since I manage Mac machines, I thought I'd lend R.I. a hand and create a package installer for it.  <a href="https://github.com/huronschools/luggage/tree/master/examples/angelia">This package is also on my luggage repo</a> if you want to work ahead.  Let's look at the Makefile:</p>
+<p>So far our Makefiles have been pretty easy.  In fact, most of them have been a couple of lines.  Lets look at a package that installs files into multiple locations.  There&rsquo;s a cool open source tool called <a href="http://github.com/ripienaar/angelia">Angelia that was created by R.I Pienaar</a>.  I use it to send alerts to my iPhone and to also process Nagios Alerts.  The problem is that it&rsquo;s only packaged for Linux machines.  Since I manage Mac machines, I thought I&rsquo;d lend R.I. a hand and create a package installer for it.  <a href="https://github.com/huronschools/luggage/tree/master/examples/angelia">This package is also on my luggage repo</a> if you want to work ahead.  Let&rsquo;s look at the Makefile:</p>
 
 <p>{% codeblock Angelia Recipe lang:make %}</p>
 
@@ -756,15 +1722,15 @@ pack-angelia-spool: l_var_spool_angelia
 
 <p>{% endcodeblock %}</p>
 
-<p>It's definitely longer, but I don't think it's any more complex than the examples we've seen before.  The PAYLOAD variable spans multiple lines using the \ character and I've defined all the custom rules.  All of the rules depend on <a href="https://github.com/huronschools/luggage/blob/master/luggage.make">folder rules in my luggage.make file</a> (which were created if they didn't exist before), and the recipes inside those rules are extremely simple to navigate (mainly copying files and changing permissions).  Creating a script that makes this package would be QUITE A BIT longer than this Makefile, and the Makefile itself took less than 3 minutes to create.  The only caveat is that we need to make sure all the files/directories we're copying into Luggage's WORK_D directory are in the folder that contains the Makefile.  Because of this, anytime Angelia is updated I will need to copy over new files.</p>
+<p>It&rsquo;s definitely longer, but I don&rsquo;t think it&rsquo;s any more complex than the examples we&rsquo;ve seen before.  The PAYLOAD variable spans multiple lines using the \ character and I&rsquo;ve defined all the custom rules.  All of the rules depend on <a href="https://github.com/huronschools/luggage/blob/master/luggage.make">folder rules in my luggage.make file</a> (which were created if they didn&rsquo;t exist before), and the recipes inside those rules are extremely simple to navigate (mainly copying files and changing permissions).  Creating a script that makes this package would be QUITE A BIT longer than this Makefile, and the Makefile itself took less than 3 minutes to create.  The only caveat is that we need to make sure all the files/directories we&rsquo;re copying into Luggage&rsquo;s WORK_D directory are in the folder that contains the Makefile.  Because of this, anytime Angelia is updated I will need to copy over new files.</p>
 
-<p>It would be much easier to create a Makefile that downloaded the current version of all of these files before it copied them into our package...</p>
+<p>It would be much easier to create a Makefile that downloaded the current version of all of these files before it copied them into our package&hellip;</p>
 
 <h2>Creating a more complex Makefile</h2>
 
-<p>The basis of this example was my thought that it would be MUCH easier for me to have a Makefile that downloaded the newest versions of the files that I need before it copies them into the package.  Make supports this through its support of shell commands and variables - it only requires you to code it up.  Let's look at a package I created for Marionette-Collective.</p>
+<p>The basis of this example was my thought that it would be MUCH easier for me to have a Makefile that downloaded the newest versions of the files that I need before it copies them into the package.  Make supports this through its support of shell commands and variables &ndash; it only requires you to code it up.  Let&rsquo;s look at a package I created for Marionette-Collective.</p>
 
-<p><a href="http://github.com/puppetlabs/marionette-collective">Marionette-Collective is awesome software</a> (also created by R.I Pienaar and now owned by Puppet Labs) that allows you to communicate with multiple nodes at once.  They DID have a script that created their packages, but I wanted to create a Makefile that would create a package of ANY version of their software.  Let's look at the Makefile first and I'll break it down:</p>
+<p><a href="http://github.com/puppetlabs/marionette-collective">Marionette-Collective is awesome software</a> (also created by R.I Pienaar and now owned by Puppet Labs) that allows you to communicate with multiple nodes at once.  They DID have a script that created their packages, but I wanted to create a Makefile that would create a package of ANY version of their software.  Let&rsquo;s look at the Makefile first and I&rsquo;ll break it down:</p>
 
 <p>{% codeblock MCollective Recipe lang:make %}</p>
 

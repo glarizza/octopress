@@ -4,7 +4,7 @@
   <title><![CDATA[Category: devops | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/devops/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2013-11-28T15:03:35-08:00</updated>
+  <updated>2013-11-30T15:08:49-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -18,17 +18,17 @@
     <link href="http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant/"/>
     <updated>2013-02-01T00:00:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant</id>
-    <content type="html"><![CDATA[<p>I miss testing code in production. In smaller organizations, 'testing' and
-'development' can sometimes consist of making changes directly on a server,
+    <content type="html"><![CDATA[<p>I miss testing code in production. In smaller organizations, &lsquo;testing&rsquo; and
+&lsquo;development&rsquo; can sometimes consist of making changes directly on a server,
 walking to an active machine, and hoping things work. Once you were done, you
 MIGHT document what changes you made, but more often than not you kept that
 information in your head and referred to it later.</p>
 
-<p>I lied - that is everything that sucks about manual configuration of machines.</p>
+<p>I lied &ndash; that is everything that sucks about manual configuration of machines.</p>
 
 <p>The best way to get out of this rut is to get addicted to automating first the
 menial tasks on your machines, and then work your way up from there. We STILL
-have the problem, though, of doing this in production - that's what this post
+have the problem, though, of doing this in production &ndash; that&rsquo;s what this post
 is meant to address.</p>
 
 <p>What we want is the ability to spin up a couple of test nodes for the purpose
@@ -39,7 +39,7 @@ automation changes BEFORE applying them to your production environment.</p>
 
 <p><a href="http://www.puppetlabs.com">Puppet</a> is a Configuration Management tool that automates all the
 annoying aspects of manual configuration out of your infrastructure. The bulk
-of its usage is beyond the scope of THIS post, however we're going to be using
+of its usage is beyond the scope of THIS post, however we&rsquo;re going to be using
 it as the means to describe the changes we want to make on our systems.</p>
 
 <p><a href="http://www.vagrantup.com">Vagrant</a> is a magical project that uses minimal VM templates (boxes)
@@ -53,24 +53,24 @@ the means by which we spin up new VMs for development purposes</p>
 
 <p>The only moving piece you need installed on your system is <a href="http://www.vagrantup.com">Vagrant</a>.
 Fortunately, Mitchell <a href="http://downloads.vagrantup.com">provides native package installers</a> on his website for
-downloading Vagrant. If you've never used Vagrant before, and you AREN'T a Ruby
-developer who maintains multiple Ruby versions on your system, then you'll want
-to opt for the native package installer since it's the easiest method to get
+downloading Vagrant. If you&rsquo;ve never used Vagrant before, and you AREN&rsquo;T a Ruby
+developer who maintains multiple Ruby versions on your system, then you&rsquo;ll want
+to opt for the native package installer since it&rsquo;s the easiest method to get
 Vagrant installed (and, on Macs, Vagrant embeds its own Ruby AND Rubygems
-binaries in the Package bundle...which is kind of cool).</p>
+binaries in the Package bundle&hellip;which is kind of cool).</p>
 
 <p>IF, however, you are developing in Ruby and you use <a href="https://rvm.io/">RVM</a> or <a href="https://github.com/sstephenson/rbenv/">Rbenv</a>
-to maintain multiple copies of Ruby on your system, then you'll want to favor
+to maintain multiple copies of Ruby on your system, then you&rsquo;ll want to favor
 installing Vagrant via Rubygems a la:</p>
 
 <p>{% codeblock lang:bash %}
-$ gem install vagrant --no-ri --no-rdoc
+$ gem install vagrant &mdash;no-ri &mdash;no-rdoc
 {% endcodeblock %}</p>
 
-<p>If you have no idea how to use RVM or Rbenv - stick with the <a href="http://downloads.vagrantup.com">native installers</a> :)</p>
+<p>If you have no idea how to use RVM or Rbenv &ndash; stick with the <a href="http://downloads.vagrantup.com">native installers</a> :)</p>
 
-<p>Puppet does NOT need to be on your workstation since we're only going to be using it on the VMs that
-Vagrant spins up - so don't worry about Puppet yet.</p>
+<p>Puppet does NOT need to be on your workstation since we&rsquo;re only going to be using it on the VMs that
+Vagrant spins up &ndash; so don&rsquo;t worry about Puppet yet.</p>
 
 <h2>My kingdom for a box</h2>
 
@@ -78,18 +78,18 @@ Vagrant spins up - so don't worry about Puppet yet.</p>
 for development purposes. <a href="http://vagrantbox.es">There are sites that host boxes available for download</a>,
 OR, you could use <a href="https://github.com/jedi4ever/veewee">an awesome project called Veewee</a> to build your own.
 Again, building your box file is outside the scope of this article, so just
-make sure you download a box with an OS that's to your liking.  This box DOES
-NOT need to have Puppet preinstalled - in fact, it's probably better that it
-doesn't (because the version will probably be old, and we're going to work
-around this anyways). I'm going to choose a CentOS 6.3 box that the SE team at
-Puppet Labs uses for demos, but, again, it's up to you.</p>
+make sure you download a box with an OS that&rsquo;s to your liking.  This box DOES
+NOT need to have Puppet preinstalled &ndash; in fact, it&rsquo;s probably better that it
+doesn&rsquo;t (because the version will probably be old, and we&rsquo;re going to work
+around this anyways). I&rsquo;m going to choose a CentOS 6.3 box that the SE team at
+Puppet Labs uses for demos, but, again, it&rsquo;s up to you.</p>
 
 <h2>Vagrantfile, assemble!</h2>
 
-<p>Now that we've got the pieces we need, let's start stitching together
-a repeatable workflow. To do that, we'll need to create a directory for this
+<p>Now that we&rsquo;ve got the pieces we need, let&rsquo;s start stitching together
+a repeatable workflow. To do that, we&rsquo;ll need to create a directory for this
 project and a <code>Vagrantfile</code> to direct Vagrant on how it should setup your VM.
-I'm going to use <code>~/src/vagrant_projects</code> for the purpose of this demo:</p>
+I&rsquo;m going to use <code>~/src/vagrant_projects</code> for the purpose of this demo:</p>
 
 <p>{% codeblock lang:bash %}
 $ mkdir -p ~/src/vagrant_projects
@@ -97,17 +97,17 @@ $ cd ~/src/vagrant_projects
 $ vim Vagrantfile
 {% endcodeblock %}</p>
 
-<p>Let's take a look at a sample Vagrantfile that I use to get Puppet installed on
+<p>Let&rsquo;s take a look at a sample Vagrantfile that I use to get Puppet installed on
 a box:</p>
 
 <p>{% codeblock lang:ruby Vagrantfile %}
 Vagrant::Config.run do |config|
-  config.vm.box       = "centos-6.3-x86_64"
-  config.vm.box_url   = "https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box"
-  config.vm.host_name = "development.puppetlabs.vm"
-  config.vm.network :hostonly, "192.168.33.10"
+  config.vm.box       = &ldquo;centos-6.3-x86_64&rdquo;
+  config.vm.box_url   = &ldquo;<a href="https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box">https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box</a>&rdquo;
+  config.vm.host_name = &ldquo;development.puppetlabs.vm&rdquo;
+  config.vm.network :hostonly, &ldquo;192.168.33.10&rdquo;
   config.vm.forward_port 80, 8084
-  config.vm.provision :shell, :path => "centos_6_x.sh"
+  config.vm.provision :shell, :path => &ldquo;centos_6_x.sh&rdquo;
 end
 {% endcodeblock %}</p>
 
@@ -116,27 +116,27 @@ establish the box we want to use for our development VM as well as the URL to
 the box file where it can be downloaded (in the event that it does not exist on
 our system). Because, initially, this box will NOT be known to Vagrant, it will
 attempt to reach out to that address and download it (note that the URL to THIS
-PARTICULAR BOX is subject to change - please find a box file that works for you
+PARTICULAR BOX is subject to change &ndash; please find a box file that works for you
 and substitute its URL in the <code>config.vm.box_url</code> config setting).  The next
-three lines define the machine's hostname, the network type, and the IP address
-for this VM. In this case, I'm using a host-only network and giving it an IP
+three lines define the machine&rsquo;s hostname, the network type, and the IP address
+for this VM. In this case, I&rsquo;m using a host-only network and giving it an IP
 address on a made-up 192.168.33.0/24 subnet (feel free to use your own
-private IP range as long as it doesn't conflict with anything). The next line
-is forwarding port 80 on the VM to port 8084 on my local laptop - this allows
-you to test out web services by simply navigating to http://localhost:8084
-from your web browser.  I'll save explaining the last line for the next
+private IP range as long as it doesn&rsquo;t conflict with anything). The next line
+is forwarding port 80 on the VM to port 8084 on my local laptop &ndash; this allows
+you to test out web services by simply navigating to <a href="http://localhost:8084">http://localhost:8084</a>
+from your web browser.  I&rsquo;ll save explaining the last line for the next
 section.</p>
 
-<p><strong>NOTE</strong>: For more documentation on these settings, <a href="http://docs.vagrantup.com/v1/docs/vagrantfile.html">visit Vagrant's documentation site</a>
-as it's quite good</p>
+<p><strong>NOTE</strong>: For more documentation on these settings, <a href="http://docs.vagrantup.com/v1/docs/vagrantfile.html">visit Vagrant&rsquo;s documentation site</a>
+as it&rsquo;s quite good</p>
 
 <h2>Getting Puppet on your VM</h2>
 
-<p>The final line in the sample Vagrantfile runs what's called the 'Shell
-Provisioner' for Vagrant. Essentially, it runs a shell script on the VM once
-it's been booted and configured. What does this shell script do?</p>
+<p>The final line in the sample Vagrantfile runs what&rsquo;s called the &lsquo;Shell
+Provisioner&rsquo; for Vagrant. Essentially, it runs a shell script on the VM once
+it&rsquo;s been booted and configured. What does this shell script do?</p>
 
-<p>{% codeblock centos_6_x.sh lang:bash https://github.com/hashicorp/puppet-bootstrap/blob/master/centos_6_x.sh %}</p>
+<p>{% codeblock centos_6_x.sh lang:bash <a href="https://github.com/hashicorp/puppet-bootstrap/blob/master/centos_6_x.sh">https://github.com/hashicorp/puppet-bootstrap/blob/master/centos_6_x.sh</a> %}</p>
 
 <h1>!/usr/bin/env bash</h1>
 
@@ -146,52 +146,52 @@ it's been booted and configured. What does this shell script do?</p>
 
 <p>set -e</p>
 
-<p>REPO_URL="http://yum.puppetlabs.com/el/6/products/i386/puppetlabs-release-6-6.noarch.rpm"</p>
+<p>REPO_URL=&ldquo;<a href="http://yum.puppetlabs.com/el/6/products/i386/puppetlabs-release-6-6.noarch.rpm">http://yum.puppetlabs.com/el/6/products/i386/puppetlabs-release-6-6.noarch.rpm</a>&rdquo;</p>
 
-<p>if [ "$EUID" -ne "0" ]; then
-  echo "This script must be run as root." >&amp;2
+<p>if [ &ldquo;$EUID&rdquo; -ne &ldquo;0&rdquo; ]; then
+  echo &ldquo;This script must be run as root.&rdquo; >&amp;2
   exit 1
 fi</p>
 
 <p>if which puppet > /dev/null 2>&1; then
-  echo "Puppet is already installed"
+  echo &ldquo;Puppet is already installed&rdquo;
   exit 0
 fi</p>
 
 <h1>Install puppet labs repo</h1>
 
-<p>echo "Configuring PuppetLabs repo..."
+<p>echo &ldquo;Configuring PuppetLabs repo&hellip;&rdquo;
 repo_path=$(mktemp)
-wget --output-document=${repo_path} ${REPO_URL} 2>/dev/null
+wget &mdash;output-document=${repo_path} ${REPO_URL} 2>/dev/null
 rpm -i ${repo_path} >/dev/null</p>
 
-<h1>Install Puppet...</h1>
+<h1>Install Puppet&hellip;</h1>
 
-<p>echo "Installing puppet"
+<p>echo &ldquo;Installing puppet&rdquo;
 yum install -y puppet > /dev/null</p>
 
-<p>echo "Puppet installed!"
+<p>echo &ldquo;Puppet installed!&rdquo;
 {% endcodeblock %}</p>
 
 <p>As you can see, it sets up the Puppet Labs el6 repository containing the
 current packages for Puppet/Facter/Hiera/PuppetDB/etc and installs the most
 recent version of Puppet and Facter that are in the repository. This will
 ensure that you have the most recent version of Puppet on your VM, and you
-don't need to worry about creating a new box every time Puppet releases a new
+don&rsquo;t need to worry about creating a new box every time Puppet releases a new
 version.</p>
 
-<p>This code <a href="https://github.com/hashicorp/puppet-bootstrap/blob/master/centos_6_x.sh">came from Mitchell's puppet-bootstrap repo</a> where he
+<p>This code <a href="https://github.com/hashicorp/puppet-bootstrap/blob/master/centos_6_x.sh">came from Mitchell&rsquo;s puppet-bootstrap repo</a> where he
 maintains a list of scripts that will bootstrap Puppet onto many of the common
 operating systems out there. This code was current as of the initial posting
-date of this blog, but make sure to check that repo for any updates.  If you're
+date of this blog, but make sure to check that repo for any updates.  If you&rsquo;re
 maintaining your OWN provisioning script, consider filing pull requests against
-Mitchell's repo so we can ALL benefit from good code and don't have to keep
-creating 'another wheel' just to provision Puppet on VMs!</p>
+Mitchell&rsquo;s repo so we can ALL benefit from good code and don&rsquo;t have to keep
+creating &lsquo;another wheel&rsquo; just to provision Puppet on VMs!</p>
 
 <h2>Spin up your VM</h2>
 
-<p>Once you've created a <code>Vagrantfile</code> in a directory, the next logical thing to
-do is to test out Vagrant and fire up your VM. Let's first check the status of
+<p>Once you&rsquo;ve created a <code>Vagrantfile</code> in a directory, the next logical thing to
+do is to test out Vagrant and fire up your VM. Let&rsquo;s first check the status of
 the vm:</p>
 
 <p>{% codeblock lang:bash %}
@@ -205,20 +205,20 @@ $ vagrant status</p>
 create the environment.
 {% endcodeblock %}</p>
 
-<p>As expected, this VM has yet to be created, so let's do that by doing a <code>vagrant up</code></p>
+<p>As expected, this VM has yet to be created, so let&rsquo;s do that by doing a <code>vagrant up</code></p>
 
 <p>{% codeblock %}
 $ vagrant up</p>
 
 <p>[default] Box centos-6.3-x86_64 was not found. Fetching box from specified
-URL...
-<a href="http://www.vagrantup.com">vagrant</a> Downloading with Vagrant::Downloaders::HTTP...
+URL&hellip;
+<a href="http://www.vagrantup.com">vagrant</a> Downloading with Vagrant::Downloaders::HTTP&hellip;
 <a href="http://www.vagrantup.com">vagrant</a> Downloading box:
-https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box
-<a href="http://www.vagrantup.com">vagrant</a> Extracting box...
-<a href="http://www.vagrantup.com">vagrant</a> Verifying box...
-<a href="http://www.vagrantup.com">vagrant</a> Cleaning up downloaded box...
-[default] Importing base box 'centos-6.3-x86_64'...
+<a href="https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box">https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box</a>
+<a href="http://www.vagrantup.com">vagrant</a> Extracting box&hellip;
+<a href="http://www.vagrantup.com">vagrant</a> Verifying box&hellip;
+<a href="http://www.vagrantup.com">vagrant</a> Cleaning up downloaded box&hellip;
+[default] Importing base box &lsquo;centos-6.3-x86_64&rsquo;&hellip;
 [default] The guest additions on this VM do not match the install version of
 VirtualBox! This may cause things such as forwarded ports, shared
 folders, and more to not work properly. If any of those things fail on
@@ -227,30 +227,30 @@ box.</p>
 
 <p>Guest Additions Version: 4.1.18
 VirtualBox Version: 4.1.23
-[default] Matching MAC address for NAT networking...
-[default] Clearing any previously set forwarded ports...
-[default] Forwarding ports...
-[default] -- 22 => 2222 (adapter 1)
-[default] -- 80 => 8084 (adapter 1)
-[default] Creating shared folders metadata...
-[default] Clearing any previously set network interfaces...
-[default] Preparing network interfaces based on configuration...
-[default] Booting VM...
+[default] Matching MAC address for NAT networking&hellip;
+[default] Clearing any previously set forwarded ports&hellip;
+[default] Forwarding ports&hellip;
+[default] &mdash; 22 => 2222 (adapter 1)
+[default] &mdash; 80 => 8084 (adapter 1)
+[default] Creating shared folders metadata&hellip;
+[default] Clearing any previously set network interfaces&hellip;
+[default] Preparing network interfaces based on configuration&hellip;
+[default] Booting VM&hellip;
 [default] Waiting for VM to boot. This can take a few minutes.
 [default] VM booted and ready for use!
-[default] Configuring and enabling network interfaces...
-[default] Setting host name...
-[default] Mounting shared folders...
-[default] -- v-root: /vagrant
-[default] Running provisioner: Vagrant::Provisioners::Shell...
-Configuring PuppetLabs repo...
+[default] Configuring and enabling network interfaces&hellip;
+[default] Setting host name&hellip;
+[default] Mounting shared folders&hellip;
+[default] &mdash; v-root: /vagrant
+[default] Running provisioner: Vagrant::Provisioners::Shell&hellip;
+Configuring PuppetLabs repo&hellip;
 warning:
 /tmp/tmp.FvW0K7FJWU: Header V4 RSA/SHA1 Signature, key ID 4bd6ec30: NOKEY
 Installing puppet
 warning:
 rpmts_HdrFromFdno: Header V4 RSA/SHA1 Signature, key ID 4bd6ec30: NOKEY
 Importing GPG key 0x4BD6EC30:
- Userid : Puppet Labs Release Key (Puppet Labs Release Key) <a href="&#x6d;&#97;&#x69;&#x6c;&#x74;&#111;&#58;&#105;&#x6e;&#x66;&#111;&#64;&#x70;&#117;&#112;&#x70;&#x65;&#x74;&#x6c;&#x61;&#98;&#x73;&#x2e;&#x63;&#x6f;&#109;">&#x69;&#110;&#x66;&#111;&#64;&#x70;&#117;&#x70;&#112;&#x65;&#x74;&#108;&#x61;&#98;&#x73;&#x2e;&#99;&#x6f;&#x6d;</a>
+ Userid : Puppet Labs Release Key (Puppet Labs Release Key) <a href="&#109;&#97;&#105;&#108;&#x74;&#x6f;&#58;&#x69;&#x6e;&#102;&#x6f;&#x40;&#112;&#x75;&#112;&#112;&#x65;&#x74;&#x6c;&#97;&#98;&#115;&#46;&#99;&#x6f;&#x6d;">&#105;&#110;&#102;&#111;&#x40;&#112;&#x75;&#112;&#112;&#101;&#x74;&#108;&#x61;&#98;&#115;&#x2e;&#99;&#x6f;&#109;</a>
  Package: puppetlabs-release-6-6.noarch (installed)
  From   : /etc/pki/rpm-gpg/RPM-GPG-KEY-puppetlabs
 Warning: RPMDB altered outside of yum.
@@ -259,18 +259,18 @@ Puppet installed!
 
 <p>Vagrant first noticed that we did not have the CentOS box on our machine, so it
 downloaded, extracted, and verified the box before importing it and creating
-our custom VM. Next, it configured the VM's network settings according to our
+our custom VM. Next, it configured the VM&rsquo;s network settings according to our
 Vagrantfile, and finally it provisioned the box using the script we passed in
 the Vagrantfile.</p>
 
-<p>We've now got a VM running and Puppet is installed. Let's ssh to our VM
+<p>We&rsquo;ve now got a VM running and Puppet is installed. Let&rsquo;s ssh to our VM
 and check the Puppet Version:</p>
 
 <p>{% codeblock lang:bash %}
 $ vagrant ssh</p>
 
 <p>Last login: Tue Jul 10 22:56:01 2012 from 10.0.2.2
-[vagrant@development ~]$ puppet --version
+[vagrant@development ~]$ puppet &mdash;version
 3.0.2
 [vagrant@development ~]$ hostname
 development.puppetlabs.vm
@@ -279,26 +279,26 @@ logout
 Connection to 127.0.0.1 closed.</p>
 
 <p>$ vagrant destroy -f
-[default] Forcing shutdown of VM...
-[default] Destroying VM and associated drives...
+[default] Forcing shutdown of VM&hellip;
+[default] Destroying VM and associated drives&hellip;
 {% endcodeblock %}</p>
 
-<p>Cool - so we demonstrated that we could ssh into the VM, check the Puppet
+<p>Cool &ndash; so we demonstrated that we could ssh into the VM, check the Puppet
 version, check the hostname to ensure that Vagrant had set it correctly, exit
 out, and then we finally destroyed the VM with <code>vagrant destroy -f</code>.  The next
-step is to actually configure Puppet to DO something with this VM...</p>
+step is to actually configure Puppet to DO something with this VM&hellip;</p>
 
 <h2>Using Puppet to setup your node</h2>
 
 <p>The act of GETTING a clean VM is all well and good (and is probably magic
 enough for most people out there), but the purpose of this post is to
 demonstrate a workflow for testing out Puppet code changes. In the previous
-step we showed how to get Puppet installed, but we've yet to demonstrate how
-to use Vagrant's built-in <a href="http://docs.vagrantup.com/v1/docs/provisioners/puppet.html">Puppet provisioner</a> to configure your VM. Let's use
+step we showed how to get Puppet installed, but we&rsquo;ve yet to demonstrate how
+to use Vagrant&rsquo;s built-in <a href="http://docs.vagrantup.com/v1/docs/provisioners/puppet.html">Puppet provisioner</a> to configure your VM. Let&rsquo;s use
 the example of a developer wanting to spin up a LAMP stack. To manually
 configure that would require installing a number of packages, editing a number
 of config files, and then making sure services were installed (among other
-things). We're going to use some of the Puppet modules from the <a href="http://forge.puppetlabs.com">Puppet
+things). We&rsquo;re going to use some of the Puppet modules from the <a href="http://forge.puppetlabs.com">Puppet
 Forge</a> to tackle these tasks and make Vagrant automatically configure
 our VM.</p>
 
@@ -306,30 +306,30 @@ our VM.</p>
 
 <p>We need a way to pass our Puppet code to the VM Vagrant creates. Fortunately,
 Vagrant has a way to define <a href="http://docs.vagrantup.com/v1/docs/config/vm/share_folder.html">Shared Folders</a> that can be shared from your
-workstation and mounted on your VM at a particular mount point. Let's modify
+workstation and mounted on your VM at a particular mount point. Let&rsquo;s modify
 our Vagrantfile to account for this shared folder:</p>
 
 <p>{% codeblock lang:ruby Vagrantfile %}
 Vagrant::Config.run do |config|
-  config.vm.box       = "centos-6.3-x86_64"
-  config.vm.box_url   = "https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box"
-  config.vm.host_name = "development.puppetlabs.vm"
-  config.vm.network :hostonly, "192.168.33.10"
+  config.vm.box       = &ldquo;centos-6.3-x86_64&rdquo;
+  config.vm.box_url   = &ldquo;<a href="https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box">https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box</a>&rdquo;
+  config.vm.host_name = &ldquo;development.puppetlabs.vm&rdquo;
+  config.vm.network :hostonly, &ldquo;192.168.33.10&rdquo;
   config.vm.forward_port 80, 8084
-  config.vm.provision :shell, :path => "centos_6_x.sh"</p>
+  config.vm.provision :shell, :path => &ldquo;centos_6_x.sh&rdquo;</p>
 
 <p>  # Puppet Shared Folder
-  config.vm.share_folder "puppet_mount", "/puppet", "puppet"
+  config.vm.share_folder &ldquo;puppet_mount&rdquo;, &ldquo;/puppet&rdquo;, &ldquo;puppet&rdquo;
 end
 {% endcodeblock %}</p>
 
 <p>The syntax for the <code>config.vm.share_folder</code> line is that the first argument is
 a logical name for the shared folder mapping, the second argument is the path
-IN THE VM where this folder will be mounted (so, a folder called 'puppet' in
+IN THE VM where this folder will be mounted (so, a folder called &lsquo;puppet&rsquo; in
 the root of the filesystem), and the last argument is the path to the folder ON
 YOUR WORKSTATION that will be mounted in the VM (it can be a full or relative
-path - which is what we've done here). This folder hasn't been created yet, so
-let's create it (and a couple of subfolders):</p>
+path &ndash; which is what we&rsquo;ve done here). This folder hasn&rsquo;t been created yet, so
+let&rsquo;s create it (and a couple of subfolders):</p>
 
 <p>{% codeblock lang:bash %}
 $ cd ~/src/vagrant_projects
@@ -338,9 +338,9 @@ $ mkdir -p puppet/{manifests,modules}
 
 <p>This command will create the <code>puppet</code> directory in the same directory that
 contains our Vagrantfile, and then two subdirectories, <code>manifests</code> and
-<code>modules</code>, that will be used by the Puppet provisioner later. Now that we've
-told Vagrant to create our shared folder, and we've created the folder
-structure, let's bring up the VM with <code>vagrant up</code> again, ssh into the VM with
+<code>modules</code>, that will be used by the Puppet provisioner later. Now that we&rsquo;ve
+told Vagrant to create our shared folder, and we&rsquo;ve created the folder
+structure, let&rsquo;s bring up the VM with <code>vagrant up</code> again, ssh into the VM with
 <code>vagrant ssh</code>, and then check to see that the folder has been mounted.</p>
 
 <p>{% codeblock lang:bash %}
@@ -355,33 +355,33 @@ $ vagrant up</p>
 manifests  modules
 {% endcodeblock %}</p>
 
-<p>Great! We've setup a shared folder. To further test it out, you can try
-dropping a file in the puppet directory or one of its subdirectories - it
+<p>Great! We&rsquo;ve setup a shared folder. To further test it out, you can try
+dropping a file in the puppet directory or one of its subdirectories &ndash; it
 should immediately show up on the VM without having to recreate the VM (because
-it's a shared folder). There are pros and cons with this workflow - the main
+it&rsquo;s a shared folder). There are pros and cons with this workflow &ndash; the main
 pro is that changes you make on your workstation will immediately be reflected
-in the VM, and the main con is that you can't symlink folders INSIDE
+in the VM, and the main con is that you can&rsquo;t symlink folders INSIDE
 the shared folder on your workstation because of the nature of symlinks.</p>
 
 <h2>Installing the necessary Puppet Modules</h2>
 
-<p>Since we've already spun up a new VM and ssh'd into it, let's use our VM to
-download modules we're going to need to setup our LAMP stack:</p>
+<p>Since we&rsquo;ve already spun up a new VM and ssh&rsquo;d into it, let&rsquo;s use our VM to
+download modules we&rsquo;re going to need to setup our LAMP stack:</p>
 
 <p>{% codeblock lang:bash %}
-[vagrant@development ~]$ puppet module install puppetlabs/apache --target-dir /puppet/modules/
-Notice: Preparing to install into /puppet/modules ...
-Notice: Downloading from https://forge.puppetlabs.com ...
-Notice: Installing -- do not interrupt ...
+[vagrant@development ~]$ puppet module install puppetlabs/apache &mdash;target-dir /puppet/modules/
+Notice: Preparing to install into /puppet/modules &hellip;
+Notice: Downloading from <a href="https://forge.puppetlabs.com">https://forge.puppetlabs.com</a> &hellip;
+Notice: Installing &mdash; do not interrupt &hellip;
 /puppet/modules
 └─┬ puppetlabs-apache (v0.5.0-rc1)
   ├── puppetlabs-firewall (v0.0.4)
   └── puppetlabs-stdlib (v3.2.0)</p>
 
-<p>[vagrant@development ~]$ puppet module install puppetlabs/mysql --target-dir /puppet/modules/
-Notice: Preparing to install into /puppet/modules ...
-Notice: Downloading from https://forge.puppetlabs.com ...
-Notice: Installing -- do not interrupt ...
+<p>[vagrant@development ~]$ puppet module install puppetlabs/mysql &mdash;target-dir /puppet/modules/
+Notice: Preparing to install into /puppet/modules &hellip;
+Notice: Downloading from <a href="https://forge.puppetlabs.com">https://forge.puppetlabs.com</a> &hellip;
+Notice: Installing &mdash; do not interrupt &hellip;
 /puppet/modules
 └── puppetlabs-mysql (v0.6.1)</p>
 
@@ -392,24 +392,24 @@ apache  concat  firewall  mysql  stdlib
 <p>The <code>puppet</code> binary has a module subcommand that will connect to the <a href="http://forge.puppetlabs.com">Puppet Forge</a>
 to download Puppet modules and their dependencies. The commands we used will
 install Puppet Labs' <code>apache</code> and <code>mysql</code> modules (and their dependencies).
-We're also passing the <code>--target-dir</code> argument that will tell the <code>puppet
+We&rsquo;re also passing the <code>--target-dir</code> argument that will tell the <code>puppet
 module</code> subcommand to install the module into our shared directory (instead of
-Puppet's default module path).</p>
+Puppet&rsquo;s default module path).</p>
 
-<p>I'm choosing to use <code>puppet module</code> to install these modules, but there are
+<p>I&rsquo;m choosing to use <code>puppet module</code> to install these modules, but there are
 a multitude of other methods you can use (from downloading the modules directly
 out of <a href="http://github.com">Github</a> to using a tool like <a href="https://github.com/rodjek/librarian-puppet">librarian-puppet</a>). The point is
 that we need to ultimately get the modules into the <code>modules</code> directory
-in our shared <code>puppet</code> folder - however you want to do that works for me :)</p>
+in our shared <code>puppet</code> folder &ndash; however you want to do that works for me :)</p>
 
-<p>Once the modules are in <code>puppet/modules</code>, we're good. You only ever need to do
+<p>Once the modules are in <code>puppet/modules</code>, we&rsquo;re good. You only ever need to do
 this step ONCE. Because this folder is a shared folder, you can now <code>vagrant
-up</code> and <code>vagrant destroy</code> to your heart's content - Vagrant will not remove the
+up</code> and <code>vagrant destroy</code> to your heart&rsquo;s content &ndash; Vagrant will not remove the
 content in our shared folder when a VM is destroyed. Remember, too, that any
 changes made to those modules from either the VM or on your Workstation will be
 IMMEDIATELY available to both.</p>
 
-<p>Since we're now done with the VM for now, let's destroy it with <code>vagrant destroy</code></p>
+<p>Since we&rsquo;re now done with the VM for now, let&rsquo;s destroy it with <code>vagrant destroy</code></p>
 
 <p>{% codeblock %}
 $ vagrant destroy
@@ -419,22 +419,22 @@ $ vagrant destroy
 
 <p>The modules we installed are a framework that we will use to configure the
 node. The act of directing the actions that Puppet should take on a particular
-node is called <a href="http://docs.puppetlabs.com/puppet/3/reference/lang_summary.html#resources-classes-and-nodes">'Classification'</a>. Puppet uses a file called <a href="http://docs.puppetlabs.com/learning/agent_master_basic.html#sitepp">site.pp</a>
-to map Puppet code with the corresponding 'node' (or, in our case, our VM) that
-should receive it. Let's create a site.pp file and open it for editing:</p>
+node is called <a href="http://docs.puppetlabs.com/puppet/3/reference/lang_summary.html#resources-classes-and-nodes">&lsquo;Classification&rsquo;</a>. Puppet uses a file called <a href="http://docs.puppetlabs.com/learning/agent_master_basic.html#sitepp">site.pp</a>
+to map Puppet code with the corresponding &lsquo;node&rsquo; (or, in our case, our VM) that
+should receive it. Let&rsquo;s create a site.pp file and open it for editing:</p>
 
 <p>{% codeblock %}
 $ cd ~/src/vagrant_projects
 $ vim puppet/manifests/site.pp
 {% endcodeblock %}</p>
 
-<p>Let's create a site.pp that will setup the LAMP stack on our
+<p>Let&rsquo;s create a site.pp that will setup the LAMP stack on our
 <code>development.puppetlabs.vm</code> that we create with Vagrant:</p>
 
 <p>{% codeblock lang:puppet ~/src/vagrant_projects/manifests/site.pp %}
-node 'development.puppetlabs.vm' {
+node &lsquo;development.puppetlabs.vm&rsquo; {
   # Configure mysql
-  class { 'mysql::server':</p>
+  class { &lsquo;mysql::server&rsquo;:</p>
 
 <pre><code>config_hash =&gt; { 'root_password' =&gt; '8ZcJZFHsvo7fINZcAvi0' }
 </code></pre>
@@ -455,14 +455,14 @@ require =&gt; File['/var/www/test'],
 <p>  }</p>
 
 <p>  # Configure Docroot and index.html
-  file { ['/var/www', '/var/www/test']:</p>
+  file { [&lsquo;/var/www&rsquo;, &lsquo;/var/www/test&rsquo;]:</p>
 
 <pre><code>ensure =&gt; directory
 </code></pre>
 
 <p>  }</p>
 
-<p>  file { '/var/www/test/index.php':</p>
+<p>  file { &lsquo;/var/www/test/index.php&rsquo;:</p>
 
 <pre><code>ensure  =&gt; file,
 content =&gt; '&lt;?php echo \'&lt;p&gt;Hello World&lt;/p&gt;\'; ?&gt; ',
@@ -477,27 +477,27 @@ content =&gt; '&lt;?php echo \'&lt;p&gt;Hello World&lt;/p&gt;\'; ?&gt; ',
 
 <p>Again, the point of this post is not about writing Puppet code but more about
 testing the Puppet code you write. The above node declaration will setup MySQL
-with a root password of 'puppet', setup Apache and a VHost for
+with a root password of &lsquo;puppet&rsquo;, setup Apache and a VHost for
 <code>development.puppetlabs.vm</code> with a docroot out of <code>/var/www/test</code>, setup an
 <code>index.php</code> file for Apache, and setup a Firewall rule to allow access through
 to port 80 on our VM.</p>
 
 <h2>Setting up the Puppet provisioner for Vagrant</h2>
 
-<p>We're going to have to modify our <code>Vagrantfile</code> one more time to tell Vagrant
+<p>We&rsquo;re going to have to modify our <code>Vagrantfile</code> one more time to tell Vagrant
 to use the <a href="http://docs.vagrantup.com/v1/docs/provisioners/puppet.html">Puppet provisioner</a> to execute our Puppet code and setup our VM:</p>
 
 <p>{% codeblock lang:ruby Vagrantfile%}
 Vagrant::Config.run do |config|
-  config.vm.box       = "centos-6.3-x86_64"
-  config.vm.box_url   = "https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box"
-  config.vm.host_name = "development.puppetlabs.vm"
-  config.vm.network :hostonly, "192.168.33.10"
+  config.vm.box       = &ldquo;centos-6.3-x86_64&rdquo;
+  config.vm.box_url   = &ldquo;<a href="https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box">https://saleseng.s3.amazonaws.com/boxfiles/CentOS-6.3-x86_64-minimal.box</a>&rdquo;
+  config.vm.host_name = &ldquo;development.puppetlabs.vm&rdquo;
+  config.vm.network :hostonly, &ldquo;192.168.33.10&rdquo;
   config.vm.forward_port 80, 8084
-  config.vm.provision :shell, :path => "centos_6_x.sh"</p>
+  config.vm.provision :shell, :path => &ldquo;centos_6_x.sh&rdquo;</p>
 
 <p>  # Puppet Shared Folder
-  config.vm.share_folder "puppet_mount", "/puppet", "puppet"</p>
+  config.vm.share_folder &ldquo;puppet_mount&rdquo;, &ldquo;/puppet&rdquo;, &ldquo;puppet&rdquo;</p>
 
 <p>  # Puppet Provisioner setup
   config.vm.provision :puppet do |puppet|</p>
@@ -522,14 +522,14 @@ one goes first? Vagrant will iterate through the <code>Vagrantfile</code> proced
 the Shell provisioner will always get checked first and then the Puppet
 provisioner will get checked second.  This allows us to be certain that Puppet
 will always be installed before attempting to use the Puppet provisioner. You
-could continue to add as many provisioning blocks as you like - Vagrant will
+could continue to add as many provisioning blocks as you like &ndash; Vagrant will
 iterate through them procedurally as it encounters them.</p>
 
 <h2>Give the entire workflow a try</h2>
 
 <p>Now that we have our Vagrantfile finalized, our Puppet directory structure
 setup, our Puppet modules installed, and our <code>site.pp</code> file set to classify our
-new VM, let's actually let Vagrant do what it does best and setup our VM:</p>
+new VM, let&rsquo;s actually let Vagrant do what it does best and setup our VM:</p>
 
 <p>{% codeblock %}
 $ vagrant up
@@ -538,25 +538,25 @@ $ vagrant up
 <p>You should see Vagrant use the Shell provisioner to install Puppet, hand off to
 the Puppet provisioner, and then use Puppet to setup a LAMP stack on our VM.
 After everything completes, try visiting <a href="http://localhost:8084">http://localhost:8084</a>
-in your web browser and see if you get a shiny "Hello World" staring back at
-you.  If you do - Awesome!  If you don't, check the error messages to determine
+in your web browser and see if you get a shiny &ldquo;Hello World&rdquo; staring back at
+you.  If you do &ndash; Awesome!  If you don&rsquo;t, check the error messages to determine
 if there are typos in the Puppet code or if something went wrong in the <code>Vagrantfile</code>.</p>
 
 <h2>Where do you take it from here?</h2>
 
-<p>The first thing to do is to take the Vagrantfile you've created and put it
+<p>The first thing to do is to take the Vagrantfile you&rsquo;ve created and put it
 under revision control so you can track the changes you make. I personally have
-a couple of workflows up on <a href="http://github.com">Github</a> that I use as templates when I'm
-testing out something new. You'll probably find that your Vagrantfile won't
-change much - just the modules you use for testing.</p>
+a couple of workflows up on <a href="http://github.com">Github</a> that I use as templates when I&rsquo;m
+testing out something new. You&rsquo;ll probably find that your Vagrantfile won&rsquo;t
+change much &ndash; just the modules you use for testing.</p>
 
 <p>Now that you understand the pattern, you can expand it to fit your workflow.
-Single-vm projects are great when you're testing a specific component, but
+Single-vm projects are great when you&rsquo;re testing a specific component, but
 the next logical step is to test out multi-tiered components/applications.  In these instances,
 <a href="http://docs.vagrantup.com/v1/docs/multivm.html">Vagrant has the ability to spin up multiple VMs from a single Vagrantfile</a>.
 That workflow saves a TON of time and lets you create your own private network
-of VMs for the purpose of simulating changes.  That's a post for another time,
-though...</p>
+of VMs for the purpose of simulating changes.  That&rsquo;s a post for another time,
+though&hellip;</p>
 
 <h2>Get involved</h2>
 
@@ -569,8 +569,8 @@ Virtualbox version 4.1.23 on OS X).</p>
 Twitter, check out <code>#vagrant</code> on Freenode, join <a href="http://groups.google.com/group/vagrant-up">the Vagrant list</a>, and
 check out Google for what other folks have done!</p>
 
-<p>A GIANT thank you to <a href="http://twitter.com/mitchellh">Mitchell Hashimoto</a> for all the work he's done on
-Vagrant - I can't count the number of hours it's saved me personally (let ALONE
+<p>A GIANT thank you to <a href="http://twitter.com/mitchellh">Mitchell Hashimoto</a> for all the work he&rsquo;s done on
+Vagrant &ndash; I can&rsquo;t count the number of hours it&rsquo;s saved me personally (let ALONE
 everyone at <a href="http://www.puppetlabs.com">Puppet Labs</a>!</p>
 ]]></content>
   </entry>
