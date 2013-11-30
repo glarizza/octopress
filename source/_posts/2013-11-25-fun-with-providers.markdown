@@ -3,7 +3,7 @@ layout: post
 title: "Fun with Puppet Providers - Part 1 of Whatever"
 date: 2013-11-25 20:47
 comments: true
-categories: 
+categories: ['os x', 'puppet', 'types', 'providers', 'proxies']
 ---
 
 I don't know why I write blog posts - everybody in open-source software knows

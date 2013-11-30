@@ -3,7 +3,7 @@ layout: post
 title: "Who abstracted my Ruby?"
 date: 2013-11-26 16:01
 comments: true
-categories: 
+categories:  ['os x', 'puppet', 'types', 'providers', 'proxies']
 ---
 
 Previously, on Lost, I said a lot of words about Puppet Types;
