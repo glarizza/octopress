@@ -34,7 +34,7 @@ At the top of the file are all the variable declarations.  Anything that begins 
 Next, we have the target stanzas.  A target (or a rule - I will use the word rule throughout the article) is setup to look like this:
 
 ``` make
-            o-something: l_usr_bin
+            do-something: l_usr_bin
             @-echo "Commands are entered here"
             @-echo "Everything below our rule is executed"
 ```
