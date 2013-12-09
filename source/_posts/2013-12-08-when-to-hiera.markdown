@@ -555,4 +555,9 @@ the params class exists and is available to you.
 To voice your opinion or to follow the progress of data in modules,
 [follow or comment on this Puppet ticket.](https://projects.puppetlabs.com/issues/16856)
 
+## Update
+
+[R.I. posted another article on the problem with params.pp](http://www.devco.net/archives/2013/12/09/the-problem-with-params-pp.php)
+that is worth reading. He gives compelling reasons on why he built Hiera, why
+params.pp WORKS, but also why he believes it's not the future of Puppet.
 
