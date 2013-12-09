@@ -4,7 +4,7 @@
   <title><![CDATA[Category: puppet | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/puppet/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2013-12-06T10:37:14-07:00</updated>
+  <updated>2013-12-09T14:29:44-05:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -14,34 +14,624 @@
 
   
   <entry>
-    <title type="html"><![CDATA[ANYTHING but unit tests!!]]></title>
-    <link href="http://garylarizza.com/blog/2013/11/30/anything-but-unit-tests/"/>
-    <updated>2013-11-30T16:33:42-07:00</updated>
-    <id>http://garylarizza.com/blog/2013/11/30/anything-but-unit-tests</id>
-    <content type="html"><![CDATA[<p>I&rsquo;ll completely admit that I don&rsquo;t <a href="http://en.wikipedia.org/wiki/Test-driven_development">TDD</a>.
-I&rsquo;m a terrible person, I know, and I&rsquo;m &lsquo;doing it wrong&rsquo;, but fuck me if I&rsquo;m
-not a hot mess of a &lsquo;developer&rsquo;. This doesn&rsquo;t mean that I don&rsquo;t write tests,
-it just means that I&rsquo;m not doing it BEFORE I write my code (full disclosure:
-there are definitely days where I have NO IDEA what my code is meant to do
-before I write it &ndash; which is PRETTY MUCH THE PROBLEM that TDD is meant to
-SOLVE!). But I digress&hellip;</p>
+    <title type="html"><![CDATA[When to Hiera (aka: How do I Module?)]]></title>
+    <link href="http://garylarizza.com/blog/2013/12/08/when-to-hiera/"/>
+    <updated>2013-12-08T18:31:54-05:00</updated>
+    <id>http://garylarizza.com/blog/2013/12/08/when-to-hiera</id>
+    <content type="html"><![CDATA[<p>I&rsquo;m convinced that writing Puppet modules is the ultimate exercise in bikeshedding:
+if it works, someone&rsquo;s probably going to tell you that you could have done it better,
+if you&rsquo;re using the methods suggested today, they&rsquo;re probably going to be out-of-date
+in about 6 months, and good luck writing something that someone else can use cleanly
+without needing to change it.</p>
 
-<p>Writing unit tests is one of those painful necessities to development. It
-allows you to test what your code is supposed to do so you can tell if any
-changes you make break existing functionality. Ideally, you write a couple
-of tests describing what your code should do, you run the tests (to show
-they initially fail), and then you write code that ultimately makes the tests
-pass. In the real world, though, you typically find yourself writing tests
-AFTER THE FACT because you want someone upstream to accept your patches
-and put your name on a changelog that you can then print off and send to
-your parents.</p>
+<p>I can help you with the last two.</p>
+
+<h2>Data and Code Separation == bliss?</h2>
+
+<p><a href="http://bit.ly/puppetdata">I wrote a blog post about 2 years ago</a> detailing why separating
+your data from your Puppet code was a good idea. The idea is still valid, which means
+it&rsquo;s probably one of the better ideas I&rsquo;ve ever stolen (Does anyone want any HD-DVDs?).
+Hunter Haugen and I <a href="http://bit.ly/hierablog">put together a quick blog post on using Hiera</a>
+to solve the data/code problem because there wasn&rsquo;t a great bit of documentation on Hiera
+at that point in time. Since then, Hiera&rsquo;s been widely accepted as &ldquo;a good idea&rdquo; and is
+in use in production Puppet environments around the world. In most every environment,
+usage of Hiera by more than just one person eventually gives birth to the question
+that inspired this post:</p>
+
+<h4>&ldquo;What the hell does and does NOT belong in Hiera?&rdquo;</h4>
+
+<h2>Puppet data models</h2>
+
+<h3>The params class pattern</h3>
+
+<p>Many Puppet modules out there since Puppet 2.6 have begun using this pattern:</p>
+
+<p>{% codeblock lang:puppet puppetlabs-mysql/manifests/server.pp %}
+class mysql::server (
+  $config_file             = $mysql::params::config_file,
+  $manage_config_file      = $mysql::params::manage_config_file,
+  $old_root_password       = $mysql::params::old_root_password,
+  $override_options        = {},
+  $package_ensure          = $mysql::params::server_package_ensure,
+  $package_name            = $mysql::params::server_package_name,
+  $purge_conf_dir          = $mysql::params::purge_conf_dir,
+  $remove_default_accounts = false,
+  $restart                 = $mysql::params::restart,
+  $root_group              = $mysql::params::root_group,
+  $root_password           = $mysql::params::root_password,
+  $service_enabled         = $mysql::params::server_service_enabled,
+  $service_manage          = $mysql::params::server_service_manage,
+  $service_name            = $mysql::params::server_service_name,
+  $service_provider        = $mysql::params::server_service_provider,
+  # Deprecated parameters
+  $enabled                 = undef,
+  $manage_service          = undef
+) inherits mysql::params {</p>
+
+<p>  ## Puppet goodness goes here
+}</p>
+
+<p>{% endcodeblock %}</p>
+
+<p>If you&rsquo;re not familiar, this is a Puppet class definition for <code>mysql::server</code> that has several parameters
+defined and defaulted to values that come out of the <code>mysql::params</code> class.  The
+<code>mysql::params</code> class looks a bit like this:</p>
+
+<p>{% codeblock lang:puppet puppetlabs-mysql/manifests/params.pp %}
+class mysql::params {
+  case $::osfamily {</p>
+
+<pre><code>'RedHat': {
+  if $::operatingsystem == 'Fedora' and (is_integer($::operatingsystemrelease) and $::operatingsystemrelease &gt;= 19 or $::operatingsystemrelease == "Rawhide") {
+    $client_package_name = 'mariadb'
+    $server_package_name = 'mariadb-server'
+  } else {
+    $client_package_name = 'mysql'
+    $server_package_name = 'mysql-server'
+  }
+  $basedir             = '/usr'
+  $config_file         = '/etc/my.cnf'
+  $datadir             = '/var/lib/mysql'
+  $log_error           = '/var/log/mysqld.log'
+  $pidfile             = '/var/run/mysqld/mysqld.pid'
+  $root_group          = 'root'
+}
+
+'Debian': {
+  ## More parameters defined here
+}
+</code></pre>
+
+<p>  }
+}</p>
+
+<p>{% endcodeblock %}</p>
+
+<p>This pattern puts all conditional logic for all the variables/parameters used
+in the module inside one class &ndash; the <code>mysql::params</code> class.  It&rsquo;s called the
+&lsquo;params class pattern&rsquo; because we suck at naming things.</p>
+
+<h4>Pros:</h4>
+
+<ul>
+<li>All conditional logic is in a single class</li>
+<li>You always know which class to seek out if you need to change any of the logic used to determine a variable&rsquo;s value</li>
+<li>You can use the include function because parameters for each class will be defaulted to the values that came out of the params class</li>
+<li>If you need to override the value of a particular parameter, you can still use the parameterized class declaration syntax to do so</li>
+<li>Anyone using Puppet version 2.6 or higher can use it (i.e. anyone who&rsquo;s been using Puppet since about 2010).</li>
+</ul>
+
+
+<h5>Cons:</h5>
+
+<ul>
+<li>Conditional logic is repeated in every module</li>
+<li>You will need to use inheritance to inherit parameter values in each subclass</li>
+<li>It&rsquo;s another place to look if you ALSO use Hiera inside the module</li>
+<li>Data is inside the manifest, so business logic is also inside params.pp</li>
+</ul>
+
+
+<h3>Hiera defaults pattern</h3>
+
+<p>When Hiera hit the scene, one of the first things people tried to do was
+to incorporate it into existing modules. The logic at that time was that
+you could keep all parameter defaults inside Hiera, rid yourself of the
+params class, and then just make Hiera calls out for your data. This
+pattern looks like this:</p>
+
+<p>{% codeblock lang:puppet puppetlabs-mysql/manifests/server.pp %}
+class mysql::server (
+  $config_file             = hiera(&lsquo;mysql::params::config_file&rsquo;, &lsquo;default value&rsquo;),
+  $manage_config_file      = hiera(&lsquo;mysql::params::manage_config_file&rsquo;, &lsquo;default value&rsquo;),
+  $old_root_password       = hiera(&lsquo;mysql::params::old_root_password&rsquo;, &lsquo;default value&rsquo;),
+  ## Repeat the above pattern
+) {</p>
+
+<p>  ## Puppet goodness goes here
+}</p>
+
+<p>{% endcodeblock %}</p>
+
+<h4>Pros:</h4>
+
+<ul>
+<li>All data is locked up in Hiera (and its multiple backends)</li>
+<li>Default values can be provided if a Hiera lookup fails</li>
+</ul>
+
+
+<h4>Cons:</h4>
+
+<ul>
+<li>You need to have Hiera installed, enabled, and configured to use this pattern</li>
+<li>All data, including non-business logic, is in Hiera</li>
+<li>If you use the default value, data could either come from Hiera OR the default (multiple places to look when debugging)</li>
+</ul>
+
+
+<h3>Hybrid data model</h3>
+
+<p>This pattern is for those people who want the portability of the params.pp class
+combined with the power of Hiera. Because it&rsquo;s a hybrid, there are multiple ways
+that people have set it up.  Here&rsquo;s a general example:</p>
+
+<p>{% codeblock lang:puppet puppetlabs-mysql/manifests/server.pp %}
+class mysql::server (
+  $config_file             = hiera(&lsquo;mysql::params::config_file&rsquo;, $mysql::params::config_file),
+  $manage_config_file      = hiera(&lsquo;mysql::params::manage_config_file&rsquo;, $mysql::params::manage_config_file),
+  $old_root_password       = hiera(&lsquo;mysql::params::old_root_password&rsquo;, $mysql::params::old_root_password),
+  ## Repeat the above pattern
+) inherits mysql::params {</p>
+
+<p>{% endcodeblock %}</p>
+
+<h4>Pros:</h4>
+
+<ul>
+<li>Data is sought from Hiera first and then defaulted back to the params class parameter</li>
+<li>Keep non-business logic (i.e. OS specific data) in the params class and business logic in Hiera</li>
+<li>Added benefits of both models</li>
+</ul>
+
+
+<h4>Cons:</h4>
+
+<ul>
+<li>Where did the variable get set &ndash; Hiera or the params class? Debugging can be hard</li>
+<li>Requires Hiera to be setup to use the module</li>
+<li>If you fudge a variable name in Hiera, you get the params class default &ndash; see Con #1</li>
+</ul>
+
+
+<h3>Hiera data bindings in Puppet 3.x.x</h3>
+
+<p>In Puppet 3.0.0, there was a concept introduced called Data Bindings. This created
+a federated data model automatically incorporating a Hiera lookup. Previously, the
+order that Puppet would use to determine the value of a parameter was to first use
+a value passed with the parameterized class declaration syntax (i.e. the below:).</p>
+
+<p>{% codeblock lang:puppet parameterized class declaration %}
+class { &lsquo;apache&rsquo;:
+  package_name => &lsquo;httpd&rsquo;,
+}
+{% endcodeblock %}</p>
+
+<p>If a parameter was not passed with the parameterized class syntax (like the &lsquo;package_name&rsquo;
+parameter above'), Puppet would then look for a default value inside the class definition
+(i.e. the below:).</p>
+
+<p>{% codeblock lang:puppet parameter default in a class definition %}
+class ntp (
+  $ntpserver = &lsquo;default.ntpserver.org&rsquo;
+) {
+  # Use $ntpserver in a file declaration&hellip;
+}
+{% endcodeblock %}</p>
+
+<p>If the value of &lsquo;ntpserver&rsquo; wasn&rsquo;t passed with a parameterized class declaration,
+then the value would be set to &lsquo;default.ntpserver.org&rsquo;, since that&rsquo;s the default
+set in the above class definition.</p>
+
+<p>Failing both of these conditions, Puppet would throw a parse error and say
+that it couldn&rsquo;t determine a value for a class parameter.</p>
+
+<p>As of Puppet 3.0.0, Puppet will now do a Hiera lookup for the fully namespaced
+value of a class parameter</p>
+
+<h3>Roles and Profiles</h3>
+
+<p><a href="http://sysadvent.blogspot.com/2012/12/day-13-configuration-management-as-legos.html">The roles and profiles pattern</a> has been written about
+a number of times and is ALSO considered to be &lsquo;a best practice&rsquo; when setting
+up your Puppet environment. What roles and profiles gets you is a &lsquo;wrapper
+class&rsquo; that allows you to declare classes within this wrapper class:</p>
+
+<p>{% codeblock lang:puppet profiles/manifests/wordpress.pp %}</p>
+
+<p>class profiles::wordpress {
+  # Data Lookups
+  $site_name               = hiera(&lsquo;profiles::wordpress::site_name&rsquo;)
+  $wordpress_user_password = hiera(&lsquo;profiles::wordpress::wordpress_user_password&rsquo;)
+  $mysql_root_password     = hiera(&lsquo;profiles::wordpress::mysql_root_password&rsquo;)
+  $wordpress_db_host       = hiera(&lsquo;profiles::wordpress::wordpress_db_host&rsquo;)
+  $wordpress_db_name       = hiera(&lsquo;profiles::wordpress::wordpress_db_name&rsquo;)
+  $wordpress_db_password   = hiera(&lsquo;profiles::wordpress::wordpress_db_password&rsquo;)</p>
+
+<p>  ## Create user
+  group { &lsquo;wordpress&rsquo;:</p>
+
+<pre><code>ensure =&gt; present,
+</code></pre>
+
+<p>  }
+  user { &lsquo;wordpress&rsquo;:</p>
+
+<pre><code>ensure   =&gt; present,
+gid      =&gt; 'wordpress',
+password =&gt; $wordpress_user_password,
+home     =&gt; '/var/www/wordpress',
+</code></pre>
+
+<p>  }</p>
+
+<p>  ## Configure mysql
+  class { &lsquo;mysql::server&rsquo;:</p>
+
+<pre><code>root_password =&gt; $wordpress_root_password,
+</code></pre>
+
+<p>  }</p>
+
+<p>  class { &lsquo;mysql::bindings&rsquo;:</p>
+
+<pre><code>php_enable =&gt; true,
+</code></pre>
+
+<p>  }</p>
+
+<p>  ## Configure apache
+  include apache
+  include apache::mod::php
+}</p>
+
+<h2>Continue with declarations&hellip;</h2>
+
+<p>{% endcodeblock %}</p>
+
+<p>Notice that any variables that might have business specific logic are set with
+Hiera lookups. These Hiera lookups do NOT have default values, which means the
+<code>hiera()</code> function will throw a parse error if a value is not returned. This
+is IDEAL because we WANT TO KNOW if a Hiera lookup fails &ndash; this means we failed
+to put the data in Hiera and should be corrected BEFORE a state that might
+contain invalid data is enforced with Puppet.</p>
+
+<p>You then have a &lsquo;Role&rsquo; wrapper class that simply includes many of the &lsquo;Profile&rsquo;
+wrapper classes:</p>
+
+<p>{% codeblock lang:puppet roles/manifests/frontend.pp %}
+class roles::frontend {
+  include profiles::mysql
+  include profiles::apache
+  include profiles::java
+  include profiles::jboss
+  # include more profiles&hellip;
+}
+{% endcodeblock %}</p>
+
+<p>The idea being that Profiles abstract all the technical bits that need to
+declared to setup a piece of technology, and Roles will abstract all the
+business logic for what pieces of technology should be installed on a certain
+&lsquo;class&rsquo; of machine.  Basically, you can say that &ldquo;all our frontend infrastructure
+should have mysql, apache, java, jboss&hellip;&rdquo;.  In this statement, the Role is
+&lsquo;frontend infrastructure&rsquo; and the Profiles are &lsquo;mysql, apache, java, jboss&hellip;&rsquo;.</p>
+
+<h4>Pros:</h4>
+
+<ul>
+<li>Hiera data lookups are confined to a wrapper class OUTSIDE of the component modules (like mysql, apache, java, etc&hellip;)</li>
+<li>Data lookups for parameters containing business logic are done with Hiera</li>
+<li>Non-business specific data is pulled from the module (i.e. the params class)</li>
+<li>Wrapper modules can be &lsquo;included&rsquo; with the <code>include</code> function, helping to eliminate multiple class declarations using the parameterized class declaration syntax</li>
+<li>Component modules are backward-compatible to Puppet 2.6 while wrapper modules still get to use a modern data lookup mechanism (Hiera)</li>
+<li>Component modules do NOT contain any business specific logic, which means they&rsquo;re portable</li>
+</ul>
+
+
+<h4>Cons:</h4>
+
+<ul>
+<li>Hiera must be setup to use the wrapper modules</li>
+<li>Wrapper modules add another debug path for variable data</li>
+<li>Wrapper modules add another layer of abstraction</li>
+</ul>
+
+
+<h2>Data in Puppet Modules</h2>
+
+<p>R.I. Pienaar (the original author of MCollective, Hiera, and much more)
+<a href="http://www.devco.net/archives/2013/12/08/better-puppet-modules-using-hiera-data.php">published a blog post</a>
+recently on implementing a folder for Puppet modules that Hiera can traverse
+when it does data lookups. This construct isn&rsquo;t new,
+<a href="https://projects.puppetlabs.com/issues/16856">there was a feature request</a>
+for this behavior filed in October of 2012 with a
+<a href="https://github.com/puppetlabs/puppet/pull/1217">subsequent pull request</a>
+that implemented this functionality (they&rsquo;re both worth reads for further
+information). The pull request didn&rsquo;t get merged, and so R.I. implemented
+the functionality <a href="http://forge.puppetlabs.com/ripienaar/module_data">inside a module on the Puppet Forge</a>.
+In a nutshell, it&rsquo;s a hiera.yaml configuration file INSIDE THE MODULE that
+implements a module-specific hierarchy, and a &lsquo;data&rsquo; folder (also inside
+the module) that allows for individual YAML files that Hiera could read.
+This hierarchy is consulted AFTER the site-specific <code>hiera.yaml</code> file
+is read (i.e. <code>/etc/puppet/hiera.yaml</code> or <code>/etc/puppetlabs/puppet/hiera.yaml</code>),
+and the in-module data files are consulted AFTER the site-specific Hiera
+data files are read (normally found in either <code>/etc/puppet/hieradata</code> or
+<code>/etc/puppetlabs/puppet/hieradata</code>).</p>
+
+<p>The argument here is that there&rsquo;s a data store for <strong>SITE-SPECIFIC</strong> Hiera
+data that should be kept outside of modules, but there&rsquo;s not a <strong>MODULE-SPECIFIC</strong>
+data store that Hiera can use. The argument isn&rsquo;t whether data that should be
+shared with other people belongs inside a site-specific Hiera datastore
+(protip: it doesn&rsquo;t. Data that&rsquo;s not business-specific should be shared
+with others and kept inside the module), the argument is that it shouldn&rsquo;t
+be locked up inside the DSL where the barrier-to-entry is learning Puppet&rsquo;s
+DSL syntax. Whereas <code>/etc/puppet/hiera.yaml</code> or <code>/etc/puppetlabs/puppet/hiera.yaml</code>
+sets up the hierarchy for all your site-specific data, there&rsquo;s no per-module
+<code>hiera.yaml</code> file for all module-specific data, and there&rsquo;s no place to put
+module-specific Hiera data.</p>
+
+<h4>But module-specific data goes inside the params class and business-specific data goes inside Hiera, right?</h4>
+
+<p>Sure, but for some people the Puppet DSL is a barrier. The argument is that
+there should be a lower barrier to entry to contribute parameter data
+to Puppet that doesn&rsquo;t require you to learn the syntax of if/case/selector
+statements in the Puppet DSL. There&rsquo;s also the argument that if you want
+to add support for an operatingsystem to your module, you have to modify
+the params class file and add another entry to the if/case/selector
+statement &ndash; wouldn&rsquo;t it be easier to just add another YAML file into
+a data folder that doesn&rsquo;t affect existing datafiles?</p>
+
+<h4>Great, ANOTHER hierarchy to traverse for data &ndash; that&rsquo;s going to get confusing</h4>
+
+<p>Well, think about it right now &ndash; most EVERY params class of EVERY module
+(if it supports multiple operatingsystems)
+does some sort of conditional logic to determine values for parameters
+on a per-OS basis. That&rsquo;s something that you need to traverse. And many
+modules use different conditional data to determine what paramters to use. Look
+at the mysql params class example above &ndash; it not only splits on
+<code>$osfamily</code>, but it also checks specific operatingsystems. That&rsquo;s a
+conditional inside a conditional. You&rsquo;re TRAVERSING conditional data
+right now to find a value &ndash; the only difference is that this method
+doesn&rsquo;t use the DSL, it uses Hiera and YAML.</p>
+
+<h4>Sure, but this is outside of Puppet and you&rsquo;re losing visibility inside Puppet with your data</h4>
+
+<p>You&rsquo;re already doing that if you&rsquo;re using the params class. In this case, visibility is
+moved to YAML files instead of separate Puppet classes.</p>
+
+<h3>Setting it up</h3>
+
+<p>You will first need to install R.I.&rsquo;s module from the Puppet Forge. As of
+this writing, it&rsquo;s version <code>0.0.1</code>, so ensure you have the most recent
+version using the <code>puppet module</code> tool:</p>
+
+<pre><code>[root@linux modules]# puppet module install ripienaar/module_data
+Notice: Preparing to install into /etc/puppetlabs/puppet/modules ...
+Notice: Downloading from https://forge.puppetlabs.com ...
+Notice: Installing -- do not interrupt ...
+/etc/puppetlabs/puppet/modules
+└── ripienaar-module_data (v0.0.1)
+</code></pre>
+
+<p>Next, you&rsquo;ll need to setup a module to use the data-in-modules pattern. Take
+a look at the tree of a sample module:</p>
+
+<pre><code>[root@linux modules]# tree mysql/
+mysql/
+├── data
+│   ├── hiera.yaml
+│   └── RedHat.yaml
+└── manifests
+    └── init.pp
+</code></pre>
+
+<p>I created a sample <code>mysql</code> module based on the examples above. All of
+the module&rsquo;s Hiera data (including the module-specific hiera.yaml file)
+goes in the <code>data</code> folder. This module should be placed in Puppet&rsquo;s
+modulepath &ndash; and if you don&rsquo;t know where Puppet&rsquo;s modulepath is set,
+run the <code>puppet config</code> face to determine that:</p>
+
+<pre><code>[root@linux modules]# puppet config print modulepath
+/etc/puppetlabs/puppet/modules:/opt/puppet/share/puppet/modules
+</code></pre>
+
+<p>In my case, I&rsquo;m putting the module in <code>/etc/puppetlabs/puppet/modules</code>
+(since I&rsquo;m running Puppet Enterprise). Here&rsquo;s the hiera.yaml file
+from the sample mysql module:</p>
+
+<p>{% codeblock lang:yaml mysql/data/hiera.yaml %}
+:hierarchy:
+  &ndash; &ldquo;%{::osfamily}&rdquo;
+{% endcodeblock %}</p>
+
+<p>I&rsquo;ve also included a YAML file for the <code>$osfamily</code> of RedHat:</p>
+
+<h2>{% codeblock lang:yaml mysql/data/RedHat.yaml %}</h2>
+
+<p>mysql::config_file: &lsquo;/path/from/data_in_modules&rsquo;
+mysql::manage_config_file: true
+mysql::old_root_password: &lsquo;password_from_data_in_modules&rsquo;
+{% endcodeblock %}</p>
+
+<p>Finally, here&rsquo;s what the mysql class definition looks like from
+<code>manifests/init.pp</code>:</p>
+
+<p>{% codeblock lang:puppet mysql/manifests/init.pp %}
+class mysql (
+  $config_file        = &lsquo;module_default&rsquo;,
+  $manage_config_file = &lsquo;module_default&rsquo;,
+  $old_root_password  = &lsquo;module_default&rsquo;
+) {
+  notify { &ldquo;The value of config_file: ${config_file}&rdquo;: }
+  notify { &ldquo;The value of manage_config_file: ${manage_config_file}&rdquo;: }
+  notify { &ldquo;The value of old_root_password: ${old_root_password}&rdquo;: }
+}
+{% endcodeblock %}</p>
+
+<p>Everything should be setup to notify the value of a couple of parameters.
+Now, to test it out&hellip;</p>
+
+<h3>Testing data-in-modules</h3>
+
+<p>Let&rsquo;s include the mysql class with <code>puppet apply</code> to see where it&rsquo;s looking
+for data:</p>
+
+<pre><code>[root@linux modules]# puppet apply -e 'include mysql'
+Notice: The value of config_file: /path/from/data_in_modules
+Notice: /Stage[main]/Mysql/Notify[The value of config_file: /path/from/data_in_modules]/message: defined 'message' as 'The value of config_file: /path/from/data_in_modules'
+Notice: The value of manage_config_file: true
+Notice: /Stage[main]/Mysql/Notify[The value of manage_config_file: true]/message: defined 'message' as 'The value of manage_config_file: true'
+Notice: The value of old_root_password: password_from_data_in_modules
+Notice: /Stage[main]/Mysql/Notify[The value of old_root_password: password_from_data_in_modules]/message: defined 'message' as 'The value of old_root_password: password_from_data_in_modules'
+Notice: Finished catalog run in 0.62 seconds
+</code></pre>
+
+<p>Since I&rsquo;m running on an operatingsystem whose family is &lsquo;RedHat&rsquo; (i.e. CentOS),
+you can see that the values of all the parameters were pulled from the Hiera
+data files inside the module.  Let&rsquo;s temporarily change the <code>$osfamily</code> fact
+value and see what happens:</p>
+
+<pre><code>[root@linux modules]# FACTER_osfamily=Debian puppet apply -e 'include mysql'
+Notice: The value of config_file: module_default
+Notice: /Stage[main]/Mysql/Notify[The value of config_file: module_default]/message: defined 'message' as 'The value of config_file: module_default'
+Notice: The value of old_root_password: module_default
+Notice: /Stage[main]/Mysql/Notify[The value of old_root_password: module_default]/message: defined 'message' as 'The value of old_root_password: module_default'
+Notice: The value of manage_config_file: module_default
+Notice: /Stage[main]/Mysql/Notify[The value of manage_config_file: module_default]/message: defined 'message' as 'The value of manage_config_file: module_default'
+Notice: Finished catalog run in 0.51 seconds
+</code></pre>
+
+<p>This time, when I specified a value of <code>Debian</code> for <code>$osfamily</code>, the parameter
+values were pulled from the declaration in the mysql class definition (i.e.
+from inside <code>mysql/manifests/init.pp</code>).</p>
+
+<h3>Testing outside of Puppet</h3>
+
+<p>One of the big pros of Hiera is that it comes with the <code>hiera</code> binary that can
+be run from the command line to test values. This works just fine for site-specific
+module data that&rsquo;s defined in the central <code>hiera.yaml</code> file that&rsquo;s usually defined
+in <code>/etc/puppet</code> or <code>/etc/puppetlabs/puppet</code>, but the data-in-modules pattern relies
+on a Puppet indirector to point to the current module&rsquo;s <code>data</code> folder, and thus
+(as of right now) there&rsquo;s not a simple way to run the <code>hiera</code> binary to pull
+data out of modules WITHOUT running Puppet. This is not a dealbreaker, and
+doesn&rsquo;t stop anybody from hacking up something that WILL look inside modules
+for data, but as of right now it doesn&rsquo;t yet exist. It also makes debugging for
+values that come out of modules a bit more difficult.</p>
+
+<h3>The scorecard for data-in-modules</h3>
+
+<h4>Pros:</h4>
+
+<ul>
+<li>Parameters are defined in YAML and not Puppet DSL (i.e. you only need to know YAML and not the Puppet DSL)</li>
+<li>Adding parameters is as simple as adding another YAML file to the module</li>
+<li>Module authors provide module data that can be read by Puppet 3.x.x Hiera data bindings</li>
+</ul>
+
+
+<h4>Cons:</h4>
+
+<ul>
+<li>Must be using Puppet 3.0.0 or higher</li>
+<li>Additional hierarchy and additional Hiera data file to consult when debugging</li>
+<li>Not (currently) an easy/straightforward way to use the <code>hiera</code> binary to test values</li>
+<li>Currently depends on a Puppet Forge module being installed on your system</li>
+</ul>
+
+
+<h2>What are you trying to say?</h2>
+
+<p>I am ALL ABOUT code portability, re-usability, and not building 500 apache modules.
+Ever since people have been building modules, they&rsquo;ve been putting too much data
+inside modules (to the point where they can&rsquo;t share them with anyone else). I
+can&rsquo;t tell you how many times I&rsquo;ve heard &ldquo;We have a module for that, but I can&rsquo;t
+share it because it has all our company-specific data in it.&rdquo;</p>
+
+<p>Conversely, I&rsquo;ve also seen organizations put EVERYTHING in their site-specific
+Hiera datastore because &ldquo;that&rsquo;s the place for Puppet data.&rdquo; They usually end up
+with 15+ levels in their Hiera hierarchies because they&rsquo;re doing things like
+this:</p>
+
+<h2>{% codeblock lang:yaml hiera.yaml %}</h2>
+
+<p>:backends:
+  &ndash; yaml</p>
+
+<p>:hierarchy:
+  &ndash; &ldquo;%{clientcert}&rdquo;
+  &ndash; &ldquo;%{environment}&rdquo;
+  &ndash; &ldquo;%{osfamily}&rdquo;
+  &ndash; &ldquo;%{osfamily}/%{operatingsystem}&rdquo;
+  &ndash; &ldquo;%{osfamily}/%{operatingsystem}/%{os_version_major}&rdquo;
+  &ndash; &ldquo;%{osfamily}/%{operatingsystem}/%{os_version_minor}&rdquo;
+  # Repeat until you have 15 levels of WTF
+{% endcodeblock %}</p>
+
+<p>This leads us back again to &ldquo;What does and DOESN&rsquo;T go in Hiera?&rdquo;
+I usually say the following:</p>
+
+<h4>Data in site-specific Hiera datastore</h4>
+
+<ul>
+<li>Business-specific data (i.e. internal NTP server, VIP address, per-environment java application versions, etc&hellip;)</li>
+<li>Sensitive data</li>
+<li>Data that you don&rsquo;t want to share with anyone else</li>
+</ul>
+
+
+<h4>Data that does NOT go in the site-specific Hiera datastore</h4>
+
+<ul>
+<li>OS-specific data</li>
+<li>Data that EVERYONE ELSE who uses this module will need to know (paths to config files, package names, etc&hellip;)</li>
+</ul>
+
+
+<p>Basically, if I ask you if I can publish your module to <a href="http://forge.puppetlabs.com">the Puppet Forge</a>,
+and you object because it has business-specific or sensitive data in it, then
+you probably need to pull that data out of the module and put it in Hiera.</p>
+
+<p>The recommendations that I give when I go on-site with Puppet users is the following:</p>
+
+<ul>
+<li>Use Roles/Profiles to create wrapper-classes for class declaration</li>
+<li>Do ALL Hiera lookups for site-specific data inside your &lsquo;Profile&rsquo; wrapper classes</li>
+<li>All module-specific data (like paths to config files, names of packages to install, etc&hellip;) should be kept in the module in the params class</li>
+<li>All &lsquo;Role&rsquo; wrapper classes should just <strong>include</strong> &lsquo;Profile&rsquo; wrapper classes &ndash; nothing else</li>
+</ul>
+
+
+<h2>But what about Data in Modules?</h2>
+
+<p>I went through all the trouble of writing up the Data in Modules pattern,
+but I didn&rsquo;t recommend or even MENTION it in the previous section. The reason
+is NOT because I don&rsquo;t believe in it (I actually think the future will be data
+outside of the DSL inside a Puppet module), the reason is because it&rsquo;s not <strong>YET</strong>
+in Puppet&rsquo;s core and because it&rsquo;s not <strong>YET</strong> been widely tested. If you&rsquo;re an
+existing Puppet user that&rsquo;s been looking for a way to split data outside of
+the DSL, here is your opportunity. Use the pattern and PLEASE report back on what
+you like and don&rsquo;t like about it. The functionality is in a module, so it&rsquo;s
+easy to tweak. If you&rsquo;re new to Puppet and are comfortable with the DSL, then
+the params class exists and is available to you.</p>
+
+<p>To voice your opinion or to follow the progress of data in modules,
+<a href="https://projects.puppetlabs.com/issues/16856">follow or comment on this Puppet ticket.</a></p>
 ]]></content>
   </entry>
   
   <entry>
     <title type="html"><![CDATA[Who abstracted my Ruby?]]></title>
     <link href="http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2/"/>
-    <updated>2013-11-26T16:01:00-07:00</updated>
+    <updated>2013-11-26T16:01:00-05:00</updated>
     <id>http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2</id>
     <content type="html"><![CDATA[<p>Previously, on Lost, I said a lot of words about Puppet Types;
 <a href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/">you should totally check it out.</a>
@@ -615,7 +1205,7 @@ get a response. Maybe.)  Cheers!</p>
   <entry>
     <title type="html"><![CDATA[Fun with Puppet Providers - Part 1 of Whatever]]></title>
     <link href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/"/>
-    <updated>2013-11-25T20:47:00-07:00</updated>
+    <updated>2013-11-25T20:47:00-05:00</updated>
     <id>http://garylarizza.com/blog/2013/11/25/fun-with-providers</id>
     <content type="html"><![CDATA[<p>I don&rsquo;t know why I write blog posts &ndash; everybody in open-source software knows
 that the code <em>IS</em> the documentation. If you&rsquo;ve ever tried to write a Puppet
@@ -1007,7 +1597,7 @@ stay tuned for more brain-dumping-goodness&hellip;</p>
   <entry>
     <title type="html"><![CDATA[Repeatable Puppet development with Vagrant]]></title>
     <link href="http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant/"/>
-    <updated>2013-02-01T00:00:00-07:00</updated>
+    <updated>2013-02-01T00:00:00-05:00</updated>
     <id>http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant</id>
     <content type="html"><![CDATA[<p>I miss testing code in production. In smaller organizations, &lsquo;testing&rsquo; and
 &lsquo;development&rsquo; can sometimes consist of making changes directly on a server,
@@ -1241,7 +1831,7 @@ Installing puppet
 warning:
 rpmts_HdrFromFdno: Header V4 RSA/SHA1 Signature, key ID 4bd6ec30: NOKEY
 Importing GPG key 0x4BD6EC30:
- Userid : Puppet Labs Release Key (Puppet Labs Release Key) <a href="&#109;&#97;&#x69;&#108;&#116;&#x6f;&#x3a;&#105;&#110;&#x66;&#x6f;&#64;&#x70;&#117;&#112;&#x70;&#x65;&#x74;&#108;&#97;&#x62;&#115;&#46;&#x63;&#x6f;&#109;">&#x69;&#110;&#102;&#x6f;&#64;&#112;&#x75;&#x70;&#112;&#x65;&#116;&#x6c;&#x61;&#98;&#115;&#x2e;&#x63;&#x6f;&#x6d;</a>
+ Userid : Puppet Labs Release Key (Puppet Labs Release Key) <a href="&#109;&#x61;&#x69;&#108;&#116;&#x6f;&#58;&#x69;&#110;&#102;&#x6f;&#x40;&#112;&#117;&#112;&#x70;&#101;&#x74;&#108;&#97;&#98;&#x73;&#46;&#x63;&#x6f;&#x6d;">&#105;&#x6e;&#102;&#x6f;&#x40;&#x70;&#117;&#112;&#x70;&#101;&#x74;&#x6c;&#x61;&#98;&#x73;&#x2e;&#x63;&#x6f;&#x6d;</a>
  Package: puppetlabs-release-6-6.noarch (installed)
  From   : /etc/pki/rpm-gpg/RPM-GPG-KEY-puppetlabs
 Warning: RPMDB altered outside of yum.
@@ -1569,7 +2159,7 @@ everyone at <a href="http://www.puppetlabs.com">Puppet Labs</a>!</p>
   <entry>
     <title type="html"><![CDATA[Using Run Stages with Puppet]]></title>
     <link href="http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet/"/>
-    <updated>2011-03-11T11:34:00-07:00</updated>
+    <updated>2011-03-11T11:34:00-05:00</updated>
     <id>http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet</id>
     <content type="html"><![CDATA[<p>As of version 2.6, Puppet introduced a feature called &ldquo;Run Stages&rdquo; that will allow you to better control the order that Puppet configures your system.  The problem with Run Stages (as of right now) is that there&rsquo;s not that much good Documentation out there.  Hopefully this document helps someone else out there who wants to setup Run Stages in their own environment.</p>
 
