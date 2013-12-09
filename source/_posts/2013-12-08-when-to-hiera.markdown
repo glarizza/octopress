@@ -559,5 +559,10 @@ To voice your opinion or to follow the progress of data in modules,
 
 [R.I. posted another article on the problem with params.pp](http://www.devco.net/archives/2013/12/09/the-problem-with-params-pp.php)
 that is worth reading. He gives compelling reasons on why he built Hiera, why
-params.pp WORKS, but also why he believes it's not the future of Puppet.
+params.pp WORKS, but also why he believes it's not the future of Puppet. R.I.
+goes even further to explain that it's not necessarily the Puppet DSL that is
+the barrier to entry, it's that this sort of data belongs in a file for config
+data and not INSIDE THE CODE itself (i.e. inside the Puppet DSL). Providing data
+inside modules gives module authors a way to provide this configuration data
+in files that AREN'T the Puppet DSL (i.e. not inside the code).
 
