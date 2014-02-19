@@ -4,7 +4,7 @@
   <title><![CDATA[Category: puppet | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/puppet/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2014-02-18T09:04:23-08:00</updated>
+  <updated>2014-02-19T15:03:25-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -12,6 +12,1141 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 3: Dynamic Environments with R10k]]></title>
+    <link href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/"/>
+    <updated>2014-02-18T09:48:18-08:00</updated>
+    <id>http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3</id>
+    <content type="html"><![CDATA[<p>Workflows are like kickball games: everyone knows the general idea of what&rsquo;s
+going on, there&rsquo;s an orderly progression towards an end-goal, nobody wants to
+be excluded, and people lose their shit when they get hit in the face by a big
+rubber ball.  Okay, so maybe it&rsquo;s not a perfect mapping but you get the idea.</p>
+
+<p>The previous two posts (<a href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/">one</a> and <a href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2/">two</a>) focused on
+writing modules, wrapping modules, and classification. While BOTH of these
+things are very important in the grand scheme of things, one of the biggest
+problems people get hung-up on is how do you iterate upon your modules, and,
+more importantly, how do you eventually get these changes pushed into production
+in a reasonably orderly fashion?</p>
+
+<p>This post is going to be all over the place. We&rsquo;re gonna cover the idea of
+separate environments in Puppet, touch on dynamic environments, and round it
+out with that mother-of-a-shell-script-turned-personal-savior, R10k. Hold on
+to your shit.</p>
+
+<h2>Puppet Environments</h2>
+
+<p><a href="http://docs.puppetlabs.com/guides/environment.html">Puppet has the concept of &lsquo;environments&rsquo;</a> where you can logically
+separate your modules and manifest (read: <code>site.pp</code>) into separate folders
+to allow for nodes to get entirely separate bits of code based on which
+&lsquo;environment&rsquo; the node belongs to.</p>
+
+<p>Puppet environments are statically set in <code>puppet.conf</code>, but,
+<a href="http://bit.ly/puppetgit">as other blog posts have noted</a>, you can do some crafty things in
+<code>puppet.conf</code> to give you the solution of having &lsquo;dynamic environments&rsquo;.</p>
+
+<p><strong>NOTE</strong>: The solutions in this post are going to rely on Puppet environments,
+however environments aren&rsquo;t without their own shortcomings
+<a href="http://projects.puppetlabs.com/issues/12173">namely, this bug on Ruby plugins in Puppet</a>). For testing and
+promoting Puppet classes written in the DSL, environments will help you out
+greatly. For complete separation of Ruby instances and any plugins to Puppet
+written in Ruby, however, you&rsquo;ll need separate masters (which is something that
+I won&rsquo;t be covering in this article).</p>
+
+<h2>One step further &ndash; &lsquo;dynamic&rsquo; environments</h2>
+
+<p>Adrien Thebo, hitherto known as &lsquo;Finch&rsquo;, &ndash; who is known for building awesome
+things and talking like he&rsquo;s fresh from a Redbull binge &ndash; created the
+<a href="http://bit.ly/puppetgit">now-famous blog post on creating dynamic environments in Puppet with git.</a>
+That post relied upon a post-commit hook to do all the jiggery-pokery necessary
+to checkout the correct branches in the correct places, and thus it had a heavy
+reliance upon git.</p>
+
+<p>Truly, the only magic in <code>puppet.conf</code> was the inclusion of &lsquo;$environment&rsquo; in
+the <code>modulepath</code> configuration entry on the Puppet master (literally that
+string and not the evaluated form of your environment). By doing that, the
+Puppet master would replace the string &lsquo;$environment&rsquo; with the environment
+of the node checking in and would look to that path for Puppet manifests
+and modules. If you use something OTHER than git, it would be up to you to
+create a post-receive hook that populated those paths, but you could still
+replicate the results (albiet with a little work on your part).</p>
+
+<p>People used this pattern and it worked fairly well. Hell, it STILL works
+fairly well, nothing has changed to STOP you from using it. What changed,
+however, was the ecosystem around modules, the need for individual module
+testing, and the further need to automate this whole goddamn process.</p>
+
+<p>Before we deliver the &lsquo;NEW SOLUTION&rsquo;, let&rsquo;s provide a bit of history and
+context.</p>
+
+<h2>Module repositories: the one-to-many problem</h2>
+
+<p>I <a href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/">touched on this topic in the first post</a>, but one of the first
+problems you encounter when putting your modules in version control is whether
+or not to have ONE GIANT REPO with all of your modules, or a repository for
+every module you create. In the past we recommended putting every module in
+one repository (namely because it was easier, the module sharing landscape
+was pretty barren, and teams were smaller). Now, we recommend the opposite
+for the following reasons:</p>
+
+<ul>
+<li>Individual repos mean individual module development histories</li>
+<li>Most VCS solutions don&rsquo;t have per-folder ACLs for a single repositories;
+having multiple repos allows per-module security settings.</li>
+<li>With the one-repository-per-module solution, modules you pull down from the
+Forge (or Github) must be committed to your repo. Having multiple
+repositories for each module allow you to keep everything separate</li>
+<li>Publishing this module to the Forge (or Github/Stash/whatever) is easier
+with separate repos (rather than having to split-out the module later).</li>
+</ul>
+
+
+<p>The problem with having a repository for every Puppet module you create is that
+you need a way to map every module with every Puppet master (and, also which
+version of every module should be installed in which Puppet environment).</p>
+
+<p><a href="https://github.com/rodjek/librarian-puppet">A project called librarian-puppet</a> sprang up that created the
+&lsquo;<code>Puppetfile</code>&rsquo;, a file that would map modules and their versions to a
+specific directory. Librarian was awesome,
+<a href="http://somethingsinistral.net/blog/scaling-puppet-environment-deployment/">but, as Finch noted in his post</a>, it had some shortcomings
+when used in an environment with many and fast-changing modules.
+<a href="http://somethingsinistral.net/blog/scaling-puppet-environment-deployment/">His solution, that he documented here,</a>, was the tool we now come
+to know as R10k.</p>
+
+<h2>Enter R10k</h2>
+
+<p>R10k is essentially a Ruby project that wraps a bunch of shell commands you
+would NORMALLY use to maintain an environment of ever-changing Puppet modules.
+Its power is in its ability to use Git branches combined with a <code>Puppetfile</code>
+to keep your Puppet environments in-sync. Because of this, R10k is CURRENTLY
+restricted to git. There have been rumblings of porting it to Hg or svn, but
+I know of no serious attempts at doing this (and if you ARE doing this, may
+god have mercy on your soul). Great, so how does it work?</p>
+
+<p>Well, you&rsquo;ll need one main repository SIMPLY for tracking the <code>Puppetfile</code>.
+<a href="https://github.com/glarizza/puppet_repository">I&rsquo;ve got one right here,</a> and it only has my <code>Puppetfile</code> and a
+<code>site.pp</code> file for classification (should you use it).</p>
+
+<p><strong>NOTE</strong>: The Puppetfile and librarian-puppet under the hood are going to
+be doing most of the work here &ndash; this repository is solely so you can create
+topic branches with changes to your <code>Puppetfile</code> that will eventually become
+dynamically-created Puppet environments.</p>
+
+<p>Let&rsquo;s take a look at the <code>Puppetfile</code> and see what&rsquo;s going on:</p>
+
+<p>{% codeblock lang:ruby Puppetfile %}
+forge &ldquo;<a href="http://forge.puppetlabs.com">http://forge.puppetlabs.com</a>&rdquo;</p>
+
+<h1>Modules from the Puppet Forge</h1>
+
+<p>mod &ldquo;puppetlabs/stdlib&rdquo;
+mod &ldquo;puppetlabs/apache&rdquo;, &ldquo;0.11.0&rdquo;
+mod &ldquo;puppetlabs/pe_gem&rdquo;
+mod &ldquo;puppetlabs/mysql&rdquo;
+mod &ldquo;puppetlabs/firewall&rdquo;
+mod &ldquo;puppetlabs/vcsrepo&rdquo;
+mod &ldquo;puppetlabs/git&rdquo;
+mod &ldquo;puppetlabs/inifile&rdquo;
+mod &ldquo;zack/r10k&rdquo;
+mod &ldquo;gentoo/portage&rdquo;
+mod &ldquo;thias/vsftpd&rdquo;</p>
+
+<h1>Modules from Github using various references</h1>
+
+<p>mod &ldquo;wordpress&rdquo;,
+  :git => &ldquo;git://github.com/hunner/puppet-wordpress.git&rdquo;,
+  :ref => &lsquo;0.4.0&rsquo;</p>
+
+<p>mod &ldquo;property_list_key&rdquo;,
+  :git => &ldquo;git://github.com/glarizza/puppet-property_list_key.git&rdquo;,
+  :ref => &lsquo;952a65d9ea2c5809f4e18f30537925ee45548abc&rsquo;</p>
+
+<p>mod &lsquo;redis&rsquo;,
+  :git => &lsquo;git://github.com/glarizza/puppet-redis&rsquo;,
+  :ref => &lsquo;feature/debian_support&rsquo;
+{% endcodeblock %}</p>
+
+<p>This example lists the syntax for dealing with modules from both the
+Forge and Github, as well as pulling specific versions of modules (whether
+versions in the case of the Forge, or Github references as tags, branches,
+or even specific commits). The syntax is not hard to follow &ndash; just remember
+that we&rsquo;re mapping modules and their versions to a set/known environment.</p>
+
+<p>For every topic branch on this repository (containing the <code>Puppetfile</code>), R10k
+will in turn create a Puppet environment with the same name. For this reason,
+it&rsquo;s convention to rename the &lsquo;master&rsquo; branch to &lsquo;production&rsquo; since that&rsquo;s the
+default environment in Puppet (note that renaming branches locally is easy &ndash;
+renaming the branch on Github can sometimes be a pain in the ass). You will
+also note why it&rsquo;s going to be somewhat hard to map R10k to subversion, for
+example, due to the lack of lightweight branching schemes.</p>
+
+<p>To explain any more of R10k reads just as if I were describing its installation,
+so let&rsquo;s quit screwing around and actually INSTALL/SETUP the damn thing.</p>
+
+<h2>Setting up R10k</h2>
+
+<p>As I mentioned before, we <a href="https://github.com/glarizza/puppet_repository">have the main repository</a> that will be
+used to track the <code>Puppetfile</code>, which in turn will track the modules to
+be installed (whether from The Forge, Github, or some internal git repo). Like
+any good Puppet component, R10k itself can be setup with a Puppet module.
+<a href="http://forge.puppetlabs.com/zack/r10k">The module I&rsquo;ll be using</a> was developed by <a href="https://github.com/acidprime">Zack Smith</a>,
+and is pretty simple to get started. Let&rsquo;s download it from the forge first:</p>
+
+<p><code>
+[root@master1 vagrant]# puppet module install zack/r10k
+Notice: Preparing to install into /etc/puppetlabs/puppet/modules ...
+Notice: Downloading from https://forge.puppetlabs.com ...
+Notice: Installing -- do not interrupt ...
+/etc/puppetlabs/puppet/modules
+└─┬ zack-r10k (v1.0.2)
+  ├─┬ gentoo-portage (v2.1.0)
+  │ └── puppetlabs-concat (v1.0.1)
+  ├── mhuffnagle-make (v0.0.2)
+  ├── puppetlabs-gcc (v0.1.0)
+  ├── puppetlabs-git (v0.0.3)
+  ├── puppetlabs-inifile (v1.0.1)
+  ├── puppetlabs-pe_gem (v0.0.1)
+  ├── puppetlabs-ruby (v0.1.0)
+  └── puppetlabs-vcsrepo (v0.2.0)
+</code></p>
+
+<p>The module will be installed into the first path in your modulepath, which in
+the case above is <code>/etc/puppetlabs/puppet/modules</code>. This modulepath will change
+due to the way we&rsquo;re going to setup our dynamic Puppet environments. For this
+example, I&rsquo;m going to have environments dynamically generated at
+<code>/etc/puppetlabs/puppet/environments</code>, so let&rsquo;s create that directory first:</p>
+
+<p><code>
+[root@master1 vagrant]# mkdir -p /etc/puppetlabs/puppet/environments
+</code></p>
+
+<p>Now, we need to setup R10k on this machine. The module we downloaded will
+allow us to do that, but we&rsquo;ll need to create a small Puppet manifest that
+will allow us to setup R10k out-of-band from a regular Puppet run (you CAN
+continuously-enforce R10k configuration in-band with your regular Puppet
+run, but if we&rsquo;re setting up a Puppet master to use R10k to serve out dynamic
+environments it&rsquo;s possible to create a chicken-and-egg situation.). Let&rsquo;s
+generate a file called <code>r10k_installation.pp</code> in <code>/var/tmp</code> and have it look
+like the following:</p>
+
+<p>{% codeblock lang:puppet /var/tmp/r10k_installation.pp %}
+class { &lsquo;r10k&rsquo;:
+  version           => &lsquo;1.1.3&rsquo;,
+  sources           => {</p>
+
+<pre><code>'puppet' =&gt; {
+  'remote'  =&gt; 'https://github.com/glarizza/puppet_repository.git',
+  'basedir' =&gt; "${::settings::confdir}/environments",
+  'prefix'  =&gt; false,
+}
+</code></pre>
+
+<p>  },
+  purgedirs         => [&ldquo;${::settings::confdir}/environments&rdquo;],
+  manage_modulepath => true,
+  modulepath        => &ldquo;${::settings::confdir}/environments/\$environment/modules:/opt/puppet/share/puppet/modules&rdquo;,
+}
+{% endcodeblock %}</p>
+
+<p>So what is every section of that declaration doing?</p>
+
+<ul>
+<li><strong><code>version =&gt; '1.1.3'</code></strong> sets the version of the R10k gem to install</li>
+<li><strong><code>sources =&gt; {...}</code></strong> is a hash of sources that R10k is going to track. For
+now it&rsquo;s only our <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>, but you can also track a Hiera
+installation too. This hash accepts key/value pairs for configuration settings
+that are going to be written to <code>/etc/r10k.yaml</code>, which is R10k&rsquo;s main
+configuration file. The keys in-use are <code>remote</code>, which is the path to the
+repository to-be-checked-out by R10k, <code>basedir</code>, which is the path on-disk
+to where dynamic environments are to be created (we&rsquo;re using the
+<code>$::settings::confdir</code> variable which maps to the Puppet master&rsquo;s configuration
+directory, or <code>/etc/puppetlabs/puppet</code>), and <code>prefix</code> which is a boolean
+to determine whether to use R10k&rsquo;s source-prefixing feature. <strong>NOTE: the <code>false</code>
+value is a BOOLEAN value, and thus SHOULD NOT BE QUOTED. Quoting it turns it
+into a string, which matches as a boolean TRUE value. Don&rsquo;t quote <code>false</code> &ndash;
+that&rsquo;s bad, mmkay.</strong></li>
+<li><strong><code>purgedirs=&gt; ["${::settings::confdir}/environments"]</code></strong> is configuring R10k
+to implement purging on the environments directory (so any folders that R10k
+doesn&rsquo;t create it will delete). This configuration MAY be moot with newer
+versions of R10k as I believe it implements this behavior by default.</li>
+<li><strong><code>manage_modulepath =&gt; true</code></strong> will ensure that this module sets the <code>modulepath</code>
+configuration item in <code>/etc/puppetlabs/puppet/puppet.conf</code></li>
+<li><strong><code>modulepath =&gt; ...</code></strong> sets the <code>modulepath</code> value to be dropped into
+<code>/etc/puppetlabs/puppet/puppet.conf</code>. Note that we are interpolating variables
+(<code>$::settings::confdir</code> again), AND inserting the LITERAL string of <code>$environment</code>
+into the <code>modulepath</code> &ndash; this is because Puppet will replace <code>$environment</code> with
+the value of the agent&rsquo;s environment at catalog compilation.</li>
+</ul>
+
+
+<p><strong>JUST IN CASE YOU MISSED IT: Don&rsquo;t quote the <code>false</code> value for the prefix setting
+in the <code>sources</code> block. That is all.</strong></p>
+
+<p>Okay, we have our one-time Puppet manifest, and now the only thing left to do
+is to run it:</p>
+
+<p><code>
+[root@master1 tmp]# puppet apply /var/tmp/r10k_installation.pp
+Notice: Compiled catalog for master1 in environment production in 2.05 seconds
+Notice: /Stage[main]/R10k::Config/File[r10k.yaml]/ensure: defined content as '{md5}0b619d5148ea493e2d6a5bb205727f0c'
+Notice: /Stage[main]/R10k::Config/Ini_setting[R10k Modulepath]/value: value changed '/etc/puppetlabs/puppet/modules:/opt/puppet/share/puppet/modules' to '/etc/puppetlabs/puppet/environments/$environment/modules:/opt/puppet/share/puppet/modules'
+Notice: /Package[r10k]/ensure: created
+Notice: /Stage[main]/R10k::Install::Pe_gem/File[/usr/bin/r10k]/ensure: created
+Notice: Finished catalog run in 10.55 seconds
+</code></p>
+
+<p>At this point, it goes without saying that <code>git</code> needs to be installed, but
+if you&rsquo;re firing up a new VM that DOESN&rsquo;T have <code>git</code>, then R10k is going to
+spit out an awesome error &ndash; so ensure that <code>git</code> is installed.  After that,
+let&rsquo;s synchronize R10k with the <code>r10k deploy environment -pv</code> command (<code>-p</code>
+for <code>Puppetfile</code> synchronization and <code>-v</code> for verbose mode):</p>
+
+<p><code>
+[root@master1 puppet]# r10k deploy environment -pv
+[R10K::Task::Deployment::DeployEnvironments - INFO] Loading environments from all sources
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment production
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying redis into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying make into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying concat into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying portage into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying git into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying ruby into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying redis into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying make into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying concat into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying portage into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying git into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying ruby into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment master
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying redis into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying portage into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying git into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying redis into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying portage into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying git into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment development
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Deployment::PurgeEnvironments - INFO] Purging stale environments from /etc/puppetlabs/puppet/environments
+</code></p>
+
+<p>I ran this first synchronization with verbose mode so you can see exactly what&rsquo;s
+getting copied where. Futher synchronizations don&rsquo;t have to be in verbose mode,
+but it&rsquo;s good for debugging. After all of that, we have an
+<code>/etc/puppetlabs/puppet/environments</code> folder containing our dynamic Puppet
+environments based off of the branches of the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>:</p>
+
+<p>```
+[root@master1 puppet]# ls -lah /etc/puppetlabs/puppet/environments/
+total 20K
+drwxr-xr-x 5 root root 4.0K Feb 19 11:44 .
+drwxr-xr-x 7 root root 4.0K Feb 19 11:25 ..
+drwxr-xr-x 4 root root 4.0K Feb 19 11:44 development
+drwxr-xr-x 5 root root 4.0K Feb 19 11:43 master
+drwxr-xr-x 5 root root 4.0K Feb 19 11:42 production</p>
+
+<p>[root@master1 puppet]# cd /etc/puppetlabs/puppet/environments/production/
+[root@master1 production]# git branch -a
+  master
+* production
+  remotes/origin/HEAD &ndash;> origin/master
+  remotes/origin/development
+  remotes/origin/master
+  remotes/origin/production
+```</p>
+
+<p>As you can see (at the time of this writing), my <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>
+has three main branches: <code>development</code>, <code>master</code>, and <code>production</code>, and so
+R10k created three Puppet environments matching those names. It&rsquo;s somewhat
+of a convention to rename the master branch to <code>production</code>, but in this
+case I left it alone to demonstrate how this works.</p>
+
+<p><strong>ONE OTHER BIG GOTCHA</strong>: librarian-puppet does NOT resolve dependencies, and
+so it is UP TO YOU to track them in your Puppetfile.  Check this out:</p>
+
+<p><code>
+[root@master1 production]# puppet module list
+Warning: Module 'puppetlabs-firewall' (v1.0.0) fails to meet some dependencies:
+  'puppetlabs-puppet_enterprise' (v3.1.0) requires 'puppetlabs-firewall' (v0.3.x)
+Warning: Module 'puppetlabs-stdlib' (v4.1.0) fails to meet some dependencies:
+  'puppetlabs-pe_accounts' (v2.0.1) requires 'puppetlabs-stdlib' (v3.2.x)
+  'puppetlabs-pe_mcollective' (v0.1.14) requires 'puppetlabs-stdlib' (v3.2.x)
+  'puppetlabs-puppet_enterprise' (v3.1.0) requires 'puppetlabs-stdlib' (v3.2.x)
+  'puppetlabs-request_manager' (v0.0.10) requires 'puppetlabs-stdlib' (v3.2.x)
+Warning: Missing dependency 'cprice404-inifile':
+  'puppetlabs-pe_puppetdb' (v0.0.11) requires 'cprice404-inifile' (&gt;=0.9.0)
+  'puppetlabs-puppet_enterprise' (v3.1.0) requires 'cprice404-inifile' (v0.10.x)
+  'puppetlabs-puppetdb' (v1.5.1) requires 'cprice404-inifile' (&gt;= 0.10.3)
+Warning: Missing dependency 'puppetlabs-concat':
+  'puppetlabs-apache' (v0.11.0) requires 'puppetlabs-concat' (&gt;= 1.0.0)
+  'gentoo-portage' (v2.1.0) requires 'puppetlabs-concat' (v1.0.x)
+Warning: Missing dependency 'puppetlabs-gcc':
+  'zack-r10k' (v1.0.2) requires 'puppetlabs-gcc' (&gt;= 0.0.3)
+/etc/puppetlabs/puppet/environments/production/modules
+├── gentoo-portage (v2.1.0)
+├── mhuffnagle-make (v0.0.2)
+├── property_list_key (???)
+├── puppetlabs-apache (v0.11.0)
+├── puppetlabs-firewall (v1.0.0)  invalid
+├── puppetlabs-git (v0.0.3)
+├── puppetlabs-inifile (v1.0.1)
+├── puppetlabs-mysql (v2.2.1)
+├── puppetlabs-pe_gem (v0.0.1)
+├── puppetlabs-ruby (v0.1.0)
+├── puppetlabs-stdlib (v4.1.0)  invalid
+├── puppetlabs-vcsrepo (v0.2.0)
+├── redis (???)
+├── ripienaar-concat (v0.2.0)
+├── thias-vsftpd (v0.2.0)
+├── wordpress (???)
+└── zack-r10k (v1.0.2)
+/opt/puppet/share/puppet/modules
+├── cprice404-inifile (v0.10.3)
+├── puppetlabs-apt (v1.1.0)
+├── puppetlabs-auth_conf (v0.1.7)
+├── puppetlabs-firewall (v0.3.0)  invalid
+├── puppetlabs-java_ks (v1.1.0)
+├── puppetlabs-pe_accounts (v2.0.1)
+├── puppetlabs-pe_common (v0.1.0)
+├── puppetlabs-pe_mcollective (v0.1.14)
+├── puppetlabs-pe_postgresql (v0.0.5)
+├── puppetlabs-pe_puppetdb (v0.0.11)
+├── puppetlabs-postgresql (v2.5.0)
+├── puppetlabs-puppet_enterprise (v3.1.0)
+├── puppetlabs-puppetdb (v1.5.1)
+├── puppetlabs-reboot (v0.1.2)
+├── puppetlabs-request_manager (v0.0.10)
+├── puppetlabs-stdlib (v3.2.0)  invalid
+└── ripienaar-concat (v0.2.0)
+</code></p>
+
+<p>I&rsquo;ve installed Puppet Enterprise 3.1.0, and so <code>/opt/puppet/share/puppet/modules</code>
+reflects the state of the Puppet Enterprise (also known as &lsquo;PE&rsquo;) modules at that
+time. You can see that there are some conflicts because certain modules require
+certain versions of other modules. This is currently the nature of the beast
+with regard to Puppet modules. Some of these errors are loud and incidental
+(i.e. someone set a dependency on a version and forgot to update it), some
+are due to namespace changes (i.e. <code>cfprice-inifile</code> being ported over to
+<code>puppetlabs-inifile</code>), and so on. Basically, ensure that you handle the
+dependencies you care about inside the <code>Puppetfile</code> as R10k, and thus
+librarian-puppet, won&rsquo;t do it for you.</p>
+
+<p>There &ndash; we&rsquo;ve done it!  We&rsquo;ve configured R10k!  Now how the hell do you use it?</p>
+
+<h2>R10k demonstration &ndash; from module iteration to environment iteration</h2>
+
+<p>Let&rsquo;s take the environment we&rsquo;ve setup in the previous steps and walk you
+through adding a new module to your production environment, iterating upon
+that module, pushing the changes to that module, pushing the changes to a
+Puppet environment, and then promoting those changes to production.</p>
+
+<p><strong>NOTES ON THE SETUP OF THIS DEMO:</strong></p>
+
+<ul>
+<li>In this demonstration, classification method is going to be left to the user
+(i.e. it&rsquo;s not a part of the magic).  So, when I tell you to classify your
+node with a specific class, I don&rsquo;t care if you use the Puppet Enterprise
+Console, <code>site.pp</code>, or any other manner.</li>
+<li>I&rsquo;m using Github for my repositories so that you folk watching and playing
+along at home can have something to follow. Feel free to substitute Github
+for something like Atlassian Stash/Bitbucket, internal repos, or whatever.</li>
+</ul>
+
+
+<h3>Add the module to an environment</h3>
+
+<p>The module we&rsquo;ll be working with, <a href="https://github.com/glarizza/puppet-notifyme">a simple module called &lsquo;notifyme&rsquo;</a>,
+will notify a message that will help us track the module&rsquo;s process through all
+phases of iteration.</p>
+
+<p>The first thing we need to do is to add the module to an environment, so let&rsquo;s
+dynamically create a NEW environment by creating a new topic branch and pushing
+it up to <a href="https://github.com/glarizza/puppet_repository">the main puppet repo</a>. I will perform this step on my laptop
+and outside of the VM I&rsquo;m using to test R10k:</p>
+
+<p>```
+└(~/src/puppet_repository)▷ git branch
+  master
+* production</p>
+
+<p>└(~/src/puppet_repository)▷ git checkout -b notifyme
+Switched to a new branch &lsquo;notifyme&rsquo;</p>
+
+<p>└(~/src/puppet_repository)▷ vim Puppetfile</p>
+
+<h1>Perform the changes to Puppetfile here</h1>
+
+<p>└(~/src/puppet_repository)▷ git add Puppetfile
+└(~/src/puppet_repository)▷ git commit
+[notifyme 5239538] Add the &lsquo;notifyme&rsquo; module
+ 1 file changed, 3 insertions(+)</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin notifyme:notifyme
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 348 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+ * [new branch]      notifyme &ndash;> notifyme
+```</p>
+
+<p>The contents I added to my <code>Puppetfile</code> look like this:</p>
+
+<p>{% codeblock lang:ruby Puppetfile %}
+mod &ldquo;notifyme&rdquo;,
+  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;
+{% endcodeblock %}</p>
+
+<h3>Perform an R10k synchronization</h3>
+
+<p>To pull the new dynamic environment down to the Puppet master, do another
+R10k synchronization with <code>r10k deploy environment -pv</code>:</p>
+
+<p><code>
+[root@master1 production]# r10k deploy environment -pv
+[R10K::Task::Deployment::DeployEnvironments - INFO] Loading environments from all sources
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment production
+&lt;snip for brevity&gt;
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment notifyme
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/notifyme/modules
+&lt;more snipping&gt;
+</code></p>
+
+<p>I only included the relevant messages, but you can see that it pulled in a new
+environment called &lsquo;notifyme&rsquo; that ALSO pulled in a module called &lsquo;notifyme&rsquo;</p>
+
+<h3>Rename the branch to avoid confusion</h3>
+
+<p>Suddenly I realize that this may get confusing having both an environment called
+&lsquo;notifyme&rsquo; with a module/class called &lsquo;notifyme&rsquo;. No worries, how about we rename
+that branch?</p>
+
+<p>```
+└(~/src/puppet_repository)▷ git branch -m notifyme garysawesomeenvironment</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin :notifyme
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+ &ndash; [deleted]         notifyme</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin garysawesomeenvironment:garysawesomeenvironment
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 348 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+ * [new branch]      garysawesomeenvironment &ndash;> garysawesomeenvironment
+```</p>
+
+<p>That bit of <code>git</code> renamed the &lsquo;notifyme&rsquo; branch to &lsquo;garysawesomeenvironment&rsquo;.
+The next git command is a bit tricky &ndash; when you <code>git push</code> to a remote, it&rsquo;s
+supposed to be:</p>
+
+<p><strong><code>git push name_of_origin local_branch_name:remote_branch_name</code></strong></p>
+
+<p>In our case, the name of our origin is LITERALLY &lsquo;origin&rsquo;, but we actually want
+to DELETE a remote branch. The way to delete a local branch is with
+<code>git branch -d branch_name</code>, but the way to delete a REMOTE branch is to push
+<strong>NOTHING</strong> to it.  So consider the following command:</p>
+
+<p><strong><code>git push origin :notifyme</code></strong></p>
+
+<p>We&rsquo;re pushing to the origin named &lsquo;origin&rsquo;, but providing NO local branch name
+and pushing that bit of nothing to the remote branch of &lsquo;notifyme&rsquo;. This
+kills (deletes) the remote branch.</p>
+
+<p>Finally, we push to our origin named &lsquo;origin&rsquo; again and push the contents of
+the local branch &lsquo;garysawesomeenvironment&rsquo; to the remote branch of
+&lsquo;garysawesomeenvironment&rsquo; which in turn CREATES that branch if it doesn&rsquo;t exist.
+Whew.  Let&rsquo;s run another damn synchronization:</p>
+
+<p><code>
+[root@master1 production]# `r10k deploy environment -pv`
+[R10K::Task::Deployment::DeployEnvironments - INFO] Loading environments from all sources
+&lt;more snippage&gt;
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment garysawesomeenvironment
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+&lt;more of that snipping shit&gt;
+R10K::Task::Deployment::PurgeEnvironments - INFO] Purging stale environments from /etc/puppetlabs/puppet/environments
+</code></p>
+
+<p>Cool, let&rsquo;s check out our <code>environments</code> folder on our VM:</p>
+
+<p>```
+[root@master1 production]# ls -lah /etc/puppetlabs/puppet/environments/
+total 24K
+drwxr-xr-x 6 root root 4.0K Feb 19 13:34 .
+drwxr-xr-x 7 root root 4.0K Feb 19 12:09 ..
+drwxr-xr-x 4 root root 4.0K Feb 19 11:44 development
+drwxr-xr-x 5 root root 4.0K Feb 19 13:33 garysawesomeenvironment
+drwxr-xr-x 5 root root 4.0K Feb 19 11:43 master
+drwxr-xr-x 5 root root 4.0K Feb 19 11:42 production</p>
+
+<p>[root@master1 production]# cd /etc/puppetlabs/puppet/environments/garysawesomeenvironment/</p>
+
+<p>[root@master1 garysawesomeenvironment]# git branch
+* garysawesomeenvironment
+  master
+```</p>
+
+<h3>Run Puppet to test the new environment</h3>
+
+<p>Perfect!  Now classify your node to include the &lsquo;notifyme&rsquo; class, and let&rsquo;s run
+Puppet to see what we get when we try to join the environment called
+&lsquo;garysawesomeenvronment&rsquo;:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment garysawesomeenvironment
+Info: Retrieving plugin
+&lt;snipping facts loading for brevity&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392845863'
+Notice: This is the notifyme module and its master branch
+Notice: /Stage[main]/Notifyme/Notify[This is the notifyme module and its master branch]/message: defined 'message' as 'This is the notifyme module and its master branch'
+Notice: Finished catalog run in 11.10 seconds
+</code></p>
+
+<p>Cool!  Now let&rsquo;s try to run Puppet with another environment, say &lsquo;production&rsquo;:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment production
+Info: Retrieving plugin
+&lt;snipping facts loading for brevity&gt;
+Error: Could not retrieve catalog from remote server: Error 400 on SERVER: Could not find class notifyme for master1 on node master1
+Warning: Not using cache on failed catalog
+Error: Could not retrieve catalog; skipping run
+</code></p>
+
+<p>We get an error because that module hasn&rsquo;t been loaded by R10k for that
+environment.</p>
+
+<h3>Tie a module version to an environment</h3>
+
+<p>Okay, so we added a module to a new environment, but what if we want to test
+out a specific commit, branch, or tag of a module and test it in this new
+environment? This is frequently what you&rsquo;ll be doing &ndash; making a change to
+an existing module, pushing your change to a topic branch of that module&rsquo;s
+repository, tying it to an environment (or creating a new environment by
+branching the main Puppet repository), and then testing the change.</p>
+
+<p>Let&rsquo;s go back to my &lsquo;notifyme&rsquo; module that I&rsquo;ve cloned to my laptop and push
+a change to a BRANCH of that module&rsquo;s Github repository:</p>
+
+<p>```
+└(~/src/puppet-notifyme)▷ git branch
+* master</p>
+
+<p>└(~/src/puppet-notifyme)▷ git checkout -b change_the_message
+Switched to a new branch &lsquo;change_the_message&rsquo;</p>
+
+<p>└(~/src/puppet-notifyme)▷ vim manifests/init.pp</p>
+
+<h2>Make changes to the notify message</h2>
+
+<p>└(~/src/puppet-notifyme)▷ git add manifests/init.pp</p>
+
+<p>└(~/src/puppet-notifyme)▷ git commit
+[change_the_message bc3975b] Change the Message
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet-notifyme)▷ git push origin change_the_message:change_the_message
+Counting objects: 7, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (4/4), 448 bytes, done.
+Total 4 (delta 0), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet-notifyme.git">https://github.com/glarizza/puppet-notifyme.git</a>
+ * [new branch]      change_the_message &ndash;> change_the_message</p>
+
+<p>└(~/src/puppet-notifyme)▷ git branch -a
+* change_the_message
+  master
+  remotes/origin/change_the_message
+  remotes/origin/master</p>
+
+<p>└(~/src/puppet-notifyme)▷ git log
+commit bc3975bb5c75ada86bfc2c45db628b5a156f85ce
+Author: Gary Larizza <a href="&#x6d;&#97;&#105;&#x6c;&#116;&#111;&#x3a;&#x67;&#x61;&#x72;&#x79;&#64;&#112;&#x75;&#x70;&#x70;&#101;&#x74;&#x6c;&#97;&#98;&#x73;&#x2e;&#x63;&#x6f;&#x6d;">&#x67;&#x61;&#114;&#x79;&#x40;&#x70;&#x75;&#x70;&#112;&#101;&#116;&#108;&#x61;&#x62;&#x73;&#46;&#x63;&#x6f;&#x6d;</a>
+Date:   Wed Feb 19 13:55:26 2014 -0800</p>
+
+<pre><code>Change the Message
+
+This commit changes the message to test my workflow.
+</code></pre>
+
+<p>```</p>
+
+<p>What I&rsquo;m showing you is the workflow that creates a new local branch called
+&lsquo;change_the_message&rsquo; to the notifyme module, changes the message in my notify
+resource, commits the change, and pushes the changes to a remote branch ALSO
+called &lsquo;change_the_message&rsquo;.</p>
+
+<p>Because I created a topic branch, I can provide that branch name in the
+<code>Puppetfile</code> located in the &lsquo;garysawesomeenvironment&rsquo; branch of the
+<a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>. THAT is the piece that ties together the specific
+version of the module with the Puppet environment we want on the Puppet master.
+Here&rsquo;s that change:</p>
+
+<p>{% codeblock lang:ruby Puppetfile %}
+mod &ldquo;notifyme&rdquo;,
+  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;,
+  :ref => &lsquo;change_the_message&rsquo;
+{% endcodeblock %}</p>
+
+<p>Again, that change gets put into the &lsquo;garysawesomeenvironment&rsquo; branch of the
+<a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a> and pushed up to the remote:</p>
+
+<p>```
+└(~/src/puppet_repository)▷ vim Puppetfile</p>
+
+<h2>Make changes</h2>
+
+<p>└(~/src/puppet_repository)▷ git add Puppetfile</p>
+
+<p>└(~/src/puppet_repository)▷ git commit
+[garysawesomeenvironment 89b139c] Update garysawesomeenvironment
+ 1 file changed, 2 insertions(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin garysawesomeenvironment:garysawesomeenvironment
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 411 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+   5239538..89b139c  garysawesomeenvironment &ndash;> garysawesomeenvironment</p>
+
+<p>└(~/src/puppet_repository)▷ git log -p
+commit 89b139c8c2faa888a402b98ea76e4ca138b3463d
+Author: Gary Larizza <a href="&#x6d;&#x61;&#x69;&#108;&#116;&#111;&#x3a;&#103;&#x61;&#114;&#x79;&#x40;&#x70;&#117;&#x70;&#112;&#101;&#116;&#108;&#x61;&#x62;&#115;&#x2e;&#x63;&#x6f;&#x6d;">&#103;&#x61;&#114;&#121;&#64;&#x70;&#x75;&#112;&#112;&#x65;&#116;&#x6c;&#x61;&#x62;&#x73;&#x2e;&#99;&#x6f;&#x6d;</a>
+Date:   Wed Feb 19 14:04:18 2014 -0800</p>
+
+<pre><code>Update garysawesomeenvironment
+
+Tie this environment to the 'change_the_message' branch of my notifyme module.
+</code></pre>
+
+<p>diff &mdash;git a/Puppetfile b/Puppetfile
+index 5e5d091..27fc06e 100644
+&mdash;&ndash; a/Puppetfile
++++ b/Puppetfile
+@@ -31,4 +31,5 @@ mod &lsquo;redis&rsquo;,
+   :ref => &lsquo;feature/debian_support&rsquo;</p>
+
+<p> mod &ldquo;notifyme&rdquo;,
+&ndash;  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;
++  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;,
++  :ref => &lsquo;change_the_message&rsquo;
+```</p>
+
+<p>Now let&rsquo;s synchronize again!!</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# `r10k deploy environment -pv`
+[R10K::Task::Deployment::DeployEnvironments - INFO] Loading environments from all sources
+&lt;snip&gt;
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment garysawesomeenvironment
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+&lt;snip&gt;
+</code></p>
+
+<p>Cool, let&rsquo;s check our work on the VM:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# pwd
+/etc/puppetlabs/puppet/environments/garysawesomeenvironment
+[root@master1 garysawesomeenvironment]# git branch
+* garysawesomeenvironment
+  master
+</code></p>
+
+<p>And finally, let&rsquo;s run Puppet:</p>
+
+<p><code>
+root@master1 garysawesomeenvironment]# puppet agent -t --environment garysawesomeenvironment
+Info: Retrieving plugin
+&lt;snip fact loading&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392847743'
+Notice: This is the changed message in the change_the_message branch
+Notice: /Stage[main]/Notifyme/Notify[This is the changed message in the change_the_message branch]/message: defined 'message' as 'This is the changed message in the change_the_message branch'
+Notice: Finished catalog run in 12.10 seconds
+</code></p>
+
+<p>TADA! We&rsquo;ve successfully tied a specific version of a module to a specific
+dynamic environment, deployed it to a master, and tested it out! Smell that?
+That&rsquo;s the smell of awesome. Or Jeff in the next cubicle eating a burrito.
+Either way, I like it.</p>
+
+<h3>Merge your changes with master/production</h3>
+
+<p>It&rsquo;s green &ndash; fuck it; ship it! NOW you&rsquo;re speaking &lsquo;agile&rsquo;! Assuming everything
+went according to plan, let&rsquo;s merge our changes in with the production
+environment and synchronize.  This is up to your company&rsquo;s workflow docs
+(whether you use pull requests, a merge master, or poke Patrick and tell
+him to tell Andy to merge in your change). I&rsquo;m using git and Github, so
+let&rsquo;s merge.</p>
+
+<p>First, do the Module:</p>
+
+<p>```
+└(~/src/puppet-notifyme)▷ git checkout master
+Switched to branch &lsquo;master&rsquo;</p>
+
+<p>└(~/src/puppet-notifyme)▷ git merge change_the_message
+Updating d44a790..bc3975b
+Fast-forward
+ manifests/init.pp | 2 +&ndash;
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet-notifyme)▷ git push origin master:master
+Total 0 (delta 0), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet-notifyme.git">https://github.com/glarizza/puppet-notifyme.git</a>
+   d44a790..bc3975b  master &ndash;> master</p>
+
+<p>└(~/src/puppet-notifyme)▷ cat manifests/init.pp
+class notifyme {
+  notify { &ldquo;This is the changed message in the change_the_message branch&rdquo;: }
+}
+```</p>
+
+<p>So now we have an issue, and that issue is that the production environment
+has YET to have the &lsquo;notifyme&rsquo; module added to it.  If we merge the contents
+of the &lsquo;garysawesomeenvironment&rsquo; branch with the &lsquo;production&rsquo; branch of the
+<a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>, then we&rsquo;re going to be pointing at the
+&lsquo;change_the_message&rsquo; branch of the &lsquo;notifyme&rsquo; module (because that was our last
+commit).</p>
+
+<p>Because of this, I can&rsquo;t do a straight merge, can I? For posterity&rsquo;s sake (in
+the event that someone in the future wants to look for that branch on my Github
+repo), I&rsquo;m going to keep that branch alive. In a production environment, I
+most likely would NOT have additional branches open for all my component modules
+as that would get pretty annoying/confusing. Understand that this is a one-off
+case because I&rsquo;m doing a demo. BECAUSE of this, I&rsquo;m going to modify the
+<code>Puppetfile</code> in the &lsquo;production&rsquo; branch of the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>:</p>
+
+<p>```
+└(~/src/puppet_repository)▷ git checkout production
+Switched to branch &lsquo;production&rsquo;</p>
+
+<p>└(~/src/puppet_repository)▷ vim Puppetfile</p>
+
+<h2>Make changes here</h2>
+
+<p>└(~/src/puppet_repository)▷ git add Puppetfile</p>
+
+<p>└(~/src/puppet_repository)▷ git commit
+[production a74f269] Add notifyme module to Production environment
+ 1 file changed, 4 insertions(+)</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin production:production
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 362 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+   5ecefc8..a74f269  production &ndash;> production</p>
+
+<p>└(~/src/puppet_repository)▷ git log -p
+commit a74f26975102f3786eedddace89bda086162d801
+Author: Gary Larizza <a href="&#x6d;&#x61;&#x69;&#108;&#x74;&#x6f;&#x3a;&#x67;&#97;&#114;&#121;&#x40;&#112;&#x75;&#112;&#112;&#101;&#x74;&#x6c;&#97;&#x62;&#x73;&#46;&#99;&#111;&#x6d;">&#103;&#x61;&#114;&#x79;&#x40;&#x70;&#117;&#112;&#x70;&#101;&#x74;&#108;&#x61;&#98;&#115;&#46;&#x63;&#x6f;&#x6d;</a>
+Date:   Wed Feb 19 14:24:05 2014 -0800</p>
+
+<pre><code>Add notifyme module to Production environment
+</code></pre>
+
+<p>diff &mdash;git a/Puppetfile b/Puppetfile
+index 0b1da68..9168a81 100644
+&mdash;&ndash; a/Puppetfile
++++ b/Puppetfile
+@@ -29,3 +29,7 @@ mod &ldquo;property_list_key&rdquo;,
+ mod &lsquo;redis&rsquo;,
+   :git => &lsquo;git://github.com/glarizza/puppet-redis&rsquo;,
+   :ref => &lsquo;feature/debian_support&rsquo;
++
++mod &lsquo;notifyme&rsquo;,
++  :git => &lsquo;git://github.com/glarizza/puppet-notifyme&rsquo;
++
+```</p>
+
+<p>Alright, we&rsquo;ve updated the production environment, now synchronize again
+(I&rsquo;ll spare you and do it WITHOUT verbose mode):</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# r10k deploy environment -p
+</code></p>
+
+<p>Okay, now run Puppet with the PRODUCTION environment:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment production
+Info: Retrieving plugin
+&lt;snipping fact loading&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392848588'
+Notice: This is the changed message in the change_the_message branch
+Notice: /Stage[main]/Notifyme/Notify[This is the changed message in the change_the_message branch]/message: defined 'message' as 'This is the changed message in the change_the_message branch'
+Notice: Finished catalog run in 12.66 seconds
+</code></p>
+
+<p>Beautiful, we&rsquo;re synchronized!!!</p>
+
+<h3>Making a change to an EXISTING module in an environment</h3>
+
+<p>Okay, so we saw previously how to add a NEW module to an environment, but what
+if we already HAVE a module in an environment and we want to make an update/change
+to it?  Well, it&rsquo;s largely the same process:</p>
+
+<ul>
+<li>Cut a branch to the module</li>
+<li>Commit your code and push it up to the module&rsquo;s repo</li>
+<li>Cut a branch to the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a></li>
+<li>Push that branch up to the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a></li>
+<li>Perform an R10k synchronization to sync the environments</li>
+<li>Test your changes</li>
+<li>Merge the changes with the master branch of the module</li>
+<li>DONE!</li>
+</ul>
+
+
+<p>Let&rsquo;s go back and change that notify message again, shall we?</p>
+
+<p>```
+└(~/src/puppet-notifyme)▷ git checkout -b &lsquo;another_change&rsquo;
+Switched to a new branch &lsquo;another_change&rsquo;</p>
+
+<p>└(~/src/puppet-notifyme)▷ vim manifests/init.pp</p>
+
+<h2>Make changes to the message</h2>
+
+<p>└(~/src/puppet-notifyme)▷ git add manifests/init.pp</p>
+
+<p>└(~/src/puppet-notifyme)▷ git commit
+[another_change 608166e] Change the message that already exists!
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet-notifyme)▷ git push origin another_change:another_change
+Counting objects: 7, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (4/4), 426 bytes, done.
+Total 4 (delta 0), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet-notifyme.git">https://github.com/glarizza/puppet-notifyme.git</a>
+ * [new branch]      another_change &ndash;> another_change
+```</p>
+
+<p>Okay, let&rsquo;s re-use &lsquo;garysawesomeenvironment&rsquo; because I like the name, but
+tie it to the new &lsquo;another_change&rsquo; branch of the &lsquo;notifyme&rsquo; module:</p>
+
+<p>```
+└(~/src/puppet_repository)▷ git checkout garysawesomeenvironment
+Switched to branch &lsquo;garysawesomeenvironment&rsquo;</p>
+
+<p>└(~/src/puppet_repository)▷ vim Puppetfile</p>
+
+<h2>Make change to Puppetfile to tie it to &lsquo;another_change&rsquo; branch</h2>
+
+<p>└(~/src/puppet_repository)▷ git add Puppetfile</p>
+
+<p>└(~/src/puppet_repository)▷ git commit
+[garysawesomeenvironment ce84a30] Tie garysawesomeenvironment to &lsquo;another_change&rsquo;
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin garysawesomeenvironment:garysawesomeenvironment
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 386 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+   89b139c..ce84a30  garysawesomeenvironment &ndash;> garysawesomeenvironment
+```</p>
+
+<p>The <code>Puppetfile</code> for that branch now has an entry for the &lsquo;notifyme&rsquo; module
+that looks like this:</p>
+
+<p>{% codeblock lang:ruby Puppetfile %}
+mod &ldquo;notifyme&rdquo;,
+  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;,
+  :ref => &lsquo;another_change&rsquo;
+{% endcodeblock %}</p>
+
+<p>Okay, synchronize again!</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# r10k deploy environment -p
+</code></p>
+
+<p>And now run Puppet in the &lsquo;garysawesomeenvironment&rsquo; environment:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment garysawesomeenvironment
+Info: Retrieving plugin
+&lt;snip fact loading&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392849521'
+Notice: This changes the message that already exists!!!!
+Notice: /Stage[main]/Notifyme/Notify[This changes the message that already exists!!!!]/message: defined 'message' as 'This changes the message that already exists!!!!'
+Notice: Finished catalog run in 12.54 seconds
+</code></p>
+
+<p>There&rsquo;s the message that I changed in the &lsquo;another_change&rsquo; branch of my &lsquo;notifyme&rsquo;
+module!  What&rsquo;s it look like if I run in the &lsquo;production&rsquo; environment, though?</p>
+
+<p>```</p>
+
+<p>ot@master1 garysawesomeenvironment]# puppet agent -t &mdash;environment production
+Info: Retrieving plugin
+<snip fact loading>
+Info: Caching catalog for master1
+Info: Applying configuration version &lsquo;1392848588&rsquo;
+Notice: This is the changed message in the change_the_message branch
+Notice: /Stage[main]/Notifyme/Notify[This is the changed message in the change_the_message branch]/message: defined &lsquo;message&rsquo; as &lsquo;This is the changed message in the change_the_message branch&rsquo;
+Notice: Finished catalog run in 14.11 seconds
+```</p>
+
+<p>There&rsquo;s the old message that&rsquo;s in the &lsquo;master&rsquo; branch of the &lsquo;notifyme&rsquo;
+module (which is where the &lsquo;production&rsquo; branch <code>Puppetfile</code> is pointing).
+To merge the changes into the production environment, we now only have to
+do one thing: that&rsquo;s merge the changes in the &lsquo;another_change&rsquo; branch of
+the &lsquo;notifyme&rsquo; module to the &lsquo;master&rsquo; branch &ndash; that&rsquo;s it!  Why? Because
+the <code>Puppetfile</code> in the <code>production</code> branch of the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>
+(and thus the production Puppet ENVIRONMENT) is already POINTING at the
+master branch of the &lsquo;notifyme&rsquo; module.  Let&rsquo;s do the merge:</p>
+
+<p>```
+└(~/src/puppet-notifyme)▷ git checkout master
+Switched to branch &lsquo;master&rsquo;</p>
+
+<p>└(~/src/puppet-notifyme)▷ git merge another_change
+Updating bc3975b..608166e
+Fast-forward
+ manifests/init.pp | 2 +&ndash;
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet-notifyme)▷ git push origin master:master
+Total 0 (delta 0), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet-notifyme.git">https://github.com/glarizza/puppet-notifyme.git</a>
+   bc3975b..608166e  master &ndash;> master
+```</p>
+
+<p>Another R10k synchronization is needed on the master:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# r10k deploy environment -p
+</code></p>
+
+<p>And now let&rsquo;s run Puppet in the production environment:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment production
+Info: Retrieving plugin
+&lt;snip fact loading&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392850004'
+Notice: This changes the message that already exists!!!!
+Notice: /Stage[main]/Notifyme/Notify[This changes the message that already exists!!!!]/message: defined 'message' as 'This changes the message that already exists!!!!'
+Notice: Finished catalog run in 11.82 seconds
+</code></p>
+
+<p>There&rsquo;s the message that was previously in the &lsquo;another_change&rsquo; branch that&rsquo;s
+been merged to the &lsquo;master&rsquo; branch (and thus is entered into the production
+Puppet environment).</p>
+
+<h2>Holy crap, that&rsquo;s a lot to take in&hellip;</h2>
+
+<p>Yeah, tell me about it. And, believe it or not, I&rsquo;m STILL not done with
+everything that I want to talk about regarding R10k &ndash; there&rsquo;s still more
+info on:</p>
+
+<ul>
+<li>Incorporating Hiera data</li>
+<li>Triggering R10k with MCollective</li>
+<li>Tying R10k to CI workflow</li>
+</ul>
+
+
+<p>Those will come in a later post once I have time to decide how to tackle them.
+Until then, this should give you more than enough information to get started
+with R10k in your own environment.</p>
+
+<p>If you have any questions/comments/corrections, PLEASE enter them in the
+comments below and I&rsquo;ll be happy to respond when I&rsquo;m not flying from gig to
+gig! :)  Cheers!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 2: Roles and Profiles]]></title>
@@ -2547,580 +3682,6 @@ the barrier to entry, it&rsquo;s that this sort of data belongs in a file for co
 data and not INSIDE THE CODE itself (i.e. inside the Puppet DSL). Providing data
 inside modules gives module authors a way to provide this configuration data
 in files that AREN&rsquo;T the Puppet DSL (i.e. not inside the code).</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Who abstracted my Ruby?]]></title>
-    <link href="http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2/"/>
-    <updated>2013-11-26T16:01:00-08:00</updated>
-    <id>http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2</id>
-    <content type="html"><![CDATA[<p>Previously, on Lost, I said a lot of words about Puppet Types;
-<a href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/">you should totally check it out.</a>
-In this second installment, you&rsquo;re going to find out how to actually throw
-pure Ruby at Puppet in a way that makes you feel accomplished. And useful. And elitist.
-Well, possibly just elitist. Either way, read on &ndash; there&rsquo;s much thought-leadership to be done&hellip;</p>
-
-<p>In the last post, we learned that Types will essentially dictate the attributes
-that you&rsquo;ll be passing in your resource declaration using the DSL. In the
-simplest and crudest explanation I could muster, types model how your
-declaration will look in the manifest. Providers are where the actual
-IMPLEMENTATION happens. If you&rsquo;ve ever wondered how this:</p>
-
-<p>{% codeblock lang:puppet %}
-package { &lsquo;httpd&rsquo;:
-  ensure => installed,
-}
-{% endcodeblock %}</p>
-
-<p>eventually gets turned into this:</p>
-
-<p>{% codeblock lang:bash %}
-yum install -e 0 -d 0 -y httpd
-{% endcodeblock %}</p>
-
-<p>your answer would be &ldquo;It&rsquo;s in the provider file&rdquo;.</p>
-
-<h2>Dirty black magic</h2>
-
-<p>I&rsquo;ve seen people do the craziest shit imaginable in the Puppet DSL simply because
-they&rsquo;re:</p>
-
-<ul>
-<li>Unsure how types and providers work</li>
-<li>Afraid of Ruby</li>
-<li>Confused by error messages</li>
-<li>Afraid to ask for help</li>
-</ul>
-
-
-<p>Sometimes you have a problem that can only be solved by interacting with data
-that&rsquo;s returned by a binary (using some binary to get a value, and then using
-that binary to set a value, and so on&hellip;). I see people writing defined resource
-types with a SHIT TON of <code>exec</code> statements and conditional logic to model this
-data when a type and provider would not only BETTER model the problem but would
-also be shareable and re-useable by other folk. The issue is that while the DSL
-is REALLY easy to get started with, types and providers still feel like dirty
-black magic.</p>
-
-<p>The reason is because they&rsquo;re dirty black magic.</p>
-
-<p>Hopefully, I can help get you over the hump and onto a working implementation. Let&rsquo;s
-take a problem I had last week:</p>
-
-<h2>Do this if that, and then be done</h2>
-
-<p>I was working with a group who wanted to set a list of domains that would
-bypass their web proxy for a specific network interface on an OS X workstation.
-It sounds so simple, because it was. Due to the amount of time I had on-site,
-I wrote a class with some nasty <code>exec</code> statements, a couple of facts, and some
-conditional logic because that&rsquo;s what you do when you&rsquo;re in a hurry&hellip;but it
-doesn&rsquo;t make it right. When I left, I hacked up a type and provider, and it&rsquo;s
-a GREAT example because you probably have a similar problem.  Let&rsquo;s look at the
-information we have:</p>
-
-<p>The list of network interfaces:</p>
-
-<p>{% codeblock lang:bash %}
-└▷ networksetup -listallnetworkservices
-An asterisk (*) denotes that a network service is disabled.
-Bluetooth DUN
-Display Ethernet
-Ethernet
-FireWire
-Wi-Fi
-iPhone USB
-Bluetooth PAN
-{% endcodeblock %}</p>
-
-<p>Getting the list of bypass domains for an interface:</p>
-
-<p>{% codeblock lang:bash %}
-└▷ networksetup -getproxybypassdomains Ethernet
-www.garylarizza.com
-*.corp.net
-10.13.1.3/24
-{% endcodeblock %}</p>
-
-<p>The message displayed when no domains are set for an interface:</p>
-
-<p>{% codeblock lang:bash %}
-└▷ networksetup -getproxybypassdomains FireWire
-There aren&rsquo;t any bypass domains set on FireWire.
-{% endcodeblock %}</p>
-
-<p>Setting the list of bypass domains for an interface:</p>
-
-<p>{% codeblock lang:bash %}
-└▷ networksetup -setproxybypassdomains Ethernet &lsquo;*.corp.net&rsquo; &lsquo;10.13.1.3/24&rsquo; &lsquo;www.garylarizza.com&rsquo;
-{% endcodeblock %}</p>
-
-<p>Perfect &ndash; all of that is done with a single binary, and it&rsquo;s pretty straightforward. Let&rsquo;s look at the type I ended up creating for this problem:</p>
-
-<p>{% codeblock lib/puppet/type/mac_proxy_bypassdomains.rb lang:ruby %}
-Puppet::Type.newtype(:mac_proxy_bypassdomains) do
-  desc &ldquo;Puppet type that models bypass domains for a network interface on OS X&rdquo;</p>
-
-<p>  ensurable</p>
-
-<p>  newparam(:name, :namevar => true) do</p>
-
-<pre><code>desc "Interface name - currently must be 'friendly' name (e.g. Ethernet)"
-</code></pre>
-
-<p>  end</p>
-
-<p>  newproperty(:domains, :array_matching => :all) do</p>
-
-<pre><code>desc "Domains which should bypass the proxy"
-def insync?(is)
-  is.sort == should.sort
-end
-</code></pre>
-
-<p>  end
-end
-{% endcodeblock %}</p>
-
-<p>The type uses a namevar parameter called &lsquo;name&rsquo;, which is the name of the network interface.
-This means that we can set one list of bypass domains for every network interface.
-There&rsquo;s a single property, &lsquo;domains&rsquo; that accepts an array of domains that should bypass
-the proxy for the network interface. I&rsquo;ve overridden the <code>insync?</code> method for the domains
-property to sort the array values on both ends &ndash; this means that the ORDER of the domains
-doesn&rsquo;t matter, I only care that the domains specified exist on the system. Finally, the
-type is ensurable (which means that we can create a list of domains and remove/destroy
-the list of domains for a network interface).</p>
-
-<h2>Setup the provider</h2>
-
-<p>Okay, so we&rsquo;ve defined the problem, seen how to interact with the system to get us the
-data that we need, setup a type to model the data, and now the last thing left to do
-is to wire up the provider to make the binary calls we need and return the data we
-want.</p>
-
-<h3>Typos are not your friend.</h3>
-
-<p>The first thing you will encounter is &ldquo;Puppet&rsquo;s predictable naming pattern&rdquo;
-that is used by the Puppet autoloader. Typos are not fun, and omitting a single
-letter in either the filename or the provider name will render your provider
-(emotionally) unavailable to Puppet. Our type is called &lsquo;mac_proxy_bypassdomains&rsquo;,
-as types are generally named along the lines of &lsquo;what does this data model?&rsquo; The
-provider name is generally the name of the underlying technology that&rsquo;s doing
-the modeling. For the package type, the providers are named after the package
-management systems (e.g. yum, apt, pacman, zypper, pip), for the file type, the
-providers are loosely named for the operatingsystem kernel type on which files
-are to be created (e.g. windows, posix). In our example, I simply chose to name
-the provider &lsquo;ruby&rsquo; because, as a Puppet Labs employee, <strong>I TOO</strong> suck at naming
-things.</p>
-
-<p>Here&rsquo;s a tree of my module to understand how the type and provider files are
-to be laid out:</p>
-
-<p>{% codeblock Module tree lang:bash %}
-├── Modulefile
-├── README.markdown
-└── lib
-    └── puppet
-        ├── provider
-        │   ├── mac_proxy_bypassdomains
-        │   │   └── ruby.rb
-        └── type
-            └── mac_proxy_bypassdomains.rb
-{% endcodeblock %}</p>
-
-<p>As you can see from above, the name of both the type and provider must <strong>EXACTLY</strong>
-match the filename of their corresponding files. Also, the provider file lives
-in a directory named after the type. There are MANY things that can be typoed here
-(filenames, foldernames, type/provider names in their files), so be absolutely sure
-that you&rsquo;ve named your files correctly.</p>
-
-<p>The reason for all this naming bullshit is because of the way Puppet syncs down
-plugin files (coincidentally, with a <a href="http://docs.puppetlabs.com/guides/plugins_in_modules.html">process known as Pluginsync)</a>.
-Everything in the <code>lib</code> directory in a Puppet module is going to get synced down
-to your nodes inside <a href="http://docs.puppetlabs.com/references/latest/configuration.html#vardir">the <code>vardir</code> directory</a> on
-the node itself. The <code>vardir</code> is a known library path to Puppet, and all files
-in the <code>vardir</code> are treated as if they had lived in Puppet&rsquo;s source code (in
-the same relative paths).  Because the Puppet source code has all type files in
-the <code>lib/puppet/type</code> directory, all <strong>CUSTOM</strong> types must go in the module&rsquo;s
-<code>lib/puppet/type</code> directory for confirmity.  This is repeated for <strong>EVERY</strong>
-custom Puppet/Facter plugin (including custom facts, custom functions, and
-etc&hellip;).</p>
-
-<h3>More scaffolding</h3>
-
-<p>Let&rsquo;s layout the shell of our provider, first, to ensure that we haven&rsquo;t typoed
-anything. Here&rsquo;s the provider declaration:</p>
-
-<p>{% codeblock lib/puppet/type/mac_proxy_bypassdomains/ruby.rb lang:ruby %}
-Puppet::Type.type(:mac_proxy_bypassdomains).provide(:ruby) do
-  # Provider work goes here
-end
-{% endcodeblock %}</p>
-
-<p>Note that the name of the type and the name of the provider are symbolized (i.e.
-they&rsquo;re prepended with a colon). Like I mentioned above, they must be spelled
-EXACT or Puppet will complain very loudly. You may see variants on that
-declaration line because there are multiple ways in Ruby to extend a class
-object. The method I&rsquo;ve listed above is the &lsquo;generally accepted best-practice&rsquo;, which
-is to say it&rsquo;s the way we&rsquo;re doing it this month.</p>
-
-<p>Congrats! You have THE SHELL of a provider that has yet to do a single goddamn thing!
-Technically, you&rsquo;re further than about 90% of other Puppet users at this point! Let&rsquo;s
-go the additional 20% (since we&rsquo;re basing this on a mangement metric of 110%) by
-wiring up the methods and making the damn thing work!</p>
-
-<h3>Are you (en)sure about this?</h3>
-
-<p>We&rsquo;ve explained before that a type is &lsquo;ensurable&rsquo; when you can check for its existance
-on a system, create it when it doesn&rsquo;t exist (and it SHOULD exist), and destroy it when
-it does exist (and it SHOULDN&rsquo;T exist). The bare minimum amount of methods necessary
-to make a type ensurable is three, and they&rsquo;re called <code>exists?</code>, <code>create</code>, and <code>destroy</code>.</p>
-
-<h3>Method: <code>exists?</code></h3>
-
-<p>The <code>exists?</code> method is a predicate method &ndash; that means it should either return
-the boolean <code>true</code> or <code>false</code> value based on whether the bypass domain list
-exists. Puppet will always call the <code>exists?</code> provider method to determine if
-that &lsquo;thing&rsquo; (in this case, &lsquo;thing&rsquo; means &lsquo;a list of domains to bypass for a
-specific network interface&rsquo;) exists before calling any other methods. How do we
-know if this thing exists? Like I showed before, you need to run the
-<code>networksetup -getproxybypassdomains</code> command and pass the interface name.  If
-it returns &lsquo;There aren&rsquo;t any bypass domains set on (interface name)&rsquo;, then the
-list doesn&rsquo;t exist. Let&rsquo;s do some binary execution&hellip;</p>
-
-<h4>Calling binaries from Puppet</h4>
-
-<p>Puppet provides some helper syntax around basic actions that most providers
-perform. MOST providers are going to need to call out to an external binary
-(e.g. yum, apt, etc&hellip;) at some point, and so Puppet allows you to create
-your own method JUST for a system binary. The <code>commands</code> method abstracts
-all the dirtyness of making a method for each system binary you want to call.
-The way you use the <code>commands</code> method is like so:</p>
-
-<p>{% codeblock lang:ruby %}
-commands :networksetup => &lsquo;networksetup&rsquo;
-{% endcodeblock %}</p>
-
-<p>The <code>commands</code> method accepts a hash whose key must be a symbolized name. The
-CONVENTION is to use a symbolized name that matches the binary name, but it&rsquo;s
-not REQUIRED to do so. The value for that symbolized key MUST be the binary
-name. Note that I&rsquo;ve not passed a full path to the binary. Why? Well, Puppet
-will automatically do a path lookup for that binary and store its full path
-for use when the binary is invoked. We don&rsquo;t REQUIRE you to pass the full
-path because sometimes the same binary exists in different locations for
-different operatingsystems. Instead of creating a provider for each OS you
-manage with Puppet, we abstract away the path stuff. You <strong>CAN</strong> still
-pass a full path as a value, but if you elect to do that an the binary doesn&rsquo;t
-exist at that path, Puppet will disqualify the provider and you&rsquo;ll be quite
-upset.</p>
-
-<p>In the event that Puppet <strong>CANNOT</strong> find this binary, it will disqualify the
-entire provider, and you&rsquo;ll get a message saying as much in the debug output
-of your Puppet run. Because of that, the <code>commands</code> method is a good way to
-confine your provider to a specific system or class of system.</p>
-
-<p>When the <code>commands</code> method is successfully invoked, you will get a new provider
-method named after the <strong>SYMBOLIZED</strong> key, and not necessarily the binary
-name (unless you made them the same). After the above command is evaluated,
-Puppet will now have a <code>networksetup()</code> method in our provider. The argument
-to the <code>networksetup</code> method should be an array of arguments that are passed
-to the binary. It&rsquo;s c-style, so each element is going to be individually
-quoted. You can run into issues here if you pass values containing quotes
-as part of your argument array. Read that again &ndash; quoting your values is
-totally acceptable (e.g. [&lsquo;foo&rsquo;, &lsquo;bar&rsquo;]), but passing a value that contains
-quotes can potentially cause problems (e.g. [&ldquo;&lsquo;foo&rsquo;&rdquo;, &ldquo;&lsquo;bar&rsquo;&rdquo;]).</p>
-
-<p>You&rsquo;re probably thinking &ldquo;Why the hell would I go through this trouble when
-I can use the <code>%x{}</code> syntax in ruby to execute a shell command?!&rdquo; And to that
-I would say &ldquo;Quit yelling at me&rdquo; and also &ldquo;Because: testing.&rdquo; When you write
-spec tests for your provider (which will be covered in a later blog post, since
-it&rsquo;s its OWN path of WTF), you&rsquo;re going to need to mock out calls to the system
-during your tests (i.e. sometimes you may be running the tests on a system that
-doesn&rsquo;t have the binary you&rsquo;re meant to be calling in your provider. You don&rsquo;t
-want the tests to fail due to the absence of a binary file). The <code>%x{}</code>
-construct in Ruby is hard to mock out, but a method of our provider is a relatively
-easy thing to mock out. Also &ndash; see the path problem above. We don&rsquo;t STOP you
-from doing <code>%x{}</code> in your code (it will still totally work), but we give you
-a couple of good reasons to NOT do it.</p>
-
-<h4>Objects are a provider&rsquo;s best friend</h4>
-
-<p>Within your provider, you&rsquo;re going to be doing lots of system calls and data
-manipulation. Often we&rsquo;re asked whether you do that ugliness inside the main
-methods (i.e. inside the <code>exists?</code> method directly), or if you create a
-helper method for some of this data manipulation. The answer I usually give
-is that you should probably create a helper method if:</p>
-
-<ul>
-<li>The code is going to be called more than once</li>
-<li>The code does something that would be tricky to test (like reading from a file)</li>
-<li>Complexity would be reduced by creating a helper method</li>
-</ul>
-
-
-<p>The act of getting a list of domains for a specific interface is definitely
-going to be utilized in more than one place in our provider (we&rsquo;ll use it
-in the <code>exists?</code> method as well as in a &lsquo;getter&rsquo; method for the <code>domains</code>
-property). Also, you could argue that it might be tricky to test since it&rsquo;s
-going to be a binary call that&rsquo;s going to return some data. Because of this,
-let&rsquo;s create a helper method that returns a list of domains for a specific
-interface:</p>
-
-<p>{% codeblock lang:ruby %}
-def get_proxy_bypass_domains(int)
-  begin</p>
-
-<pre><code>output = networksetup(['-getproxybypassdomains', int])
-</code></pre>
-
-<p>  rescue Puppet::ExecutionFailure => e</p>
-
-<pre><code>Puppet.debug("#get_proxy_bypass_domains had an error -&gt; #{e.inspect}")
-return nil
-</code></pre>
-
-<p>  end
-  domains = output.split(&ldquo;\n&rdquo;).sort
-  return nil if domains.first =~ /There aren\&rsquo;t any bypass domains set/
-  domains
-end
-{% endcodeblock %}</p>
-
-<p>Ruby convention is to use underscores (i.e. versus camelCase or hyphens) in
-method names. You want to give your methods very descriptive names based on
-what it is that they DO. In this case, <code>get_proxy_bypass_domains</code> seems
-adequately descriptive. Also, you should err on the side of readability when
-you&rsquo;re writing code. You can get pretty creative with Ruby metaprogramming,
-but that can quickly become hard to follow (and then you&rsquo;re just a dick).
-Finally, error-handling is a good thing. If you&rsquo;re going to do any error-handling,
-though, be very specific about the errors you catch/rescue. When you have a rescue
-block, make sure you catch a specific exception class (in the case above, we&rsquo;re
-catching a Puppet::ExecutionFailure &ndash; which means the binary is returning a
-non-zero exit code).</p>
-
-<p>The code above will return an array containing all the domains, or it will
-return <code>nil</code> if domains aren&rsquo;t found or the <code>networksetup</code> binary had an issue.</p>
-
-<p>Using the helper method above, here&rsquo;s what the final <code>exists?</code> method looks like:</p>
-
-<p>{% codeblock lang:ruby %}
-def exists?
-  get_proxy_bypass_domains(resource[:name]) != nil
-end
-{% endcodeblock %}</p>
-
-<p>All provider methods have the ability to access the &lsquo;should&rsquo; values for the resource
-(and by that I mean the values that are set in the Puppet maniest on the Puppet master
-server, or locally if you&rsquo;re using <code>puppet apply</code>). Those values reside in the <code>resource</code>
-method that responds with a hash. In the code above, <code>resource[:name]</code> will return the
-network interface name (e.g. Ethernet, FireWire, etc&hellip;) that was specified in the
-Puppet manifest. The exists method will return true of a list of domains exists for
-an interface, or it will return false if a list of domains does not exist (i.e.
-<code>get_proxy_bypass_domains</code> returns <code>nil</code>).</p>
-
-<h3>Method: <code>create</code></h3>
-
-<p>The <code>create</code> method is called when <code>exists?</code> returns false and a resource has an
-<code>ensure</code> value set to <code>present</code>. Because of this, you don&rsquo;t need to call the <code>exists?</code>
-method explicitly in <code>create</code> &ndash; it&rsquo;s already been evaluated. Remember from above that
-the <code>-setproxybypassdomains</code> argument to the <code>networksetup</code> binary will set a domain
-list, so the <code>create</code> method is going to be very short-and-sweet:</p>
-
-<p>{% codeblock lang:ruby %}
-def create
-  networksetup([&lsquo;-setproxybypassdomains&rsquo;, resource[:name], resource[:domains]])
-end
-{% endcodeblock %}</p>
-
-<p>In the end, the <code>create</code> method will call the <code>networksetup</code> binary with the <code>-setproxybypassdomains</code>
-argument, pass the interface name (from <code>resource[:name]</code>) and pass an array of domain values (which
-comes from <code>resource[:domains]</code>). That&rsquo;s it; it&rsquo;s done!</p>
-
-<h3>Method: <code>destroy</code></h3>
-
-<p>The <code>destroy</code> method is easier than the <code>create</code> method:</p>
-
-<p>{% codeblock lang:ruby %}
-def destroy
-  networksetup([&lsquo;-setproxybypassdomains&rsquo;, nil])
-end
-{% endcodeblock %}</p>
-
-<p>Here, we&rsquo;re calling <code>networksetup</code> with the <code>-setproxybypassdomains</code> argument
-and passing nothing else. This will initialize the list and set it to be empty.</p>
-
-<h2>Synchronizing properties</h2>
-
-<h3>Getter method: <code>domains</code></h3>
-
-<p>At this point our type is ensurable, which means we can create and destroy resources.
-What we CAN&rsquo;T do, however, is change the value of any properties that are out-of-sync. A
-property is out-of-sync when the value discovered by Puppet on the node differs from the
-value in the catalog (i.e. set by the Puppet manifest using the DSL on the Puppet master).
-Just like <code>exists?</code> is called to determine if a resource exists, Puppet needs a way to
-get the current value for a property on a node. The method that gets this value is
-called the &lsquo;getter method&rsquo; for a property, and its name must match the name of the
-property. Because we have a property called <code>domains</code>, the provider must have a <code>domains</code>
-method that returns a value (in this case, an array of domains to be bypassed by the
-proxy). We&rsquo;ve already written a helper method that does this work for us, so the
-<code>domains</code> getter method is pretty easy:</p>
-
-<p>{% codeblock lang:ruby %}
-def domains
-  get_proxy_bypass_domains(resource[:name])
-end
-{% endcodeblock %}</p>
-
-<p>Tada! Just call the helper method and pass the interface name. Boom &ndash; instant array
-of values. The getter method will return the &lsquo;is&rsquo; value, because that&rsquo;s what the value
-<strong>IS</strong> (currently on the node). Get it? Anyone? The <strong>IS</strong> value is the other side of
-the coin to the &lsquo;should&rsquo; value (that comes from the Puppet manifest) because that&rsquo;s
-what the value <strong>SHOULD</strong> be set on the node.</p>
-
-<h3>Setter method: <code>domains=</code></h3>
-
-<p>If the getter method (e.g. <code>domains</code>) returns a value that doesn&rsquo;t match the value
-in the catalog, then Puppet changes the value on the node and sets it to the value
-in the catalog. It does this by calling the &lsquo;setter&rsquo; method for the property, which
-is the name of the property and the equals ( = ) sign. In this case, the setter
-method for the <code>domains</code> property must be called <code>domains=</code>.  It looks like this:</p>
-
-<p>{% codeblock lang:ruby %}
-def domains=(value)
-  networksetup([&lsquo;-setproxybypassdomains&rsquo;, resource[:name], value])
-end
-{% endcodeblock %}</p>
-
-<p>Setter methods are always passed a single argument &ndash; the &lsquo;should&rsquo; value of the property.
-In our example, we&rsquo;re calling the <code>networksetup</code> binary with the <code>-setproxybypassdomains</code>
-argument, passing the name of the interface, and then passing the &lsquo;should&rsquo; value &ndash; or
-the array of domains. It&rsquo;s easy, it&rsquo;s one line, and I love it when a plan comes together</p>
-
-<h2>Putting the whole damn thing together</h2>
-
-<p>I&rsquo;ve broken down the provider line by line, but here&rsquo;s the entire file:</p>
-
-<p>{% codeblock lib/puppet/provider/mac_proxy_bypassdomains/ruby.rb lang:ruby %}
-Puppet::Type.type(:mac_proxy_bypassdomains).provide(:ruby) do
-  commands :networksetup => &lsquo;networksetup&rsquo;</p>
-
-<p>  def get_proxy_bypass_domains(int)</p>
-
-<pre><code>begin
-  output = networksetup(['-getproxybypassdomains', int])
-rescue Puppet::ExecutionFailure =&gt; e
-  Puppet.debug("#get_proxy_bypass_domains had an error -&gt; #{e.inspect}")
-  return nil
-end
-domains = output.split("\n").sort
-return nil if domains.first =~ /There aren\'t any bypass domains set/
-domains
-</code></pre>
-
-<p>  end</p>
-
-<p>  def exists?</p>
-
-<pre><code>get_proxy_bypass_domains(resource[:name]) != nil
-</code></pre>
-
-<p>  end</p>
-
-<p>  def destroy</p>
-
-<pre><code>networksetup(['-setproxybypassdomains', nil])
-</code></pre>
-
-<p>  end</p>
-
-<p>  def create</p>
-
-<pre><code>networksetup(['-setproxybypassdomains', resource[:name], resource[:domains]])
-</code></pre>
-
-<p>  end</p>
-
-<p>  def domains</p>
-
-<pre><code>get_proxy_bypass_domains(resource[:name])
-</code></pre>
-
-<p>  end</p>
-
-<p>  def domains=(value)</p>
-
-<pre><code>networksetup(['-setproxybypassdomains', resource[:name], value])
-</code></pre>
-
-<p>  end
-end
-{% endcodeblock %}</p>
-
-<h2>Testing the type/provider</h2>
-
-<p>And that&rsquo;s it, we&rsquo;re done!  The last thing to do is to test it out.  You can
-test out your provider in one of two ways: the first is to add the module to
-the modulepath of your Puppet master and include it that way, or test it
-locally by setting the <code>$RUBYLIB</code> environmental variable to point to the <code>lib</code>
-directory of your module (which is the more preferred method since it won&rsquo;t
-serve it out to all of your nodes without it being tested). Because this module
-is on my system at <code>/users/glarizza/src/puppet-mac_proxy</code>, here&rsquo;s how my
-<code>$RUBYLIB</code> is set:</p>
-
-<p>{% codeblock lang:bash %}
-export RUBYLIB=/users/glarizza/src/puppet-mac_proxy/lib
-{% endcodeblock %}</p>
-
-<p>Next, we need to create a resource declaration to try and set a couple of
-bypass domains. I&rsquo;ll create a <code>tests</code> directory and simple test file in
-<code>tests/mac_proxy_bypassdomains.pp</code>:</p>
-
-<p>{% codeblock tests/mac_proxy_bypassdomains.pp lang:puppet %}
-mac_proxy_bypassdomains { &lsquo;Ethernet&rsquo;:
-  ensure  => &lsquo;present&rsquo;,
-  domains => [&lsquo;www.garylarizza.com&rsquo;,&lsquo;*.puppetlabs.com&rsquo;,&lsquo;10.13.1.3/24&rsquo;],
-}
-{% endcodeblock %}</p>
-
-<p>Finally, let&rsquo;s run Puppet and test it out:</p>
-
-<p>{% codeblock %}
-└▷ puppet apply ~/src/puppet-mac_proxy/tests/mac_proxy_bypassdomains.pp
-Notice: Compiled catalog for satori.local in environment production in 0.06 seconds
-Notice: /Stage[main]//Mac_proxy_bypassdomains[Ethernet]/domains: domains changed [] to &lsquo;www.garylarizza.com *.puppetlabs.com 10.13.1.3/24&rsquo;
-Notice: Finished catalog run in 3.47 seconds
-{% endcodeblock %}</p>
-
-<p><strong>NOTE:</strong> If you run this as a local user, you will be prompted by OS X to
-enter an administrative password for a change.  Since Puppet will ultimately be
-run as root on OS X when we&rsquo;re NOT testing out code, this shouldn&rsquo;t be required
-during a normal Puppet run. To test this out (i.e. that you don&rsquo;t always have to
-enter an admin password in a pop-up window), you&rsquo;ll need to <code>sudo -s</code> to
-change to root, set the <code>$RUBYLIB</code> as the root user, and then run Puppet again.</p>
-
-<p>And that&rsquo;s it &ndash; looks like our code worked! To check and make sure it will notice a
-change, open System Preferences, then the Network pane, click on the Ethernet
-interface, then the Advanced button, then the Proxies tab, and finally note the
-&lsquo;Bypass proxy settings&hellip;&rsquo; text box at the bottom of the screen (now do you see
-why we automate this shit?!). Make a change to the entries in there and run
-Puppet again &ndash; it should correct it for you</p>
-
-<h2>Wait&hellip;so that was it?  Really?  We&rsquo;re done?</h2>
-
-<p>Yeah, that was a whole type and provider. Granted, it has only one property and it&rsquo;s
-not too complicated, but that&rsquo;s the point. We&rsquo;ve still got some latent bugs (the
-network interface passed must be capitalized exactly like OS X expects it, we could
-do some better error handling, etc&hellip;), and the type doesn&rsquo;t work with <code>puppet resource</code>
-(yet), but we&rsquo;ll handle all of these things in the next blog post (or two&hellip;or three).</p>
-
-<p>Until then, take this time to crack open a type and a provider for something that&rsquo;s
-been pissing you off and FIX it!  Better yet, push it up to Github, tweet about it,
-and post it up <a href="http://forge.puppetlabs.com">on The Forge</a> so the rest of the
-community can use it!</p>
-
-<p>Like always, feel free to comment, tweet me (@glarizza), email me (gary <strong>AT</strong> puppetlabs <strong>DOT</strong> com),
-or use the social media platform of choice to get a hold of me (Snapchats may or may not
-get a response. Maybe.)  Cheers!</p>
 ]]></content>
   </entry>
   
