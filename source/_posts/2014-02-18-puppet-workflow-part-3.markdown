@@ -1088,12 +1088,29 @@ There's the message that was previously in the 'another_change' branch that's
 been merged to the 'master' branch (and thus is entered into the production
 Puppet environment).
 
+### OR, use tags
+
+One more note - for production environments that want a BIT more stability
+(rather than hoping that someone follows the policy of pushing commits to
+a BRANCH of a module rather than pushing directly to master - by accident or
+otherwise - and allowing that commit to make DIRECTLY it into production), the
+better way is to tie all modules to some sort of release version. For modules
+released to the Puppet Forge, that's a version, for modules stored in git
+repositories, that would be a tag. Tying all modules in your production
+environment (and thus production `Puppetfile`) to specific tags in git
+repositories IS a "best practice" to ensure that the code that's executed in
+production has some sort of 'safe guard'.
+
+TL;DR: Example tied to 'master' branch above was demo, and not necessarily
+recommended for your production needs.
+
 ## Holy crap, that's a lot to take in...
 
 Yeah, tell me about it. And, believe it or not, I'm STILL not done with
 everything that I want to talk about regarding R10k - there's still more
 info on:
 
+* Using R10k with a monolithic modules repo
 * Incorporating Hiera data
 * Triggering R10k with MCollective
 * Tying R10k to CI workflow
@@ -1105,6 +1122,8 @@ with R10k in your own environment.
 If you have any questions/comments/corrections, PLEASE enter them in the
 comments below and I'll be happy to respond when I'm not flying from gig to
 gig! :)  Cheers!
+
+**EDIT**: 2/19/2014 - correct librarian-puppet assumption thanks to Reid Vandewiele
 
 [firstpost]: http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/
 [secondpost]: http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2/
