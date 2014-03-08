@@ -2,90 +2,94 @@
 <urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>
     <url>
         <loc>http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage/</loc>
-        <lastmod>2013-12-06T09:35:28-08:00</lastmod>
+        <lastmod>2013-12-06T12:35:28-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet/</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>
             http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/
         </loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins/</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms/</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>
             http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant/
         </loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/02/15/puppet-plus-github-equals-laptop-love/</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/07/10/from-the-archive-using-crankd/</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/11/25/fun-with-providers/</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2/</loc>
-        <lastmod>2013-12-03T20:53:18-08:00</lastmod>
+        <lastmod>2013-12-03T23:53:18-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/12/08/when-to-hiera/</loc>
-        <lastmod>2013-12-09T12:00:15-08:00</lastmod>
+        <lastmod>2013-12-09T15:00:15-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/12/15/seriously-what-is-this-provider-doing/</loc>
-        <lastmod>2013-12-15T11:49:27-08:00</lastmod>
+        <lastmod>2013-12-15T14:49:27-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/</loc>
-        <lastmod>2014-02-18T08:43:28-08:00</lastmod>
+        <lastmod>2014-02-18T11:43:28-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2/</loc>
-        <lastmod>2014-02-18T08:56:09-08:00</lastmod>
+        <lastmod>2014-02-18T11:56:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/</loc>
-        <lastmod>2014-02-19T15:03:25-08:00</lastmod>
+        <lastmod>2014-02-19T21:32:30-05:00</lastmod>
+    </url>
+    <url>
+        <loc>http://garylarizza.com/blog/2014/03/07/puppet-workflow-part-3b/</loc>
+        <lastmod>2014-03-08T09:09:05-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/about/</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/archives/</loc>
-        <lastmod>2014-02-19T15:03:25-08:00</lastmod>
+        <lastmod>2014-03-08T09:09:05-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/</loc>
-        <lastmod>2014-02-19T15:03:25-08:00</lastmod>
+        <lastmod>2014-03-08T09:09:05-05:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/robots.txt</loc>
-        <lastmod>2013-11-30T14:50:09-08:00</lastmod>
+        <lastmod>2013-11-30T17:50:09-05:00</lastmod>
     </url>
 </urlset>
