@@ -4,7 +4,7 @@
   <title><![CDATA[Shit Gary Says]]></title>
   <link href="http://garylarizza.com/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2014-03-08T09:10:15-05:00</updated>
+  <updated>2014-08-31T14:19:09-07:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -14,11 +14,1748 @@
 
   
   <entry>
+    <title type="html"><![CDATA[R10k + Directory Environments]]></title>
+    <link href="http://garylarizza.com/blog/2014/08/31/r10k-plus-directory-environments/"/>
+    <updated>2014-08-31T12:00:00-07:00</updated>
+    <id>http://garylarizza.com/blog/2014/08/31/r10k-plus-directory-environments</id>
+    <content type="html"><![CDATA[<p>If you&rsquo;ve read anything I&rsquo;ve posted in the past year, you know my feelings about
+the word &lsquo;environments&rsquo; and about how well we tend to name things here at
+Puppet Labs (and if you don&rsquo;t, <a href="http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas/">you can check out that post here</a>).
+Since then, Puppet Labs has released a new feature called <a href="https://docs.puppetlabs.com/puppet/latest/reference/environments.html">directory
+environments (click this link for further reading)</a>
+that replace the older &lsquo;config file environments&rsquo; that we all used to use (i.e.
+stanzas in puppet.conf).  Directory environments weren&rsquo;t without their false
+starts and issues, but further releases of Puppet, and their inclusion in
+Puppet Enterprise 3.3.0, have allowed more people
+to ask about them.  SO, I thought I&rsquo;d do a quick writeup about them&hellip;</p>
+
+<h2>R10k had a child: Directory Environments</h2>
+
+<p>The Puppet platform team had a couple of problems with config file environments
+in puppet.conf &ndash; namely:</p>
+
+<ul>
+<li>Entering them in puppet.conf meant that you couldn&rsquo;t use environments named &lsquo;master&rsquo;, &lsquo;main&rsquo;, or &lsquo;agent&rsquo;</li>
+<li>There was no easy/reliable way to determine all the available/used Puppet environments without making assumptions (and hacky code) &ndash; especially if someone were using R10k + dynamic environments</li>
+<li>Adding more environments to <code>puppet.conf</code> made managing that file something of a nightmare (<code>environments.d</code> anyone?)</li>
+</ul>
+
+
+<p>Combine this with the fact that <a href="http://bit.ly/puppetworkflows3">most of the Professional Services team was
+rolling out R10k to create dynamic environments</a> (which meant we
+were abusing <code>$environment</code> inside <code>puppet.conf</code> and creating environments&hellip;well&hellip;
+dynamically and on-the-fly), and they knew something needed to be done.
+Because R10k was so popular and widely deployed, an environment solution that
+was a simple step-up from an R10k deployment was made the target, and directory
+environments were born.</p>
+
+<h2>How does it work?</h2>
+
+<p>Directory environments, essentially, are born out of a folder on the Puppet master
+(typically <code>$confdir/environments</code>, where <code>$confdir</code> is <code>/etc/puppetlabs/puppet</code>
+in Puppet Enterprise) wherein every subfolder is a new Puppet environment. Every
+subfolder contains a couple of key items:</p>
+
+<ul>
+<li>A <code>modules</code> folder containing all modules for that environment</li>
+<li>A <code>manifests/site.pp</code> file containing the site.pp file for that environment</li>
+<li>A new <code>environment.conf</code> file which can be used to set the <code>modulepath</code>, the <code>environment_timeout</code>, and, a new and often-requested feature, the ability to have environment-specific <code>config_version</code> settings</li>
+</ul>
+
+
+<p>Basically, it&rsquo;s everything that R10k ALREADY does with a couple of added goodies
+dropped into an <code>environment.conf</code> file. <a href="https://docs.puppetlabs.com/puppet/latest/reference/environments_configuring.html">Feel free to read the official docs
+on configuring directory environments</a> for further information
+on all of the goodies!</p>
+
+<h2>Cool, how do we set it up?</h2>
+
+<p>It wouldn&rsquo;t be one of my blog posts if it didn&rsquo;t include exact steps to configure
+shit, would it? For this walkthrough, I&rsquo;m using a Centos 6.5 vm with DNS working
+(i.e. the node can ping itself and knows its own hostname and FQDN), and I&rsquo;ve
+already installed an All-in-one installation of Puppet Enterprise 3.3.0. For
+the walkthrough, we&rsquo;re going to setup:</p>
+
+<ul>
+<li>Directory environments based on a control repo</li>
+<li>Hiera data inside a <code>hieradata</code> folder in the control repo</li>
+<li>Hiera to use the per-environment hieradata folder</li>
+</ul>
+
+
+<p>Let&rsquo;s start to break down the components:</p>
+
+<h3>The &lsquo;Control Repo&rsquo;?</h3>
+
+<p>Sometime between <a href="http://bit.ly/puppetworkflows3">my initial R10k post</a> and THIS post, the Puppet Labs PS
+team has come to call the repository that contains the Puppetfile and is used
+to track Puppet environments on all Puppet masters the &lsquo;Control Repo&rsquo; (because
+it &lsquo;Controls the creation of Puppet environments&rsquo;, ya dig?  Zack Smith and
+James Sweeny are actually pretty tickled about making that name stick). For
+the purpose of this demonstration, I&rsquo;m using a repository on Github:</p>
+
+<p><a href="https://github.com/glarizza/puppet_repository">https://github.com/glarizza/puppet_repository</a></p>
+
+<p>Everything you will need for this walkthrough is in that repository, and we
+will refer to it frequently. You DO NOT need to use my repository, and it&rsquo;s
+definitely going to be required that you create your OWN, but it&rsquo;s there
+for reference purposes (and to give you a couple of Puppet manifests to
+make setup a bit easier).</p>
+
+<h3>Configuring the Puppet master</h3>
+
+<p>We&rsquo;re going to first clone my control repo to <code>/tmp</code> so we can use it to
+configure R10k and the Puppet master itself:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>[root@master ~]# cd /tmp
+</span><span class='line'>
+</span><span class='line'>[root@master /tmp]# git clone https://github.com/glarizza/puppet_repository.git
+</span><span class='line'>Initialized empty Git repository in /tmp/puppet_repository/.git/
+</span><span class='line'>remote: Counting objects: 164, done.
+</span><span class='line'>remote: Compressing objects: 100% (134/134), done.
+</span><span class='line'>remote: Total 164 (delta 54), reused 81 (delta 16)
+</span><span class='line'>Receiving objects: 100% (164/164), 22.68 KiB, done.
+</span><span class='line'>Resolving deltas: 100% (54/54), done.
+</span><span class='line'>
+</span><span class='line'>[root@master /tmp]# cd puppet_repository</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Great, I&rsquo;ve cloned my repo. To configure R10k, we&rsquo;re going to need to pull
+down Zack Smith&rsquo;s R10k module from the forge with <code>puppet module install zack/r10k</code>
+and then use <code>puppet apply</code> on a manifest in my repo with
+<code>puppet apply configure_r10k.pp</code>.  <strong>DO NOTE: If you want to use YOUR Control
+Repo, and NOT the one I use on Github, then you need to modify the
+<code>configure_r10k.pp</code> file and replace the <code>remote</code> property with the URL to
+YOUR Control Repo that&rsquo;s housed on a git repository!</strong></p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>[root@master /tmp/puppet_repository:production]# puppet module install zack/r10k
+</span><span class='line'>
+</span><span class='line'>Notice: Preparing to install into /etc/puppetlabs/puppet/modules ...
+</span><span class='line'>Notice: Downloading from https://forgeapi.puppetlabs.com ...
+</span><span class='line'>Notice: Found at least one version of puppetlabs-stdlib compatible with PE (3.3.0);
+</span><span class='line'>Notice: Skipping versions which don't express PE compatibility. To install
+</span><span class='line'>the most recent version of the module regardless of compatibility
+</span><span class='line'>with PE, use the '--ignore-requirements' flag.
+</span><span class='line'>Notice: Found at least one version of puppetlabs-inifile compatible with PE (3.3.0);
+</span><span class='line'>Notice: Skipping versions which don't express PE compatibility. To install
+</span><span class='line'>the most recent version of the module regardless of compatibility
+</span><span class='line'>with PE, use the '--ignore-requirements' flag.
+</span><span class='line'>Notice: Found at least one version of puppetlabs-vcsrepo compatible with PE (3.3.0);
+</span><span class='line'>Notice: Skipping versions which don't express PE compatibility. To install
+</span><span class='line'>the most recent version of the module regardless of compatibility
+</span><span class='line'>with PE, use the '--ignore-requirements' flag.
+</span><span class='line'>Notice: Found at least one version of puppetlabs-concat compatible with PE (3.3.0);
+</span><span class='line'>Notice: Skipping versions which don't express PE compatibility. To install
+</span><span class='line'>the most recent version of the module regardless of compatibility
+</span><span class='line'>with PE, use the '--ignore-requirements' flag.
+</span><span class='line'>Notice: Installing -- do not interrupt ...
+</span><span class='line'>/etc/puppetlabs/puppet/modules
+</span><span class='line'>└─┬ zack-r10k (v2.2.7)
+</span><span class='line'>  ├─┬ gentoo-portage (v2.2.0)
+</span><span class='line'>  │ └── puppetlabs-concat (v1.0.3) [/opt/puppet/share/puppet/modules]
+</span><span class='line'>  ├── mhuffnagle-make (v0.0.2)
+</span><span class='line'>  ├── puppetlabs-gcc (v0.2.0)
+</span><span class='line'>  ├── puppetlabs-git (v0.2.0)
+</span><span class='line'>  ├── puppetlabs-inifile (v1.1.0) [/opt/puppet/share/puppet/modules]
+</span><span class='line'>  ├── puppetlabs-pe_gem (v0.0.1)
+</span><span class='line'>  ├── puppetlabs-ruby (v0.2.1)
+</span><span class='line'>  ├── puppetlabs-stdlib (v3.2.2) [/opt/puppet/share/puppet/modules]
+</span><span class='line'>  └── puppetlabs-vcsrepo (v1.1.0)
+</span><span class='line'>
+</span><span class='line'>[root@master /tmp/puppet_repository:production]# puppet apply configure_r10k.pp
+</span><span class='line'>
+</span><span class='line'>Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.71 seconds
+</span><span class='line'>Warning: The package type's allow_virtual parameter will be changing its default value from false to true in a future release. If you do not want to allow virtual packages, please explicitly set allow_virtual to false.
+</span><span class='line'>   (at /opt/puppet/lib/ruby/site_ruby/1.9.1/puppet/type.rb:816:in `set_default')
+</span><span class='line'>Notice: /Stage[main]/R10k::Install/Package[r10k]/ensure: created
+</span><span class='line'>Notice: /Stage[main]/R10k::Install::Pe_gem/File[/usr/bin/r10k]/ensure: created
+</span><span class='line'>Notice: /Stage[main]/R10k::Config/File[r10k.yaml]/ensure: defined content as '{md5}5cda58e8a01e7ff12544d30105d13a2a'
+</span><span class='line'>Notice: Finished catalog run in 11.24 seconds</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Performing those commands will successfully setup R10k to point to my Control
+Repo out on Github (and, again, if you don&rsquo;t WANT that, then you need to make
+the change to the <code>remote</code> property in <code>configure_r10k.pp</code>). We next need to
+configure Directory Environments in <code>puppet.conf</code> by setting two attributes:</p>
+
+<ul>
+<li><code>environmentpath</code> (Or the path to the folder containing environments)</li>
+<li><code>basemodulepath</code> (Or, the set of modules that will be shared across ALL ENVIRONMENTS)</li>
+</ul>
+
+
+<p>I have created a Puppet manifest that will set these attributes, and this
+manifest requires the <code>puppetlabs/inifile</code> module from the Puppet Forge.
+Fortunately, since I&rsquo;m using Puppet Enterprise, that module is already installed.
+If you&rsquo;re using open source Puppet and the module is NOT installed, feel free
+to install it by running <code>puppet module install puppetlabs/inifile</code>. Once
+this is done, go ahead and execute the manifest by running
+<code>puppet apply configure_directory_environments.pp</code>:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>[root@master /tmp/puppet_repository:production]# puppet apply configure_directory_environments.pp
+</span><span class='line'>
+</span><span class='line'>Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.05 seconds
+</span><span class='line'>Notice: /Stage[main]/Main/Ini_setting[Configure environmentpath]/ensure: created
+</span><span class='line'>Notice: /Stage[main]/Main/Ini_setting[Configure basemodulepath]/value: value changed '/etc/puppetlabs/puppet/modules:/opt/puppet/share/puppet/modules' to '$confdir/modules:/opt/puppet/share/puppet/modules'
+</span><span class='line'>Notice: Finished catalog run in 0.20 seconds</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The last step to configuring the Puppet master is to execute an R10k run.
+We can do that by running <code>r10k deploy environment -pv</code>:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>[root@master /tmp/puppet_repository:production]# r10k deploy environment -pv
+</span><span class='line'>
+</span><span class='line'>[R10K::Source::Git - INFO] Determining current branches for "https://github.com/glarizza/puppet_repository.git"
+</span><span class='line'>[R10K::Task::Environment::Deploy - NOTICE] Deploying environment production
+</span><span class='line'>[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/production/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/production/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/production/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/production/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/production/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/production/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+</span><span class='line'>[R10K::Task::Environment::Deploy - NOTICE] Deploying environment webinar_env
+</span><span class='line'>[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying haproxy into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying haproxy into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/webinar_env/modules
+</span><span class='line'>[R10K::Task::Deployment::PurgeEnvironments - INFO] Purging stale environments from /etc/puppetlabs/puppet/environments</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Great!  Everything should be setup (if you&rsquo;re using my repo)!  My repository has
+a production branch, which is what Puppet&rsquo;s default environment is named,
+so we can test that everything works by listing out all modules in the main
+production environment with the <code>puppet module list</code> command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>[root@master /tmp/puppet_repository:production]# puppet module list
+</span><span class='line'>
+</span><span class='line'>Warning: Module 'puppetlabs-stdlib' (v3.2.2) fails to meet some dependencies:
+</span><span class='line'>  'puppetlabs-ntp' (v3.1.2) requires 'puppetlabs-stdlib' (&gt;= 4.0.0)
+</span><span class='line'>/etc/puppetlabs/puppet/environments/production/modules
+</span><span class='line'>├── notifyme (???)
+</span><span class='line'>├── profiles (???)
+</span><span class='line'>├── puppetlabs-apache (v1.1.1)
+</span><span class='line'>└── puppetlabs-ntp (v3.1.2)
+</span><span class='line'>/etc/puppetlabs/puppet/modules
+</span><span class='line'>├── gentoo-portage (v2.2.0)
+</span><span class='line'>├── mhuffnagle-make (v0.0.2)
+</span><span class='line'>├── puppetlabs-gcc (v0.2.0)
+</span><span class='line'>├── puppetlabs-git (v0.2.0)
+</span><span class='line'>├── puppetlabs-pe_gem (v0.0.1)
+</span><span class='line'>├── puppetlabs-ruby (v0.2.1)
+</span><span class='line'>├── puppetlabs-vcsrepo (v1.1.0)
+</span><span class='line'>└── zack-r10k (v2.2.7)
+</span><span class='line'>/opt/puppet/share/puppet/modules
+</span><span class='line'>├── puppetlabs-apt (v1.5.0)
+</span><span class='line'>├── puppetlabs-auth_conf (v0.2.2)
+</span><span class='line'>├── puppetlabs-concat (v1.0.3)
+</span><span class='line'>├── puppetlabs-firewall (v1.1.2)
+</span><span class='line'>├── puppetlabs-inifile (v1.1.0)
+</span><span class='line'>├── puppetlabs-java_ks (v1.2.4)
+</span><span class='line'>├── puppetlabs-pe_accounts (v2.0.2-3-ge71b5a0)
+</span><span class='line'>├── puppetlabs-pe_console_prune (v0.1.1-4-g293f45b)
+</span><span class='line'>├── puppetlabs-pe_mcollective (v0.2.10-15-gb8343bb)
+</span><span class='line'>├── puppetlabs-pe_postgresql (v1.0.4-4-g0bcffae)
+</span><span class='line'>├── puppetlabs-pe_puppetdb (v1.1.1-7-g8cb11bf)
+</span><span class='line'>├── puppetlabs-pe_razor (v0.2.1-1-g80acb4d)
+</span><span class='line'>├── puppetlabs-pe_repo (v0.7.7-32-gfd1c97f)
+</span><span class='line'>├── puppetlabs-pe_staging (v0.3.3-2-g3ed56f8)
+</span><span class='line'>├── puppetlabs-postgresql (v2.5.0-pe2)
+</span><span class='line'>├── puppetlabs-puppet_enterprise (v3.2.1-27-g8f61956)
+</span><span class='line'>├── puppetlabs-reboot (v0.1.4)
+</span><span class='line'>├── puppetlabs-request_manager (v0.1.1)
+</span><span class='line'>└── puppetlabs-stdlib (v3.2.2)  invalid</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Notice a couple of things:</p>
+
+<ul>
+<li>First, I&rsquo;ve got some dependency issues&hellip;oh well, nothing that&rsquo;s a game-stopper</li>
+<li>Second, the path to the production environment&rsquo;s module is correct at: <code>/etc/puppetlabs/puppet/environments/production/modules</code></li>
+</ul>
+
+
+<h3>Configuring Hiera</h3>
+
+<p>The last dinghy to be configured on this dreamboat is Hiera. Hiera is Puppet&rsquo;s
+data lookup mechanism, and is used to gather specific bits of data (such
+as versions of packages, hostnames, passwords, and other business-specific
+data). Explaining HOW Hiera works is beyond the scope of this article, but
+configuring Hiera data on a per-environment basis IS absolutely a worthwhile
+endeavor.</p>
+
+<p>In this example, I&rsquo;m going to demonstrate coupling Hiera data with the Control
+Repo for simple replication of Hiera data across environments. You COULD also
+choose to put your Hiera data in a separate repository and set it up in
+<code>/etc/r10k.yaml</code> as another source, but that exercise is left to the reader
+<a href="http://bit.ly/puppetworkflows3b">(and if you&rsquo;re interested, I talk about it in this post).</a></p>
+
+<p>You&rsquo;ll notice that my demonstration repository ALREADY includes Hiera data,
+and so that data is automatically being replicated to all environments. By
+default, Hiera&rsquo;s configuration file (<code>hiera.yaml</code>) has no YAML data directory
+specified, so we&rsquo;ll need to make that change.  <a href="https://github.com/glarizza/puppet_repository/blob/production/hiera.yaml">In my demonstration control
+repository, I&rsquo;ve included a sample <code>hiera.yaml</code>,</a> but let&rsquo;s take a look at
+one below:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="c1">## /etc/puppetlabs/puppet/hiera.yaml</span>
+</span><span class='line'>
+</span><span class='line'><span class="nn">---</span>
+</span><span class='line'><span class="l-Scalar-Plain">:backends</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">yaml</span>
+</span><span class='line'><span class="l-Scalar-Plain">:hierarchy</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="p-Indicator">-</span> <span class="s">&quot;%{clientcert}&quot;</span>
+</span><span class='line'>  <span class="p-Indicator">-</span> <span class="s">&quot;%{application_tier}&quot;</span>
+</span><span class='line'>  <span class="p-Indicator">-</span> <span class="l-Scalar-Plain">common</span>
+</span><span class='line'>
+</span><span class='line'><span class="l-Scalar-Plain">:yaml</span><span class="p-Indicator">:</span>
+</span><span class='line'><span class="c1"># datadir is empty here, so hiera uses its defaults:</span>
+</span><span class='line'><span class="c1"># - /var/lib/hiera on *nix</span>
+</span><span class='line'><span class="c1"># - %CommonAppData%\PuppetLabs\hiera\var on Windows</span>
+</span><span class='line'><span class="c1"># When specifying a datadir, make sure the directory exists.</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">:datadir</span><span class="p-Indicator">:</span> <span class="s">&quot;/etc/puppetlabs/puppet/environments/%{environment}/hieradata&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This hiera.yaml file specifies a hierarchy with three levels &ndash; a node-specific,
+level, a level for different application tiers (like &lsquo;dev&rsquo;, &lsquo;test&rsquo;, &lsquo;prod&rsquo;, and
+etc), and finally makes the change we need: mapping the data directory to each
+environment&rsquo;s hieradata folder.  The path to <code>hiera.yaml</code> is Puppet&rsquo;s
+configuration directory (which is <code>/etc/puppetlabs/puppet</code> for Puppet
+Enterprise, or <code>/etc/puppet</code> for the open source version of Puppet), so open
+the file there, make your changes, and finally you&rsquo;ll need to need to restart
+the Puppet master service to have the changes picked up.</p>
+
+<p>Next, let&rsquo;s perform a test by executing the <code>hiera</code> binary from the command
+line before running puppet:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="p-Indicator">[</span><span class="nv">root@master /etc/puppetlabs/puppet/environments</span><span class="p-Indicator">]</span><span class="c1"># hiera message environment=production</span>
+</span><span class='line'><span class="l-Scalar-Plain">This node is using common data</span>
+</span><span class='line'>
+</span><span class='line'><span class="l-Scalar-Plain">[root@master /etc/puppetlabs/puppet/environments]# hiera message environment=webinar_env -d</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 19:55:44 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Hiera YAML backend starting</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 19:55:44 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Looking up message in YAML backend</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 19:55:44 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Looking for data source common</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 19:55:44 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Found message in common</span>
+</span><span class='line'><span class="l-Scalar-Plain">This node is using common data</span>
+</span><span class='line'>
+</span><span class='line'><span class="p-Indicator">[</span><span class="nv">root@master /etc/puppetlabs/puppet/environments</span><span class="p-Indicator">]</span><span class="c1"># hiera message environment=bad_env -d</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 19:58:22 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Hiera YAML backend starting</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 19:58:22 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Looking up message in YAML backend</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 19:58:22 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Looking for data source common</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 19:58:22 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Cannot find datafile /etc/puppetlabs/puppet/environments/bad_env/hieradata/common.yaml, skipping</span>
+</span><span class='line'><span class="l-Scalar-Plain">nil</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You can see that for the first example, I passed the environment of <code>production</code>
+and did a simple lookup for a key called <code>message</code> &ndash; Hiera then returned me
+the value of out that environment&rsquo;s <code>common.yaml</code> file.  Next, I did another
+lookup, but added <code>-d</code> to enable debug mode (debug mode on the <code>hiera</code>
+binary is REALLY handy for debugging problems with Hiera &ndash; combine it with
+specifying values from the command line, and you can pretty quickly simulate
+what value a node is going to get).  Notice the last example where I specified
+an invalid environment &ndash; Hiera logged that it couldn&rsquo;t find the datafile
+requested and ultimately returned a nil, or empty, value.</p>
+
+<p>Since we&rsquo;re working on the Puppet master machine, we can even check for a value
+using <code>puppet apply</code> combined with the notice function:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="p-Indicator">[</span><span class="nv">root@master /etc/puppetlabs/puppet/environments</span><span class="p-Indicator">]</span><span class="c1"># puppet apply -e &quot;notice(hiera(&#39;message&#39;))&quot;</span>
+</span><span class='line'><span class="l-Scalar-Plain">Notice</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Scope(Class[main])</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">This node is using common data</span>
+</span><span class='line'><span class="l-Scalar-Plain">Notice</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Compiled catalog for master.puppetlabs.vm in environment production in 0.09 seconds</span>
+</span><span class='line'><span class="l-Scalar-Plain">Notice</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Finished catalog run in 0.19 seconds</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Great, it&rsquo;s working, but let&rsquo;s look at pulling data from a higher level in the
+hierarchy &ndash; like from the <code>application_tier</code> level. We haven&rsquo;t defined an
+<code>application_tier</code> fact, however, so we&rsquo;ll need to fake it. First, let&rsquo;s do
+that with the <code>hiera</code> binary:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="p-Indicator">[</span><span class="nv">root@master /etc/puppetlabs/puppet/environments</span><span class="p-Indicator">]</span><span class="c1"># hiera message environment=production application_tier=dev -d</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 20:04:12 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Hiera YAML backend starting</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 20:04:12 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Looking up message in YAML backend</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 20:04:12 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Looking for data source dev</span>
+</span><span class='line'><span class="l-Scalar-Plain">DEBUG</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">2014-08-31 20:04:12 +0000</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Found message in dev</span>
+</span><span class='line'><span class="l-Scalar-Plain">You are in the development application tier</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And then also with <code>puppet apply</code>:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="p-Indicator">[</span><span class="nv">root@master /etc/puppetlabs/puppet/environments</span><span class="p-Indicator">]</span><span class="c1"># FACTER_application_tier=dev puppet apply -e &quot;notice(hiera(&#39;message&#39;))&quot;</span>
+</span><span class='line'><span class="l-Scalar-Plain">Notice</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Scope(Class[main])</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">You are in the development application tier</span>
+</span><span class='line'><span class="l-Scalar-Plain">Notice</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Compiled catalog for master.puppetlabs.vm in environment production in 0.09 seconds</span>
+</span><span class='line'><span class="l-Scalar-Plain">Notice</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">Finished catalog run in 0.18 seconds</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Tuning <code>environment.conf</code></h2>
+
+<p>The brand-new, per-environment  <code>environment.conf</code> file is meant to be (for
+the most part) a one-stop-shop for your Puppet environment tuning needs. Right
+now, the only things you&rsquo;ll need to tune will be the <code>modulepath</code>,
+<code>config_version</code>, and possibly the <code>environment_timeout</code>.</p>
+
+<h3>Module path</h3>
+
+<p>Before directory environments, every environment had its own <code>modulepath</code> that
+needed to be tuned to allow for modules that were to be used by this
+machine/environment, as well as shared modules.  That <code>modulepath</code> worked like
+<code>$PATH</code> in that it was a priority-based lookup for modules (i.e. the first
+directory in <code>modulepath</code> that had a module matching the module name you wanted
+won).  It also previously required the FULL path to be used for every path in
+<code>modulepath</code>.</p>
+
+<p>Those days are over.</p>
+
+<p>As I mentioned before, the main <code>puppet.conf</code> configuration file has a new
+parameter called <code>basemodulepath</code> that can be used to specify modules that are
+to be shared across ALL modules in ALL environments. Paths defined here
+(typically <code>$confdir/modules</code> and <code>/opt/puppet/share/puppet/modules</code>) are
+usually put at the END of a <code>modulepath</code> so Puppet can search for any
+overridden modules that show up in earlier <code>modulepath</code> paths. In the previous
+configuration steps, we executed a manifest that setup <code>basemodulepath</code> to
+look like:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">basemodulepath = $confdir/modules:/opt/puppet/share/puppet/modules</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Again, feel free to add or remove paths (except don&rsquo;t remove
+<code>/opt/puppet/share/puppet/modules</code> if you&rsquo;re using Puppet Enterprise, because
+that&rsquo;s where all Puppet Enterprise modules are located), especially if you&rsquo;re
+using a giant monolithic repo of modules (which was typically done before things
+like R10k evolved).</p>
+
+<p>With <code>basemodulepath</code> configured, it&rsquo;s now time to configure the <code>modulepath</code>
+to be defined for every environment. My demonstration control repo contains
+a sample <code>environment.conf</code> that defines a <code>modulepath</code> like so:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">modulepath = modules:$basemodulepath</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You&rsquo;ll notice, now, that there are relative paths in <code>modulepath</code>. This is
+possible because now each environment contains an <code>environment.conf</code>, and thus
+relative paths make sense. In this example, nodes in the production environment
+(<code>/etc/puppetlabs/puppet/environments/production</code>) will look for a module by its
+name FIRST by looking in a folder called <code>modules</code> inside the current
+environment folder (i.e. <code>/etc/puppetlabs/puppet/environments/production/modules/&lt;module_name&gt;</code>).
+If the module wasn&rsquo;t found there, it looks for the module in the order that
+paths are defined for <code>basemodulepath</code> above. If Puppet fails to find a module
+in ANY of the paths, a compile error is raised.</p>
+
+<h3>Per-environment <code>config_version</code></h3>
+
+<p><a href="https://docs.puppetlabs.com/references/stable/configuration.html#configversion">Setting <code>config_version</code> has been around for awhile</a> &ndash; hell,
+I remember video of Jeff McCune talking about it at the first Puppetcamp Europe
+in like 2010 &ndash; but the new directory environments implementation has fine
+tuned it a bit. Previously, <code>config_version</code> was a command executed on the
+Puppet master at compile time to determine a string used for versioning the
+configuration enforced during that Puppet run. When it&rsquo;s not set it defaults
+to something of a time/date stamp off the parser, but it&rsquo;s way more useful to
+make it do something like determine the most recent commit hash from a repository.</p>
+
+<p>In the past when we used a giant monolithic repository containing all Puppet
+modules, it was SUPER easy to get a single commit hash and be done. As everyone
+moved their modules into individual repositories, determining <em>WHAT</em> you were
+enforcing became harder. With the birth of R10k an the control repo, we
+suddenly had something we could query for the state of our modules being
+enforced. The problem existed, though, that with multiple dynamic environments
+using multiple git branches, <code>config_version</code> wasn&rsquo;t easily tuned to be able
+to grab the most recent commit from every branch.</p>
+
+<p>Now that <code>config_version</code> is set in a per-environment <code>environment.conf</code>, we
+can make <code>config_version</code> much smarter. Again, looking in the <code>environment.conf</code>
+defined in my demonstration control repo produces this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">config_version = &#39;/usr/bin/git --git-dir $confdir/environments/$environment/.git rev-parse HEAD&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This setting will cause the Puppet master to produce the most recent commit ID
+for whatever environment you&rsquo;re in and embed it in the catalog and the report
+that is sent back to the Puppet master after a Puppet run.</p>
+
+<p><a href="https://tickets.puppetlabs.com/browse/PUP-3150">I actually discovered a bug in <code>config_version</code> while writing this post</a>,
+and it&rsquo;s that <code>config_version</code> is subject to the relative pathing fun that other
+<code>environment.conf</code> settings are subject to. Relative pathing is great for things like
+<code>modulepath</code>, and it&rsquo;s even good for <code>config_version</code> if you&rsquo;re including the
+script you want to run to gather the <code>config_version</code> string inside the control
+repo, but using a one-line command that tries to execute a binary on the system
+that DOESN&rsquo;T include the full path to the binary causes an error (because Puppet
+attempts to look for that binary in the current environment path, and NOT by
+searching <code>$PATH</code> on the system).  Feel free to follow or comment on the bug
+if the mood hits you.</p>
+
+<h3>Caching and environment_timeout</h3>
+
+<p>The Puppet master loads environments on-request, but it also caches data associated
+with each environment to make things faster. This caching is finally tunable on a
+per-environment basis by defining the <code>environment_timeout</code> setting in
+<code>environment.conf</code>.  The default setting is 3 minutes, which means the Puppet master
+will invalidate its caches and reload environment data every 3 minutes, but that&rsquo;s
+now tunable. <a href="https://docs.puppetlabs.com/puppet/3.6/reference/environments_configuring.html#environmenttimeout">Definitely read up on this setting before making changes.</a></p>
+
+<h2>Classification</h2>
+
+<p>One of the last new features of directory environments is the ability to include
+an environment-specific <code>site.pp</code> file for classification. You could ALWAYS do
+this by modifying the <code>manifest</code> configuration item in <code>puppet.conf</code>, but now
+each environment can have its own <code>manifest</code> setting. The default behavior is
+to have the Puppet master look for <code>manifests/site.pp</code> in every environment
+directory, and I really wouldn&rsquo;t change that unless you have a good reason. DO
+NOTE, however, that if you&rsquo;re using Puppet Enterprise, you&rsquo;ll need to be careful
+with your <code>site.pp</code> file.  Puppet Enterprise defines things like the Filebucket
+and overrides for the File resource in <code>site.pp</code>, so if you&rsquo;re using Puppet Enterprise,
+you&rsquo;ll need to copy those changes into the <code>site.pp</code> file you add into your control
+repo (as I did).</p>
+
+<p>It may take you a couple of times to change your thinking from looking at the main
+<code>site.pp</code> in <code>$confdir/manifests</code> to looking at each environment-specific <code>site.pp</code>
+file, but definitely take advantage of Puppet&rsquo;s commandline tool to help you track
+which <code>site.pp</code> Puppet is monitoring:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="p-Indicator">[</span><span class="nv">root@master /etc/puppetlabs/puppet/environments</span><span class="p-Indicator">]</span><span class="c1"># puppet config print manifest</span>
+</span><span class='line'><span class="l-Scalar-Plain">/etc/puppetlabs/puppet/environments/production/manifests</span>
+</span><span class='line'>
+</span><span class='line'><span class="l-Scalar-Plain">[root@master /etc/puppetlabs/puppet/environments]# puppet config print manifest --environment webinar_env</span>
+</span><span class='line'><span class="l-Scalar-Plain">/etc/puppetlabs/puppet/environments/webinar_env/manifests</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You can see that <code>puppet config print</code> can be used to get the path to the
+directory that contains <code>site.pp</code>.  Even cooler is what happens when you
+specify an environment that doesn&rsquo;t exist:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="p-Indicator">[</span><span class="nv">root@master /etc/puppetlabs/puppet/environments</span><span class="p-Indicator">]</span><span class="c1"># puppet config print manifest --environment bad_env</span>
+</span><span class='line'><span class="l-Scalar-Plain">no_manifest</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Yep, Puppet tells you if it can&rsquo;t find the manifest file.  That&rsquo;s pretty cool.</p>
+
+<h2>Wrapping Up</h2>
+
+<p>Even though the new implementation of directory environments is meant to map
+closely to a workflow most of us have been using (if you&rsquo;ve been using R10k, that is),
+there are still some new features that may take you by surprise. Hopefully this
+post gets you started with just enough information to setup your own test
+environment and start playing. PLEASE DO make sure to file bugs on any behavior
+that comes as unexpected or stops you from using your existing workflow. Cheers!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[On R10k and 'Environments']]></title>
+    <link href="http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas/"/>
+    <updated>2014-03-26T01:00:00-07:00</updated>
+    <id>http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas</id>
+    <content type="html"><![CDATA[<p>There have been more than a couple of moments where I&rsquo;m on-site with a customer
+who asks a seemingly simple question and I&rsquo;ve gone &ldquo;Oh shit; that&rsquo;s a great
+question and I&rsquo;ve never thought of that&hellip;&rdquo;  Usually that&rsquo;s followed by me
+changing up the workflow and immediately regretting things I&rsquo;ve done on prior
+gigs. Some people call that &lsquo;agile&rsquo;; I call it &lsquo;me not having the
+forethought to consider conditions properly&rsquo;.</p>
+
+<h2>&lsquo;Environment&rsquo;, like &lsquo;scaling&rsquo;, &lsquo;agent&rsquo;, and &lsquo;test&rsquo;, has many meanings</h2>
+
+<p>It&rsquo;s not a secret that we&rsquo;ve made some shitty decisions in the past with regard
+to naming things in Puppet (and anyone who asks me what <code>puppet agent -t</code>
+stands for usually gets a heavy sigh, a shaken head, and an explanation emitted
+in dulcet, apologetic tones). It&rsquo;s also very easy to conflate certain concepts
+that unfortunately share very common labels (quick &ndash; what&rsquo;s the difference
+between properties and parameters, and give me the lowdown on MCollective
+agents versus Puppet agents!).</p>
+
+<p>And then we have &lsquo;environments&rsquo; + Hiera + R10k.</p>
+
+<h3>Puppet &lsquo;environments&rsquo;</h3>
+
+<p>Puppet has the concept of &lsquo;environments&rsquo;, which, to me, exist to provide a
+means of compiling a catalog using different paths to Puppet modules on the
+Puppet master. Using a Puppet environment is the same as saying &ldquo;I made some
+changes to my tomcat class, but I don&rsquo;t want to push it DIRECTLY to my production
+machines yet because I don&rsquo;t drink Dos Equis. It would be great if I could stick
+this code somewhere and have a couple of my nodes test how it works before
+merging it in!&rdquo;</p>
+
+<p>Puppet environments suffer some &lsquo;seepage&rsquo; issues,
+<a href="http://projects.puppetlabs.com/issues/12173">which you can read about here,</a> but do a reasonable job of quickly
+testing out changes you&rsquo;ve made to the Puppet DSL (as opposed to custom
+plugins, as detailed in the bug). Puppet environments work well when you
+need a pipeline for testing your Puppet code (again, when you&rsquo;re refactoring
+or adding new functionality), and using them for that purpose is great.</p>
+
+<h3>Internal &lsquo;environments&rsquo;</h3>
+
+<p>What I consider &lsquo;internal environments&rsquo; have a couple of names &ndash; sometimes
+they&rsquo;re referred to as application or deployment gateways, sometimes as &lsquo;tiers&rsquo;, but
+in general they&rsquo;re long-term groupings that machines/nodes are attached to
+(usually for the purpose of phased-out application deployments). They
+frequently have names such as &lsquo;dev&rsquo;, &lsquo;test&rsquo;, &lsquo;prod&rsquo;, &lsquo;qa&rsquo;, &lsquo;uat&rsquo;, and the
+like.</p>
+
+<p>For the purpose of distinguishing them from Puppet environments, I&rsquo;m going to
+refer to them as &lsquo;application tiers&rsquo; or just &lsquo;tiers&rsquo; because, fuck it, it&rsquo;s a
+word.</p>
+
+<h3>Making both of them work</h3>
+
+<p>The problems with having Puppet environments and application tiers are:</p>
+
+<ul>
+<li>Puppet environments are usually assigned to a node for short periods of time,
+while application tiers are usually assigned to a node for the life of the node.</li>
+<li>Application tiers usually need different bits of data (i.e. NTP server
+addresses, versions of packages, etc), while Puppet environments usually
+use/involve differences to the Puppet DSL.</li>
+<li>Similarly to the first point, the goal of Puppet environments is to eventually
+merge code differences into the main production Puppet environment. Application
+tiers, however, may always have differences about them and never become unified.</li>
+</ul>
+
+
+<p>You can see where this would be problematic &ndash; especially when you might want to
+do things like use different Hiera values between different application tiers,
+but you want to TEST out those values before applying them to all nodes in an
+application tier. If you previously didn&rsquo;t have a way to separate Puppet
+environments from application tiers, and you used R10k to generate Puppet
+environments, you would have things like long-term branches in your repositories
+that would make it difficult/annoying to manage.</p>
+
+<p><strong>NOTE: This is all assuming you&rsquo;re managing component modules, Hiera data,
+and Puppet environments using R10k.</strong></p>
+
+<p>The first step in making both monikers work together is to have two separate
+variables in Puppet &ndash; namely <code>$environment</code> for Puppet environments, and
+something ELSE (say, <code>$tier</code>) for the application tier. The &ldquo;something else&rdquo; is
+going to depend on how your workflow works. For example, do you have something
+centrally that can correlate nodes to the tier in which they belong? If so, you
+can write a custom fact that will query that service. If you don&rsquo;t have this
+magical service, you can always just attach an application tier to a node in
+your classification service (i.e. the Puppet Enterprise Console or Foreman).
+Failing both of those, <a href="http://docs.puppetlabs.com/guides/custom_facts.html#external-facts">you can look to external facts.</a> External Fact
+support was introduced into Facter 1.7 (but Puppet Enterprise has supported
+them through the standard lib for quite awhile). External facts give you the
+ability to create a text file inside the facts.d directory in the format of:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>tier=qa
+</span><span class='line'>location=portland</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Facter will read this text file and store the values as facts for a Puppet run,
+so <code>$tier</code> will be <code>qa</code> and <code>$location</code> will be <code>portland</code>. This is handy for
+when you have arbitrary information that can&rsquo;t be easily discovered by the
+node, but DOES need to be assigned for the node on a reasonably consistent
+basis.  Usually these files are created during the provisioning process, but
+can also be managed by Puppet.  At any rate, having <code>$environment</code> and <code>$tier</code>
+available allow us to start to make decisions based on the values.</p>
+
+<h3>Branch with $environment, Hiera with $tier</h3>
+
+<p>Like we said above, Puppet environments are frequently short-term assignments,
+while application tiers are usually long-term residencies. Relating those back
+to the R10k workflow: branches to the main puppet repo (containing the
+<code>Puppetfile</code>) are usually short-lived, while data in Hiera is usually
+longer-lived. It would then make sense that the name of the branches to the
+main puppet repo would resolve to being <code>$environment</code> (and thus the Puppet
+environment name), and <code>$tier</code> (and thus the application tier) would be used
+in the Hiera hierarchy for lookups of values that would remain different across
+application tiers (like package versions, credentials, and etc&hellip;).</p>
+
+<p>Wins:</p>
+
+<ul>
+<li>Puppet environment names (like repository branch names) become relatively
+meaningless and are the &ldquo;means&rdquo; to the end of getting Puppet code merged into
+the PUPPET CODE&rsquo;s production branch (i.e. code that has been tested to work
+across all application tiers)</li>
+<li>Puppet environments become short lived and thus have less opportunity to
+deviate from the main production codebase</li>
+<li>Differences across application tiers are locked in one place (Hiera)</li>
+<li>Differences to Puppet DSL code (i.e. in Manifests) can be pushed up to the
+profile level, and you have a fact (<code>$tier</code>) to catch those differences.</li>
+</ul>
+
+
+<p>The ultimate reason why I&rsquo;m writing about this is because I&rsquo;ve seen people try
+to incorporate both the Puppet environment and application tier into both the
+environment name and/or the Hiera hierarchy. Many times, they run into all
+kinds of unscalable issues (large hierarchies, many Puppet environments,
+confusing testing paths to &lsquo;production&rsquo;). I tend to prefer this workflow
+choice, but, like everything I write about, take it and model it toward what
+works for you (because what works now may not work 6 months from now).</p>
+
+<h2>Thoughts?</h2>
+
+<p>Like I said before, I tend to discover new corner cases that change my mind
+on things like this, so it&rsquo;s quite possible that this theory isn&rsquo;t the most
+solid in the world. It HAS helped out some customers to clean up their code
+and make for a cleaner pipeline, though, and that&rsquo;s always a good thing. Feel
+free to comment below &ndash; I look forward to making the process better for all!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[When Yellow Ruled the World]]></title>
+    <link href="http://garylarizza.com/blog/2014/03/11/when-yellow-ruled-the-world/"/>
+    <updated>2014-03-11T18:04:55-07:00</updated>
+    <id>http://garylarizza.com/blog/2014/03/11/when-yellow-ruled-the-world</id>
+    <content type="html"><![CDATA[<p><em>&ldquo;The universe (including ourselves) is made up of energy &ndash; it&rsquo;s important to
+keep it positive! Be as wonderful as the world you want to live in!&rdquo;</em></p>
+
+<p>Writing is theraputic; it&rsquo;s usually the frenetic transcription of wild thoughts
+that come to me when I run, walk, or sit slave to the United flight of the
+week. This piece, however, is quite possibly the hardest and most cathartic
+thing I&rsquo;ve ever had to compose. I&rsquo;m writing it not necessarily to inform,
+entertain, or to pursuade, but instead with the same desperation of someone
+whom holds the rain in one hand and sand in the other. I&rsquo;m writing this
+so I don&rsquo;t forget the only thing I have left of someone I&rsquo;d consider the best
+friend I ever had: my memories of her.</p>
+
+<p>The thing is &ndash; I&rsquo;ve had this article on my laptop for over a week now (note:
+I started writing this in March; the reality is that it&rsquo;s been MONTHS), and
+I can&rsquo;t seem to get it right. I&rsquo;ve written INCREDIBLY LONG tomes with crazy
+amounts of detail, but it never feels &lsquo;done&rsquo; or &lsquo;right&rsquo;. I really want to give
+some insight into the Tanny that <em>I</em> knew, but, at the end of the day, this
+article is really for me&hellip;because I know she&rsquo;s quite comfortable with how she
+lived her life, and I&rsquo;m still all over the map with mine :)</p>
+
+<h2>Tanny from the block</h2>
+
+<p>In my school age years, I was lucky enough to wake up AFTER the shitshow that
+occurs when two teenage girls share a bathroom. Being the youngest in a family
+of two older sisters, I was (mostly) shielded from the horrors born out of the
+hormonal laments of middle school girls (but I DID have to get up between the
+hours of Picture Pages and half-past my mother&rsquo;s call of &ldquo;GIRLS! YOU&rsquo;RE GONNA
+BE LATE FOR SCHOOL!&rdquo;). The only reasonably prompt event of those mornings was the
+arrival of the skinny girl with glasses who walked over from &ldquo;the back street&rdquo;,
+Tanny Vonthron. Tanny (whose real name was &ldquo;Satanta, which was no name <em><em>I</em></em>
+had ever seen on a keychain) usually meant one thing &ndash; it was time for my
+sisters and Tanny to leave for school, and for the house to quiet-the-hell-down
+just before Mr. Wizard (and, looking back, that could be what first drew me to
+her).</p>
+
+<p>Tanny was usually dressed in bright colors (come on, this WAS the 80s), sported
+giant glasses, and had bangs and blonde hair for days (if &lsquo;a day&rsquo; starts at the
+top of your head and ends at your shoulders). To say that she was a casualty of
+the 80s would imply that ANYONE survived unscathed, but let&rsquo;s just say that
+even Tim Gunn would have had extreme difficulty trying to &ldquo;make it work.&rdquo; Tanny
+always a giant, friendly smile on her face that reeked of never having
+a detention &ndash; if there was ever a stereotype of the smart, smiley
+super-student, that was Tanny.</p>
+
+<p>I had seen Tanny thousands of times between childhood and my
+20s, but never really talked to her much (most likely because the moments we
+shared together involved me wearing Ninja Turtle pajamas and her holding her
+hippy-lunch waiting for the two hot messes I call sisters). In fact, the first
+time I remember sharing space with her OUTSIDE of my mother&rsquo;s berber carpeting
+was around the year 2000 when I started helping out with technology at the
+school district I originally attended.</p>
+
+<h2>I attempt a career</h2>
+
+<p><strong>NOTE: I&rsquo;m totally including a ton of detail because, like I said, I don&rsquo;t
+want to forget any of this. If you&rsquo;re interested in the part where I talk about
+what Tanny meant to me and the last few years, be prepared to skip a bunch of
+paragraphs :)</strong></p>
+
+<p>Back then, Tanny was teaching Special Education to elementary school children,
+and I was doing my best to fix the sad Mac faces of Apple 5260/120s (as
+a college student who had come back to be an &ldquo;intern&rdquo;, of sorts, for the school
+district I once attended). We made casual pleasantries as I updated her Special
+Education reporting tool database, which is to say I said &ldquo;Hi, I need to update
+your Special Education reporting tool database&rdquo; and did so in silence. When
+I was done, I left with a nod, and that was about it. Elementary school
+classrooms were always very weirdly-happy to me, and Tanny&rsquo;s was definitely the
+epitome of the &ldquo;happy&rdquo; component. As long as I&rsquo;ve been aware of Tanny, her logo
+has been the giant yellow smiley face. She has smiley face <em>EVERYTHING</em>. The
+car she drives?  That would be a yellow year-2000 VW bug with the license plate
+&ldquo;TANSBUG&rdquo;. Hopefully you&rsquo;re seeing the picture I&rsquo;m painting</p>
+
+<p>Sometime around 2002, Tanny left Huron City Schools, and Ohio altogether, for
+sunny North Carolina while I stayed in town and tried to wrap my head around
+a TCP/IP network stack. Cut to the summer of 2005, and I&rsquo;m working in a back
+office of the high school library when the principal waltzes in with Tanny in
+tow. I remember flipping out with nerdy exuberance &ndash; not necessarily because it
+was TANNY, but because I remembered that Tanny&rsquo;s personal computer was
+a clamshell iBook, and I had just gotten in a shipment of new G5 Powermacs
+(Look, for everyone who knows me NOW, you&rsquo;ve got to understand that the product
+of &ldquo;me&rdquo; now is the result of years of learning social queues. I was 25, living
+in the town I grew up in, working at the school I attended, and the only thing
+that made me happy was working with computers.  Trust me; it was a bit tragic).
+For SOME reason, I thought that this fresh stock of awesome Macs would be
+a HUGE selling point in getting Tanny to work for the school district again (I
+also thought that fedoras were cool back then &ndash; leave me the hell alone).
+Later that day, I sang Tanny&rsquo;s praises to the principal and gave him something
+like a 4-minute diatribe as to why he should absolutely hire Tanny this
+instant.  It was totally unnecessary, and didn&rsquo;t sway him in the least, because
+he already had a small mountain of recommendations from anyone who had ever
+crossed Tanny&rsquo;s path (you&rsquo;d be a moron to not recognize how awesome Tanny was).
+In the fall of 2005, I was freaking out trying to prepare for the beginning of
+yet another school year (being the Director of Technology for the district at
+this point), and Tanny started working for Huron City Schools again as
+a special education teacher.</p>
+
+<h2>It wasn&rsquo;t Stockholm, but we had the syndrome</h2>
+
+<p>The Tanny Vonthron that I had &ldquo;known&rdquo; when I was younger and the Tanny Vonthron
+of 2005 shared a couple of traits &ndash; they were both incredibly skinny, smiley, happy,
+blonde, and positive individuals who always knew what to say, but the Tanny of
+2005 had this quick, sarcastic wit about her. The measure of how much I&rsquo;m going
+to like a person is usually whether or not they can keep up with the onslaught of
+references I pull off the top of my head. Tanny ALWAYS caught every stupid
+reference I threw and usually followed it up with a &ldquo;Nice!&rdquo; and another relevant
+and even-funnier reference of her own. If you talked with her for any length of
+time, you&rsquo;d get sucked into her shorthand &ldquo;language&rdquo; comprised of these references,
+nicknames, and pseudonyms that were necessary when sharing drama in such a small
+town where everyone is related and everyone was LISTENING (in later years, this
+shorthand was also borne out of iPhone autocorrects that you would just run with &ndash; so
+even when you saw &ldquo;Lola&rdquo;, &ldquo;Le Faceboom&rdquo;, &ldquo;GOL&rdquo;, &ldquo;gorp&rdquo; and whatever ducking phrase
+the iPhone decided to mangle this week, you learned to be like Cover Girl &ndash; or
+easy, breezy, and beautiful). Tanny knew the power of the inside joke, and
+reveled in treating every verbal quip as a well-crafted riddle. She had the
+&ldquo;elephant brain&rdquo; of the group, and thus could remember minutae. I loved to pride
+myself on my ability to remember stupid obscure details, and we bonded almost
+immediately.</p>
+
+<p>It&rsquo;s true to say that you develop &ldquo;favorites&rdquo; wherever you work. For me, I
+enjoyed the high school because the kids didn&rsquo;t cry as much when you openly
+mocked them (and, being a former fat kid, I wielded a sharp stick of sarcasm
+that I tended to jab with the most wanton of disregard). My sister Andrea
+had come to work for the same school district as la profesora de Español,
+which made things a bit more comfortable, and we had come to enjoy the snarky
+sentiments of Brooke Kukay/Lorenz/Kukay &ndash; the senior english teacher who
+wore black to match her cold, dead heart. We each shared a common love:
+finding humor in the mundane, alcohol, and sushi (okay, maybe just the latter two,
+but who&rsquo;s counting).</p>
+
+<p>Like I said, Tanny was a high school intervention specialist
+who dealt with special education children and helped them to adjust to HS work.
+Throughout the day she would encounter children with amazing &ldquo;quirks&rdquo; that
+others perceived as flaws. Some wanted things a particular way, others refused
+to be touched, some had no concept of sarcasm, and many had issues reading
+and reacting to emotions of others (while showing limited emotions themselves).
+The coolest thing was, not only did Tanny consider these facets of every child&rsquo;s
+personality, but she taught me to identify with them instead of judge them.
+In reality, looking back on it, she was actually shining a light on certain
+&ldquo;quirks&rdquo; in my own personality that I had never taken the time to face. She
+was MASTERFUL at modeling correct behavior and being completely unflappable.
+I was amazed that she could be completely drained yet put on the happy face
+for some unhappy parent, disarm them with a smile, guide them to the answers
+they needed to hear, and have them leaving like they had accomplished something.
+I remember actually repeating phrases that she had used to myself to try
+and remember them in case I was ever in the same situation. Here she was modeling
+behaviors and teaching me how to become a better person, while simply trying
+to escape an awkward situation of her own.</p>
+
+<p>As for unflappable &ndash; that was Tanny&rsquo;s middle name. I have never seen her recoil
+in the face of anything. You know the stories of flight attendents, soldiers,
+and nurses who react as calm as Hindu cows in the face of trauma? That was
+Tanny. The problem was &ndash; I&rsquo;m the kind of person that kicks sand on the line
+you draw just to find your boundaries. It became a game to me to see how
+casually I could drop the most candid, cringeworthy statements just to see if
+Tanny would react. She never did. Ever. I&rsquo;m sure by now people will have posted
+countless number of Tanny quotes and nuggets of information she shared with
+all of us, but there was one key mantra that, <em>TO ME</em> defined Tanny: &ldquo;Never
+let the bitches see you sweat.&rdquo; Now, I don&rsquo;t know that those were her actual
+WORDS, but she was the complete embodiment of that phrase. Tanny never let
+anyone have the power to break her. Ever. She wouldn&rsquo;t give anyone the benefit
+of letting them see her shaken. To Tanny, losing yourself was losing the situation,
+and that bitch never met a situation she didn&rsquo;t win.</p>
+
+<p>Finally, Tanny was private to a fault. She bought a tiny little house in the
+center of town and I had the opportunity to visit it a sum total of twice when
+I knew her. Being one of those people who loved doing the &ldquo;drop in&rdquo; on people at
+home, I couldn&rsquo;t understand her fear of having people visit. But it wasn&rsquo;t &ldquo;fear&rdquo;,
+per se, but mainly the concept of having your own space where you could retreat
+and recharge. Where Tanny and I most strongly bonded was the fact that many
+people would consider the both of us as extroverted, social creatures, but, in
+reality, we not only favored being alone and to ourselves, but sometimes downright
+DESPISED having to leave our four walls and be social. We would lament required
+attendance at events and try to plan our getaways in advance. We had systems for
+signaling the other to give a &ldquo;rescue call&rdquo;, where you telephoned to try and
+save someone from an event/meeting/social interaction they were required to
+have. At the end of the day, we wanted that &ldquo;Tanny Time&rdquo;, as we called it,
+which was that time at home doing nothing but enjoying the company of one&rsquo;s
+self.</p>
+
+<h2>Rise of the basic bitches and putting the &lsquo;pal&rsquo; in Principal</h2>
+
+<p>I don&rsquo;t remember when it happened, I can&rsquo;t even point to exactly HOW it happened,
+but Tanny, Brooke, and I became close. It could have been the fact that we were all
+single in a town with an age gap between the ages of 18 &ndash; 36, it might have been
+the fact that we put on a pleasant face and bit with sarcasm when you turned your
+back, or it could have been a simple result of friendship by proximity, but
+slowly we found ourselves communicating pretty frequently about the craziness of
+the day (from stupid things like who&rsquo;s doing a reply-all to a news post, to
+more important decisions like when Nagoya was going to begin half-price sushi
+this year). We all had our hang-ups, ideosyncracies, and rituals, but instead
+of being taboo, we laughed and celebrated them. It was good to &ldquo;belong&rdquo;.
+Over time, monday night sushi dates became a thing, runs to Jim&rsquo;s Pizza Box
+were common, and we bonded between the hours of work and &ldquo;alone time&rdquo;.</p>
+
+<p>Have you ever seen that YouTube video by that kid Lohanthony where he spins his
+leg and calls &ldquo;all basic bitches&rdquo;? You probably have, but if you&rsquo;ve NOT, then
+check this out:</p>
+
+<div class="embed-video-container"><iframe src="http://www.youtube.com/embed/dKY0FsUEMyw "></iframe></div>
+
+
+<p>Somewhere along the line the three of us watched this video and kept referring
+back to it (mainly that shit he does with his leg). Eventually, we started
+calling each other &ldquo;basic bitches&rdquo;, or just BBs for short (because we ain&rsquo;t
+got time for whole words). The name stuck, and Tanny would refer to her BBs
+near and far.</p>
+
+<p><strong>Note: I&rsquo;m certainly not stupid enough to presume that A.) we were Tanny&rsquo;s
+only friends, B.) we were Tanny&rsquo;s &ldquo;best&rdquo; friends, or C.) I had any monopoly
+on insight into Tanny&rsquo;s thoughts &ndash; I&rsquo;m only suggesting that we formed a bond
+that we maintained up until this day.</strong></p>
+
+<p>Around 2008, the school district restructured and opened an elementary school
+for preschool children through 2nd grade. The district opened a search for an
+elementary principal, and it turns out that the best candidate was right under
+their noses. Tanny had completed her administrative certificate with other folk
+who ended up working in our school district, and so when the position opened up
+there was an outpouring of support for her. During that time, I sat on the
+&ldquo;Administrative Leadership Team&rdquo; for the school district since the role of
+&ldquo;Director of Technology&rdquo; was considered an administrative position (versus a certified or
+classified position in the union). Because of this, Tanny asked me questions
+how things worked. I won&rsquo;t begin to profess that I was her innermost confidant
+(as I said earlier, she had friends who were principals in our school district,
+and they were more than capable of answering her questions), but I will say that
+we had a super casual and extremely down-to-earth bond that you would have with
+someone with whom you&rsquo;d shared all your deepest and darkest secrets (well,
+she knew all MY secrets &ndash; to know Tanny is to understand that you never truly
+know all there is to know about her). Tanny was a shoe-in for the job, and the
+Huron City School district had the smiliest goddamn principal in the tri-state
+area :)</p>
+
+<h2>&ldquo;How do YOU get cancer?&rdquo;</h2>
+
+<p>I remember Tanny confessing that she had started feeling strange. She was very
+much in-tune with her body, and she had some nagging suspicions about symptoms
+that didn&rsquo;t add up. I remember her saying that she pressured her doctor into
+doing some additional tests, and, low and behold, they had found some questionable
+results.</p>
+
+<p>Now, you&rsquo;ve got to understand, Tanny was the pinnacle of healthy living in my
+book. She&rsquo;d been a vegetarian living in the midwest for as long as I knew &ndash;
+that is a goddamn feat &ndash; she&rsquo;s been rail-thin forever, and she gave the
+appearance of &ldquo;Miss Honey&rdquo; from Matilda to anyone that laid eyes on her. She
+lived on positive energy, vegetables, and macaroni and cheese. For all intents
+and purposes, she was the poster child for avoiding cancer, but here we were.</p>
+
+<p>Tanny was methodical with everything she&rsquo;d ever done in life. This is the
+woman who wouldn&rsquo;t go to Hawaii without a list of things she needed to accomplish,
+the woman who would send HERSELF post cards home FROM Hawaii so she could
+remember what it felt like being there, and the woman who had binders full
+of tabs that separated all her monthly bills. Everything she ever researched
+was tabulated and sorted according to whatever index made the most sense, and
+she left absolutely no stone unturned; she was simply a voracious consumer of
+information (which, frankly, is why I loved her &ndash; being in IT I thrived on
+tearing things apart and understanding how the components came together to create a
+stronger product). When Tanny was diagnosed with cancer, she knew it was going
+to mean big changes for both herself as well as all the employees and students
+at the school. She also knew that her privacy was going to be invaded. She
+had the desire to tell people personally of her condition, but wanted it to
+be a secret so she could control the flow of information. She had it SO planned
+out that she made sure to reveal her secret in pairs, so that every person she
+told had at least ONE other person they could go to in order to discuss what
+they had learned. It was the most methodical goddamn reveal I&rsquo;d seen this side
+of Extreme Home Makeover, but it worked.</p>
+
+<p>I remember the day she broke the news to me. I was sitting in her office and
+was DETERMINED to keep my shit together. I did not like to show emotion, I
+enjoyed playing the jester and keeping things light, and this was entirely too
+heavy for my taste.</p>
+
+<p>But I crumbled.</p>
+
+<p>My god did I crumble. I remember tilting my head back and staring up around her
+office trying to will the tears back into my eyes. And my breakdown fed her
+breakdown, which bothered me even more. Tanny did NOT like to cry in front
+of people (though she&rsquo;d tell you that it was perfectly fine to do so). I hold
+that same sentiment, so it was one of the hardest things for us to share. To
+this day, it&rsquo;s the only time we&rsquo;d seen each other cry, and part of me is happy
+that we let each other have the moment. My mind was reeling and all I could
+think about was life without Tanny&hellip;and it hurt. It didn&rsquo;t compute. She wasn&rsquo;t
+SUPPOSED to have bad things happen to her (except when she tried to fly anywhere
+by plane, which was constantly a shitshow) &ndash; she was the pinnacle of optimism
+and sunny days keeping the clouds away. I couldn&rsquo;t rationalize it. My entire
+life revolves around me rationalizing some behavior I discovered, and this
+simply did not add up. You want to piss off a kid who needs to understand their
+environment? Give him some of this does-not-compute bullshit and expect them
+to live with it. Man did it hurt.</p>
+
+<p>I went home that night and I wrote a letter. I know Tanny still has it
+somewhere, and I only VAGUELY remember what I wrote in it, but I poured
+every raw emotion I had into it, stuffed it into a card, and left it for her.
+It was the only way I could vent the building emotional pressure that I so
+didn&rsquo;t want welling up inside me. And that was it. The next day, I was focused
+on how she was going to kick ass with treatments and deal with this in true
+Tanny-style.</p>
+
+<h2>Cancer treatments are hell, and cisplatin is the devil</h2>
+
+<p>Unfortunately for Tanny, &ldquo;true Tanny-style&rdquo; meant that she was going to go home
+and browse the internet looking up the kind of cancer she had. She had told us
+all she had cancer, and was somewhat vague about the TYPE of cancer, but that
+was it.</p>
+
+<p>As an aside, it&rsquo;s probably pertinent to explain a little something I like to
+call &ldquo;The Tanny Truth&rdquo;. Tanny is the most honest individual I have EVER met in
+my entire life. Being someone who freaks out MORE when I don&rsquo;t know ANYTHING
+about something versus when I know the TRUTH about something (no matter how
+terrible or embarrassing it is), I totally appreciated that Tanny would give
+me the truth when I asked for it.</p>
+
+<p>But you had to know HOW to ask for it.</p>
+
+<p>You could ask Tanny a question like &ldquo;How is the cancer?&rdquo; (which would be an
+incredibly rude question, but let&rsquo;s go with it), and she would respond &ldquo;I feel
+great today!&rdquo;. The truth is that she DOES feel great, but she didn&rsquo;t actually
+tell you ANYTHING about the cancer. Less experienced individuals would get
+swayed by the response and would roll with it &ndash; exactly like she wanted. More
+experienced individuals would rephrase the question and get a similar brush
+off. After awhile, you recognized when you were getting the Tanny truth and
+simply rolled with it because A.) It was Tanny and she was private, or B.)
+She was actually trying to protect you. Either way, you&rsquo;re better off just
+being deftly redirected like a stream in the woods versus trying to swim
+against the current and trying her patience.</p>
+
+<p>So, understanding how The Tanny Truth worked, I didn&rsquo;t pursue the line of
+questioning about the type of cancer she had. It wasn&rsquo;t until years (truly,
+YEARS) later that I found out exactly what a unique and aggressive form of
+cancer she really had. In these immediate days after her diagnosis, she
+discovered some truly terrible pictures of the type of cancer she had. I cannot
+even begin to fathom what it was like for someone who had lived exceedingly
+well and had planned out their life so meticulously to have their mortality
+delivered to them courtesy of some scan results. I&rsquo;ll never be able to
+understand the power she had to command to fight this MENTAL battle even before
+the physical treatments had begun, but, again, this was Tanny and she was a
+believer in the power of the self and positive attitudes.</p>
+
+<p>To her credit, had I known the bleak picture the internet painted her at that
+time, I would have been even more inconsolable than I had already been that
+day in her office. I chatted with a friend recently who went through cancer,
+and he summed it up better than I could: &ldquo;When you&rsquo;re in treatment, you&rsquo;re
+in survival mode: you&rsquo;re fighting for yourself and focused on getting better.
+Cancer is much worse for the people around you than it is for you.&rdquo; Thinking
+about this years after the fact, I not only respect her privacy and decisions,
+but love her for them.</p>
+
+<p>The first round of treatments Tanny received were hell. The thought process was
+that you deliver the harshest treatment immedately following diagnosis when
+you&rsquo;re at your healthiest (and with the hopes that you can eradicate the
+cancer when it&rsquo;s small). The treatments she received made her lose her hair
+and delivered the harshest blow to her body. Here was this woman who couldn&rsquo;t
+have weighed more than 110 lbs ANYWAYS, and she was receiving treatment that
+made you lose weight and feel weak. Throughout the whole ordeal, she prided
+her ability to NOT lose the weight but instead to keep on plan and upbeat.
+I don&rsquo;t know how she did it, but she did. I won&rsquo;t dwell on the details, but
+she spent the first summer after her first year as principal getting treatments
+with the hope that she could return back in the fall. Who DOES that?! Tanny does.</p>
+
+<p>Tanny&rsquo;s hair eventually grew back, she slowly came back to school, and eventually
+resumed her role as Principal at Shawnee Elementary. As far as people knew, she
+was back to 100% and ready to rock!</p>
+
+<p>The relationship between Tanny and myself became much stronger and closer after
+her cancer diagnosis. It was a considerable wake-up call that emphasized how
+precious life is. One of Tanny&rsquo;s favorite quotes was:  &ldquo;We&rsquo;re all terminal;
+none of us knows our expiration date, so we&rsquo;d better make the most out of every
+day that we&rsquo;ve been given.&rdquo; We both knew that, and I think it helped to eliminate
+all pretense and allow us to be incredibly candid, open, and honest with each
+other in every situation. Also, if you think I&rsquo;m trying to say that &ldquo;I took
+care of Tanny,&rdquo; then you&rsquo;re sorely mistaken. That bitch STILL looked out for
+me no matter how sick she felt. One of my favorite stories came from a trip to
+San Francisco that I had taken in early 2010. I had gone out to San Francisco to
+attend a conference, and had managed to leave my FAVORITE HAT at the New Delhi
+restaurant on Ellis street. When I arrived back in Huron, I phoned the
+restaurant and they had INDEED found my hat &ndash; but now how was I gonna get it?
+Sure, they could mail it to me, but serendipity reared its head in the form of
+Tanny&hellip;who had plans to visit San Francisco two short weeks after I had
+returned. Tanny stopped into the restaurant, picked up my hat, and delivered it
+back home to me when she returned. That hat became a staple of my outfit,
+and many people I know in technology ONLY know me for that hat. The truth is,
+that hat had new meaning to me the instant Tanny delivered it back to me.
+Suddenly, it was a simple connection to her and a reminder of how she was
+always there for me.</p>
+
+<h2>Schools, fools, and coping tools</h2>
+
+<p>Around the spring to summer of 2010, we were all closing out the school year,
+entering into summer, and looking forward to the NICE three months in Ohio! Over
+the course of that summer, &ldquo;things&rdquo;, well, how do I put it, &ldquo;HAPPENED&rdquo; between the
+Superintendent of our school district and the Principal of another school district.
+If you want to read about it, the Sandusky Register website has
+<a href="http://www.sanduskyregister.com/fox-fiasco">a whole section dedicated to the situation</a>, and you can even
+<a href="http://www.sanduskyregister.com/sites/www.sanduskyregister.com/files/3_Bd_Ex_4.pdf">read all the lovely emails with all the sordid details</a>.</p>
+
+<p>One of my favorite things to do was to visit Tanny in her Principal&rsquo;s office
+(which was BRIGHT YELLOW and full of Yodas and smiley faces) and chat about the
+events of the day. This was especially fun in the summer because NOBODY was
+around and we were able to talk without fear of interruption.</p>
+
+<p>Working at a school district over the summer comes with a certain amount of
+&ldquo;flexibility&rdquo; because the students and teachers aren&rsquo;t there, and you&rsquo;re mostly
+surrounded by the cleaning/support and front-office staff. Anyone who&rsquo;s a good
+administrator will tell you that their slowest AND busiest periods are during
+the summer (wrapping up the current year, planning for the next). As the
+director of technology, my summers were ABSOLUTELY busy and full &ndash; that&rsquo;s when
+I took down systems, experimented with new workflows, and had to get everything
+re-imaged and ready by the first day of school. Couple this with cleaning staff
+who want to unplug everything to clean, and you have a recipe for some crazy
+stuff</p>
+
+<p>Anyways, here we would find ourselves at the end of the day in her office
+talking about whom had showed up where, who was getting what work done, and
+so on. I&rsquo;m totally fascinated by psychology (but I HATE sociology because
+A PERSON is awesome, but PEOPLE, as a group, fucking scare me), and Tanny had
+one of the best reads on people and body language that I had ever seen in my
+life. She could detect the smallest of tells, and I usually had the background
+information.</p>
+
+<p>Previously, I told you that Tanny loved to refer to her &ldquo;elephant brain&rdquo;,
+because it was just this steel trap of information. We BOTH grew up in the same
+small town in which we were employed, so we BOTH had the same experiences with
+the same families. Small town families run deep and you frequently see
+generation after generation of family members funneling through the doors of the
+schools. We LOVED &ldquo;connecting the dots&rdquo; and making connections about kids, their
+parents, and whatnot. This sounds like small-town drama, and, make no mistake
+about it &ndash; it totally is, but it&rsquo;s what you do to stay sharp and survive.</p>
+
+<p>At any rate, the nature of my job was to be in every building nearly every day.
+Also, I would go take pictures of all the sports and extra-curricular events,
+couple that with managing all the user accounts and lots of data entry, as well
+as a mind for remembering dumb things, and I basically held lots of names and
+connections in my head. I&rsquo;d hear a kid&rsquo;s name, could tell you what grade and
+school they were in, what sport they played, and most likely what group of kids
+they hung out with. My job was information, and I was good at it because it
+FASCINATED me.</p>
+
+<p>Combine my fascination with Tanny&rsquo;s innate abilities and her amazing
+&ldquo;elephant brain&rdquo;, and you can probably see where I&rsquo;m going. We would play this
+little game of taking things that had happened and trying to correlate them
+with other things we knew. For example, maybe someone spraypainted the
+building or stole the flag from a flagpole, and all the cameras got were
+shadowed glimpses of figures walking, Tanny could CSI the shit out of that
+data. We also knew that kids never did ANYTHING alone and never shut up about
+the things they did. Put these pieces together (combined with the fact that this
+WAS a small town), and there wasn&rsquo;t anything that could get by Tanny. It&rsquo;s no
+coincidence that one of Tanny&rsquo;s favorite TV shows was Scandal.</p>
+
+<p>So, come the fall of 2010, and things feel very different in the district. I&rsquo;m
+coming up on my 30th birthday, though, and am starting to feel like I&rsquo;ve squeezed
+all the life I can out of Huron and my situation. I&rsquo;ve had job offers before,
+but this was the first time that I&rsquo;d actually entertained them. In my mind,
+Tanny was a big part of why I stayed in Huron. Her friendship meant the world
+to me and I&rsquo;ve STILL, to this day, not met anyone else with whom I&rsquo;ve had a deep
+connection like I did with Tanny. We could read each other&rsquo;s body language,
+facial expressions, and immediately follow the stringy references we would
+conjur up to avoid detection. I remember actually having the thoughts that
+if Tanny died, I would have to leave Huron and pursue life elsewhere &ndash; I just
+wouldn&rsquo;t be able to stay in town and cope without having her there. As it turned
+out, this process would happen much sooner than I expected&hellip;</p>
+
+<p>One particularly attractive job offer turned up (the job I currently hold, as
+a matter of fact), and I couldn&rsquo;t refuse it. Unfortunately (or fortunately), I
+needed to leave Huron and move to Portland, Oregon. Tanny was the first person I told,
+and I could tell that even though she was very happy for me, that a part of her
+was equally sad that I was jumping ship and leaving town.</p>
+
+<p>Just before this happened, though, another &ldquo;attractive offer&rdquo; had arisen that
+caused me to make a difficult decision. I&rsquo;d always known that I was gay, but
+never bothered to mention it to anyone else in town. Also, with the
+previously-mentioned age gap, there was never anyone around my age that I felt
+like I could hang out with. After 30 years, though, I had found someone that
+I wanted to spend time with, and I needed to tell someone about it. Tanny was
+the first person with whom I ever verbalized my feelings. Shockingly, this was
+something she hadn&rsquo;t suspected &ndash; I was actually taken aback that I was able to
+put something by the GREAT Tanny Vonthron, because that bitch missed NOTHING!
+She was amazingly warm and super supportive, but part of me feels like she
+was only this way because she and Brooke always wanted a gay BFF&hellip;</p>
+
+<p><a href="http://garylarizza.com/images/tanny/portland_bin.JPG"><img class="left" src="http://garylarizza.com/images/tanny/portland_bin.JPG" width="400" height="400"></a>
+<a href="http://garylarizza.com/images/tanny/portland_bin_sideways.JPG"><img class="left" src="http://garylarizza.com/images/tanny/portland_bin_sideways.JPG" width="400" height="400"></a></p>
+
+<p>As my departure date drew near, Tanny organized a going away party that still
+makes me smile :)  The show Portlandia had just become popular, and Portland
+was being known as the city where &ldquo;The dream of the 90s was alive&rdquo; &ndash; that was
+the theme of my going away party. Tanny had made little Sex in the City name
+badges for everyone to wear (whether you were a Carrie or a Samantha, which
+were Tanny and Brooke respectively. I can&rsquo;t remember who I was, but at least
+I wasn&rsquo;t the whore), and had put together a &ldquo;going away&rdquo; box for me. Picture
+a plastic storage bin (or actually LOOK at the picture on the left), but around
+the inside wall of the bin she had printed out pictures of 90s CDs, TV shows,
+and movies (Friends, Reality Bites, Seinfeld).  Inside I had all the
+necessities for moving away &ndash; CDs she had burned with her favorite 90s songs,
+books, pictures, and the like. She LOVED making personalized things like this,
+and to this day I have that bin exactly the way she left it (mainly because
+I&rsquo;m really lazy, but also partly because I&rsquo;m also nostalgic).</p>
+
+<p>Once I had left, our communication was mostly limited to countless group
+iMessages, phone calls, and occasional visits to Huron as I was passing through.
+Phone conversations were pretty limited because my job mostly consisted of
+traveling from one place to another, and I really hate to use the phone. When
+we DID get a chance to talk on the phone, though, we tried to talk about everything
+BUT Huron and what was happening at home. I think Tanny enjoyed talking to me
+because I was outside of Huron and could share stories of things that weren&rsquo;t
+going on in her backyard (also &ndash; there&rsquo;s only so much you can take of &ldquo;same shit,
+different day.&rdquo;). Even though I was 2000 miles away, modern technology made it
+feel like we were still nearby.</p>
+
+<h2>&ldquo;Fox Fiasco&rdquo;</h2>
+
+<p><a href="http://www.sanduskyregister.com/fox-fiasco">Earlier, I mentioned the &lsquo;fox fiasco&rsquo;</a>, which refers back to the
+story of the former superintendent of Huron City Schools and his alleged
+misdeeds. I have no desire to write anything about the former superintendent,
+but I do want to write about how I believe the experience made Tanny feel.
+Since there is pending litigation, I&rsquo;ll preface all of this with the statement
+that these are my personal beliefs/opinions.</p>
+
+<p>Before that &ndash; some background&hellip;</p>
+
+<p>Tanny Vonthron was certainly the most honest person I&rsquo;ve ever met in life, and
+the person whose moral compass consistently pointed due north for as long as
+I&rsquo;d known her. Tanny&rsquo;s opinion of people aligned with how honest, moral, and
+caring they were (among other things). She valued these three characteristics
+above all others (in my opinion), and tended to surround herself with people
+who demonstrated these three core values. Before she was a principal, Tanny
+was an intervention specialist and she dealt with children who had any number
+of issues that required special attention. Her favorite students were those who
+landed on the &ldquo;I&rsquo;m incredibly honest, literal, and have problem reading and
+expressing emotion&rdquo; level of the autism spectrum. She genuinely loved these
+people because you know at any point in time where you stood with them (and,
+if you didn&rsquo;t know, just ask them and they&rsquo;d tell you without hesitation).
+Tanny was the personification of &ldquo;zero judgement&rdquo;, and loved these students
+for every reason why others felt they were &ldquo;disabled&rdquo;. Tanny had this amazing
+ability to reach them on their level, and I believe they genuinely felt she
+was interested and willing to do anything to help them out (undoubtedly because
+she actually WAS GENUINELY INTERESTED AND WILLING TO DO ANYTHING TO HELP THEM
+OUT!). In the time I shared with her at school, I learned an absolute ton
+about both the students and the autism spectrum on which they landed. Tanny
+was super careful not to break confidentiality or share sensitive information,
+but would talk in generalities and show me the &ldquo;human&rdquo; side of the human
+condition. Looking back, I identified VERY STRONGLY with her students because
+I actually empathized with them on many levels, and I feel that Tanny not only
+loved my idiosyncrasies but tried to show me how ALL of us have our issues and
+we&rsquo;re ALL a bit &lsquo;special.&rsquo;</p>
+
+<p><strong>Anyways, we&rsquo;ve established that Tanny valued honesty and morality, which you
+would THINK would be the characteristics LEAST exhibited by someone who
+allegedly had an affair during school hours &ndash; right?</strong></p>
+
+<p>I feel very strongly that Tanny felt betrayed by her former boss (&lsquo;betrayed&rsquo;
+isn&rsquo;t nearly a strong enough word, in my opinion), especially considering these
+events occurred while she was in treatment for cancer. I think she was even
+more embarrassed when rumors started flying about her possible involvement with
+her former boss. The rumors were categorically false (like I said, Tanny had
+a moral compass that was cemented &lsquo;due north&rsquo;), but the accusations were enough
+to cut her deeply (and, again, even though she felt upset, she never let it
+show).</p>
+
+<p>I&rsquo;d love to say more, but I&rsquo;d also not like to feed into the ego of a few, so
+we&rsquo;ll just leave it like that.</p>
+
+<h2>The past year</h2>
+
+<p>Tanny was diagnosed in April, 2009, and so in April, 2013, she celebrated her
+4 year &ldquo;cancerversary&rdquo;.  She celebrated at Nagoya with some sushi (as one
+does), but it also felt (to ME, at least) like an odd omen. Short of losing her
+hair, you would never know that Tanny had any health issues. All of the sudden,
+though, now she&rsquo;s hitting these &lsquo;anniversaries&rsquo; date and (thus far) beating the odds.
+That wasn&rsquo;t how Tanny wanted to see it, though.</p>
+
+<p>To know Tanny, and to share time with Tanny, was to concede to a couple of
+&lsquo;conditions&rsquo; to her condition:</p>
+
+<ul>
+<li>Be positive</li>
+<li>Be present</li>
+<li>No goodbyes</li>
+</ul>
+
+
+<p>The first rule was non-negotiable. If you were being negative, she was removing
+herself from the situation (see the quote at the top of the page).</p>
+
+<p>The second is, as <em>I</em> see it, a more recent addition. See, Tanny was also the
+plan-iest person I&rsquo;ve ever met. She had plans for the present, plans for the future,
+plans for dinner, and plans to update her plans. She had binders, with tabs and
+highlighted passages, for damn near everything. But, as the saying goes about
+best laid plans, that was somewhat relaxed after Tanny was diagnosed. Sure, she
+still had her plans, but she also did as MUCH as she could to absorb every
+effervescent element around her as often as she could. Imagine her hugging a
+card to her chest and closing her eyes for about 5 seconds &ndash; she would literally
+try to pull the emotions and the moment into her to feel them race up her spine
+and tingle those little neckhairs (See &ndash; that&rsquo;s my attempt writing to elicit
+emotion; Mary Alice Harpster would be SO proud&hellip;). Tanny would clip all of
+these little articles about teaching yourself to &lsquo;be more present&rsquo;, which,
+at the time, I thought was kinda weird&hellip;but, then again, nobody was holding
+a clock above MY head. As someone who is impulsive and wanders around life jumping
+from one adventure to the next, it was kinda awesome to see her join me in what
+SHE called &lsquo;being present&rsquo; but what I called &lsquo;another day&rsquo; :)</p>
+
+<p>Finally, Tanny did NOT want to go through the &lsquo;goodbye&rsquo; phase. From the start,
+she did as much as she could to not be PERCEIVED as &lsquo;sick&rsquo;. She hated losing
+her hair, still kept up her immaculate appearance (and appearances), and fought
+as hard as she could to remain &lsquo;just Tanny&rsquo;. She even had rules against &lsquo;sad
+eyes&rsquo; (You know how when someone tells you something, like &lsquo;my dog just died&rsquo;,
+and you immediately give them the &lsquo;sad eyes&rsquo;? You know what I&rsquo;m talking about &ndash;
+you cock your head just slightly, raise your eyebrows, and affect that &lsquo;oh
+my goodness&rsquo; tone. Yeah, Tanny would have none of that shit). So even if Tanny
+wasn&rsquo;t doing well, you weren&rsquo;t allowed to gush about the perceived enormity of
+it all &ndash; that would be conceding that she <em>WASN&rsquo;T</em> fighting and, thus, was
+conceding to this invisible biological threat. No, she wanted absolutely none
+of that.</p>
+
+<p>I&rsquo;m not say that we were all walking on eggshells for the past year, I&rsquo;m just
+saying that for the first time since she was initially diagnosed it started to
+feel&hellip;I dunno&hellip;more &lsquo;real&rsquo;? Because Tanny was who she was (because &lsquo;a fighter&rsquo;
+is the clichéd emobodiment of &lsquo;an understatement&rsquo;), she demanded normalcy. And
+normalcy is exactly what I (we) gave her. I kept flying around the damn world
+preaching the good word of Puppet Labs, and she kept opening the school in
+the morning, giving out smiley face awards, and seeing the kids off at the end
+of the day (so to speak). I had something of a spoken &lsquo;unspoken&rsquo; rule with a
+couple of close friends that they were to let me know as SOON as things were
+&lsquo;not going well&rsquo; so that I could fly home to be there (knowing full-well that
+Tanny would do no such thing). I never really got that &lsquo;call&rsquo;, but I did make
+the call to come home between March 7th and 11th, 2014 based on a couple of
+conditions.</p>
+
+<p><a href="http://garylarizza.com/images/tanny/last_text_to_me.PNG"><img class="left" src="http://garylarizza.com/images/tanny/last_text_to_me.PNG" width="400" height="400"></a>
+<a href="http://garylarizza.com/images/tanny/last_call.PNG"><img class="left" src="http://garylarizza.com/images/tanny/last_call.PNG" width="400" height="400"></a>
+The last week of February I was working in Texas and was texting back and
+forth with Tanny. We didn&rsquo;t really text TOO often, but the texts were coming
+with a bit more frequency. On that thursday, the 27th, Tanny sent me a text
+telling me to &lsquo;Call me when you can&rsquo;, which was really rare for Tanny (we
+talked, but usually on weekends when she had downtime, and usually only to
+catch up. This was like 3pm on a thursday, though, and so was a bit out of
+character. When I called her, we talked about a bunch of random things
+(ranging from happenings in Huron, where I was traveling, and the like), but
+it was really laid-back and&hellip;I dunno&hellip;free of distraction? Tanny constantly
+had texts, calls, people stopping by her office, and whatnot &ndash; this conversation
+had NONE of that, and we just talked about whatever came up for about 40 minutes.
+The conversation came to a close, and it REALLY started to feel like Tanny was
+injecting a subtext that felt really&hellip;quotable (You know, things like &lsquo;well,
+you know I want you to do whatever makes you happiest, and&hellip;&rsquo; that had an
+air of finality). She ended the conversation with &ldquo;I love you&rdquo; (which was
+something we started doing within the past year), and I felt really good that
+I had been able to talk to her (since we hadn&rsquo;t really spoken since Christmas &ndash;
+it was all texts).</p>
+
+<p>After that call on Thursday, I would never received another call or text from Tanny
+again.</p>
+
+<p>I definitely started to get worried the following week when I didn&rsquo;t hear from
+Tanny (but knew she liked her privacy, so tried to give her some space). After
+hearing that another mutual friend had felt the same way and had booked a flight
+home, I decided to do the same for the upcoming weekend. It was convenient that
+my mother&rsquo;s birthday was the following week on March 12th, so that made for a
+reasonable excuse, but, frankly, most people had started wondering about Tanny
+over recent weeks after she&rsquo;d been progressively more absent from work. If you
+were to take a drive around Huron, you would have seen yellow smiley faces
+everywhere (I&rsquo;m talking flags, wood signs, stickers &ndash; you name it and people
+were displaying it to support Tanny). It&rsquo;s definitely NOT hyperbole to say
+that the community loved Tanny, and everyone wanted to show their support in
+some way. Some suggested ideas were definitely crazier than others, but everyone&rsquo;s
+heart was in the right place.</p>
+
+<p>It would be dramatic to say that I flew home, sat beside her bed, held her
+hand, and confessed every way in which she changed my life, but the truth is
+honestly much more boring than that &ndash; remember, to know Tanny is to give up
+your ability to deliver the &lsquo;goodbye speech&rsquo; to her. And don&rsquo;t think she wasn&rsquo;t
+above sending people who started down that road RIGHT out of her room!
+I definitely heard stories of her shoo-ing people out who began
+very-clearly-rehearsed &lsquo;final words&rsquo; to her (I think THAT, most of ALL, makes
+me laugh the loudest) :)</p>
+
+<p>I would fly out of Cleveland bound for a work gig in Denver on March 11th, thus
+missing her death by one day (yep, if you&rsquo;re keeping score, she died on my
+mother&rsquo;s birthday).  There are very few things about me that I&rsquo;m guarded
+about &ndash; most of everything about my life is sewn on my sleeve in very colorful
+thread &ndash; but my feelings for and about Tanny are the some of the most precious
+things I carry (ironic, considering this post).</p>
+
+<h2>Immediately following</h2>
+
+<p>Life was kind of a blur after Tanny died.  I don&rsquo;t know where to begin in
+trying to describe how I felt, but I will share ONE story from that time
+period:  One of the things I&rsquo;m very honored to have been able to do was
+<a href="http://www.sanduskyregister.com/obituary/5434676">Tanny&rsquo;s Obituary</a>.  Tanny&rsquo;s
+family had asked me to help out with it, and it was fun to open a Google doc,
+start writing, and watch the rest of her family write comments and jokes while
+I was giving birth to the thing. To say it was rough to write was an
+understatement.  Tanny liked things to be&hellip;well&hellip;perfect. When she composed
+a document, every word was chosen for a purpose, every sentence tied the
+previous to the next, and the entire body of work was meant to convey a single
+message. I could hear Tanny laughing at me as I spent tens of minutes fighting
+over a single word. I could LITERALLY hear her family laughing at me as
+I re-wrote entire sentences because they felt wrong.  Thinking I had a final
+document, I called Brooke and asked her to read it with me.  I&rsquo;m REALLY glad
+I did that because Brooke was able to give me some pointers on things I hadn&rsquo;t
+even considered.  In the end, several people had a hand in putting that
+document together, and I feel, like Tanny&rsquo;s life, it was made better by all the
+people that were close with her.</p>
+
+<h2>Life without Tanny</h2>
+
+<p>It has taken me over two months to put this post together simply because
+it&rsquo;s a painful thing to keep revisiting. I&rsquo;ve honestly written this post
+on something like 20+ different flights, in countless states and countries,
+and, always with the goal of &lsquo;finishing today&rsquo;. Part of me believes that I
+can&rsquo;t finish it because I don&rsquo;t have Tanny around to help me work out my
+thoughts :)</p>
+
+<p>What I&rsquo;ve come to understand, though, is that the best parts of myself came
+directly from Tanny. I made a conscious decision to not lie after watching her
+model this behavior for 39 years (and, also, because I can&rsquo;t remember where
+I put my KEYS let alone what I told someone, somewhere). Watching Tanny deal
+with difficult situations and model behavior for her students taught me how to
+be able to respectfully diffuse a situation. I could go on forever, but the
+core idea was that she was THE ONE person that I had in my life that I KNEW
+DEFINITIVELY would only do something with good intentions. Anytime Tanny said
+or did something that I reacted even slightly negatively to, it helped me
+to discover the flawed thinking in myself (the idea being that if I was upset
+over something she said/did, but that I KNEW that Tanny didn&rsquo;t intend it to
+be upsetting, what part of me was misinterpreting things?). I had absolutely
+no idea how formative this was&hellip;until it wasn&rsquo;t around anymore.</p>
+
+<p>I&rsquo;ve also reached for my phone way too many times these past months &ndash; I will
+see something, open up a text, and start writing a snarky little note&hellip;until
+I remember. Sundays are particularly hard because that&rsquo;s when we usually talked.
+Every time I meet a new person, or do something worth a story (which, frankly,
+if you KNOW me happens almost hourly), I&rsquo;m reaching for my phone to tell someone
+who&rsquo;s not going to write back again. It hurts.</p>
+
+<p>Finally, I tend to process things a bit more slowly than normal people. When
+Tanny died, I did everything I could to keep my shit together and &lsquo;stay strong&rsquo;
+for everyone else.  I remember TRYING to have a breakdown and failing kinda
+miserably at it.  It wasn&rsquo;t until very recently where I was talking somewhat
+casually about Tanny that I just got hit with a wave of emotion. It hurt, but
+it felt&hellip;welcoming. Coping is good (and, as The Shins say, caring is creepy).</p>
+
+<h2>How do I even end this?</h2>
+
+<p>Honestly, I have no idea what this post was about other than something of a
+love letter for a friend. It&rsquo;s also helped me work out the MANY ways Tanny
+helped me that I hadn&rsquo;t even remotely considered. It&rsquo;s also helpful in
+answering the question &ldquo;Who was &lsquo;Tanny&rsquo; on your tattoo?&rdquo;</p>
+
+<p><a href="http://garylarizza.com/images/tanny/tattoo.png"><img class="left" src="http://garylarizza.com/images/tanny/tattoo.png" width="400" height="400"></a>
+Yep, after Tanny died, a couple of us got tattoos.  The funny thing is that
+I often talked with Tanny about wanting a tattoo on my wrists.  I even went
+so far as to draw/paint them there a couple of times. My wrists are my &lsquo;prized
+location&rsquo; because they&rsquo;re right out there (and I talk with my hands&hellip;I&rsquo;m Italian;
+what do you want from me?). Ultimately I took that from a letter Tanny sent &ndash; it&rsquo;s
+her handwriting and all &ndash; and it&rsquo;s really poignant because, as I mentioned
+before, we didn&rsquo;t start saying &ldquo;I love you&rdquo; until recently, and it&rsquo;s something
+I have hangups saying.  With Tanny, it was meaningful.  Every laptop I&rsquo;ve had
+since Tanny was diagnosed has had a yellow smiley face on the right wrist rest,
+and so I thought it was appropriate to put her writing there too.  I love that
+I can see it everyday, and it&rsquo;s been really awesome to get daily reminders.</p>
+
+<p>In the &lsquo;end&rsquo; (of this post, at least), I have to say that one of the biggest
+things I pieced together with Tanny was the concept of &lsquo;regret&rsquo; being arguably
+the worst word in the English language. It&rsquo;s something that basically means you
+wish a period of time didn&rsquo;t exist.  Something SO TERRIBLE happened that you
+not only want to have NEVER experienced it, but you feel like the lessons you
+learned that time would be better spent by doing the situation all over again.</p>
+
+<p>I truthfully have no regret in my life for any decision I&rsquo;ve ever made.</p>
+
+<p>Tanny once said that &ldquo;I&rsquo;m thankful for every good thing, every bad thing, and
+every wise, stupid, rash, calculated, and wonderful decision you&rsquo;ve ever made
+in your life because they&rsquo;ve made you the person you are, and they&rsquo;ve brought
+you to this place, at this very moment, in life.&rdquo; I don&rsquo;t think I could say it
+better &ndash; my life is at a wonderful place right now, and most of that is due
+to the best person I&rsquo;ll ever know:  Tanny.</p>
+
+<h2>-UPDATE-</h2>
+
+<p>As is usually the case, I remember things (or learned things) after initially
+making this post.  I had WARNED you that I didn&rsquo;t feel like this post was
+finished, and so here we go&hellip;</p>
+
+<h3>Portland Care Package</h3>
+
+<p>I mentioned above that Tanny made me this lovely box of 90s nostalgia after
+she found out that I was going to be moving to Portland (where the dream of
+the 90s is STILL alive).  So, it turns out that&rsquo;s not entirely true&hellip;and
+by that I mean that Shannon Smith came up with the idea :) I got a funny
+Facebook message from Shannon filling me in on the deets and laughing at how
+much I attributed to Tanny.  Personally, it makes for a better story, so Shannon&rsquo;s
+just gonna have to cope and deal :)</p>
+
+<h3>The numbers</h3>
+
+<p>One of the things Tanny and I shared was this fascination with numbers. I have a
+huge obsession with reducing everything to a single number and deciding if it&rsquo;s a
+&lsquo;good&rsquo; number. The numbers 3, 9, and 11 were, for whatever reason, good numbers
+for me (3 being a good number, 3 threes is 9, so THAT&rsquo;s a great number, and 11
+is not only the date in which I was born, but is one of those &lsquo;special numbers&rsquo;).
+I remember getting somewhat into numerology in my 20s (didn&rsquo;t we all&hellip;sigh), but,
+honestly, the thing that REALLY gave me fucked-up superstitions was playing Craps
+up at Casino Windsor with my dad and his friend Scott. Imagine a game FULL OF
+numbers, and certain numbers that can cause you to lose all your money if they
+come up (incidentally, if you know nothing about Craps you probably think that 7
+is a REALLY good number&hellip;it&rsquo;s actually the opposite. The number 7 is SO BAD that
+you can&rsquo;t even say it around a table or you&rsquo;ll get filthy looks. But I digress&hellip;).</p>
+
+<p>Anyways, I had a habit of taking certain numbers and breaking them down to a
+single number.  My old address was 517, and 5 + 1 + 7 is 13. Taking 13 and
+breaking it down gets you 1 + 3 which equals 4, so my house &lsquo;was a 4&rsquo;. Weird?
+Sure. But it&rsquo;s something I did in silent forever.  Even now when I stay in hotels
+(which is weekly), the first thing I do is break the room number down into a single
+number&hellip;and sometimes that&rsquo;s the ONLY way I remember my room number (&ldquo;Let&rsquo;s see,
+it was an 8, I&rsquo;m on the fifth floor, and it&rsquo;s down this hall&hellip;ah yeah, it was room 503&rdquo;).</p>
+
+<p>I remember one day Tanny and I went out to eat (at Marconi&rsquo;s, incidentally) where
+we shared our love of numbers.  Tanny&rsquo;s special number was 33.  Why?  I honestly
+don&rsquo;t remember exactly, but I believe it was because 33 was one of the master
+numbers (like 11 is&hellip;which is my number).  Also the number 33 always came up
+for Tanny, and she used it like a waypoint on the road of life.  We&rsquo;d always
+get a random text from Tanny anytime she ran into a 33 SOMEWHERE, and she had
+a metal number 33 in her car that had fallen off of one of the old lockers
+(and was given to her I THINK by Mr. T &ndash; John Turinsky &ndash; but I could be
+wrong).  Sometimes we would get a text at 3:33 just to say hi.  I really
+miss those texts&hellip;</p>
+
+<p>Tanny really didn&rsquo;t make TOO much of a secret about this, but it was definitely
+&lsquo;her number&rsquo;.  Since then, I see 33s all over the place, and it&rsquo;s a friendly
+reminder of her.  If you want to be let in on another secret, check out the
+Sandusky Register website and look at the timestamps on any article that was
+posted about her&hellip;</p>
+
+<h3>The threesome and Tanny Time, the redux</h3>
+
+<p>I alluded above that at times it felt like Brooke, Tanny, and I were connected
+at the hip (and, like I said, that&rsquo;s not to say that Tanny wasn&rsquo;t connected with
+ALL her other friends&hellip;it just felt like that to me).  We were SO connected that
+John Ruf, when he was principal at HHS, would call us &ldquo;The Threesome&rdquo;.  Whatever
+that meant.  A gay man and his two besties did not an awesome threesome make, but
+whatever.  ANYWAYS, when I accepted the postion in Portland it felt like I was
+breaking up the band (though it didn&rsquo;t happen like that, thanks to the marvels of
+modern technology and Facetime).  I remember even getting a text that Tony Munafo,
+who was vice principal at the high school at the time, was &ldquo;applying to be a new
+member of The Threesome&rdquo;.  Let&rsquo;s just say that didn&rsquo;t end very well (#seatstaken).</p>
+
+<p>Before I left, our threesome was at its peak.  We all worked pretty late (because
+we liked the quiet and got work done when people weren&rsquo;t bugging us), so it was
+common to get a call at my extension from Tanny and have it turn out to be a
+three-way bullshit session.  Tanny would eventually tell us to meet her in her
+office at like 5:30 to go get Jim&rsquo;s, Marconi&rsquo;s, or whatever local dish we were
+craving, but we ALL knew that if Tanny said 5:30 it usually meant around 6:45.
+Tanny operated on Tanny Time (I mentioned before that &ldquo;Tanny Time&rdquo; was the time</p>
+]]></content>
+  </entry>
+  
+  <entry>
     <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 3b: More R10k Madness]]></title>
     <link href="http://garylarizza.com/blog/2014/03/07/puppet-workflow-part-3b/"/>
-    <updated>2014-03-07T11:00:00-05:00</updated>
+    <updated>2014-03-07T08:00:00-08:00</updated>
     <id>http://garylarizza.com/blog/2014/03/07/puppet-workflow-part-3b</id>
-    <content type="html"><![CDATA[<p><a href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/">In the last workflows post,</a>, I talked about dynamic Puppet
+    <content type="html"><![CDATA[<p><a href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/">In the last workflows post,</a> I talked about dynamic Puppet
 environments and introduced R10k, which is an awesome tool for mapping modules
 to their environments which are dynamically generated by git branches. I didn&rsquo;t
 get out everything I wanted to say because:</p>
@@ -848,7 +2585,7 @@ note, and I hope I&rsquo;m providing some good info you can actually use! Cheers
   <entry>
     <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 3: Dynamic Environments With R10k]]></title>
     <link href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/"/>
-    <updated>2014-02-18T12:48:18-05:00</updated>
+    <updated>2014-02-18T09:48:18-08:00</updated>
     <id>http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3</id>
     <content type="html"><![CDATA[<p>Workflows are like kickball games: everyone knows the general idea of what&rsquo;s
 going on, there&rsquo;s an orderly progression towards an end-goal, nobody wants to
@@ -2521,7 +4258,7 @@ gig! :)  Cheers!</p>
   <entry>
     <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 2: Roles and Profiles]]></title>
     <link href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2/"/>
-    <updated>2014-02-17T17:01:37-05:00</updated>
+    <updated>2014-02-17T14:01:37-08:00</updated>
     <id>http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2</id>
     <content type="html"><![CDATA[<p>In my <a href="http://www.garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/">first post</a>, I talked about writing functional component
 modules. Well, I didn&rsquo;t really do much detailing other than pointing out
@@ -3024,7 +4761,7 @@ whatever names you decide to use).</p>
   <entry>
     <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 1: Module Structure]]></title>
     <link href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/"/>
-    <updated>2014-02-17T17:01:37-05:00</updated>
+    <updated>2014-02-17T14:01:37-08:00</updated>
     <id>http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1</id>
     <content type="html"><![CDATA[<p>Working as a professional services engineer for <a href="http://www.puppetlabs.com">Puppet Labs</a>,
 my life consists almost entirely of either correcting some of the worst code
@@ -3245,7 +4982,7 @@ that I could be entirely full of shit.</p>
   <entry>
     <title type="html"><![CDATA[Seriously, What Is This Provider Doing?]]></title>
     <link href="http://garylarizza.com/blog/2013/12/15/seriously-what-is-this-provider-doing/"/>
-    <updated>2013-12-15T11:44:17-05:00</updated>
+    <updated>2013-12-15T08:44:17-08:00</updated>
     <id>http://garylarizza.com/blog/2013/12/15/seriously-what-is-this-provider-doing</id>
     <content type="html"><![CDATA[<p>Clarke&rsquo;s third law states: &ldquo;Any sufficiently advanced technology is
 indistinguishable from magic.&rdquo; In the case of Ruby and Puppet provider
@@ -4764,7 +6501,7 @@ providers do their dirty work&hellip;</p>
   <entry>
     <title type="html"><![CDATA[When to Hiera (Aka: How Do I Module?)]]></title>
     <link href="http://garylarizza.com/blog/2013/12/08/when-to-hiera/"/>
-    <updated>2013-12-08T18:31:54-05:00</updated>
+    <updated>2013-12-08T15:31:54-08:00</updated>
     <id>http://garylarizza.com/blog/2013/12/08/when-to-hiera</id>
     <content type="html"><![CDATA[<p>I&rsquo;m convinced that writing Puppet modules is the ultimate exercise in bikeshedding:
 if it works, someone&rsquo;s probably going to tell you that you could have done it better,
@@ -5519,7 +7256,7 @@ in files that AREN&rsquo;T the Puppet DSL (i.e. not inside the code).</p>
   <entry>
     <title type="html"><![CDATA[Who Abstracted My Ruby?]]></title>
     <link href="http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2/"/>
-    <updated>2013-11-26T16:01:00-05:00</updated>
+    <updated>2013-11-26T16:01:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2</id>
     <content type="html"><![CDATA[<p>Previously, on Lost, I said a lot of words about Puppet Types;
 <a href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/">you should totally check it out.</a>
@@ -6186,7 +7923,7 @@ get a response. Maybe.)  Cheers!</p>
   <entry>
     <title type="html"><![CDATA[Fun With Puppet Providers - Part 1 of Whatever]]></title>
     <link href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/"/>
-    <updated>2013-11-25T20:47:00-05:00</updated>
+    <updated>2013-11-25T20:47:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/11/25/fun-with-providers</id>
     <content type="html"><![CDATA[<p>I don&rsquo;t know why I write blog posts &ndash; everybody in open-source software knows
 that the code <em>IS</em> the documentation. If you&rsquo;ve ever tried to write a Puppet
@@ -6632,7 +8369,7 @@ stay tuned for more brain-dumping-goodness&hellip;</p>
   <entry>
     <title type="html"><![CDATA[From the Archive: Using Crankd]]></title>
     <link href="http://garylarizza.com/blog/2013/07/10/from-the-archive-using-crankd/"/>
-    <updated>2013-07-10T09:51:00-04:00</updated>
+    <updated>2013-07-10T09:51:00-07:00</updated>
     <id>http://garylarizza.com/blog/2013/07/10/from-the-archive-using-crankd</id>
     <content type="html"><![CDATA[<p>Supporting laptops in a managed environment is tricky (and doubly so if you allow them to be taken off your corporate network).  While you can be reasonably assured that your desktops will remain on and connected during the workday, it&rsquo;s not uncommon for laptops to go to sleep, change wireless access points, and even change between an Ethernet or AirPort connection several times during the day.  It&rsquo;s important to have a tool that can &ldquo;tweak&rdquo; certain settings in response to these changes.</p>
 
@@ -6729,7 +8466,7 @@ stay tuned for more brain-dumping-goodness&hellip;</p>
   <entry>
     <title type="html"><![CDATA[Puppet + Github = Laptop <3]]></title>
     <link href="http://garylarizza.com/blog/2013/02/15/puppet-plus-github-equals-laptop-love/"/>
-    <updated>2013-02-15T00:00:00-05:00</updated>
+    <updated>2013-02-15T00:00:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/02/15/puppet-plus-github-equals-laptop-love</id>
     <content type="html"><![CDATA[<p>Everybody wants to be special (I blame our moms). The price of special, when
 it comes to IT, is time. Consider how long you&rsquo;ve spent on just your damn
@@ -7795,7 +9532,7 @@ for more information!</p>
   <entry>
     <title type="html"><![CDATA[Repeatable Puppet Development With Vagrant]]></title>
     <link href="http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant/"/>
-    <updated>2013-02-01T00:00:00-05:00</updated>
+    <updated>2013-02-01T00:00:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant</id>
     <content type="html"><![CDATA[<p>I miss testing code in production. In smaller organizations, &lsquo;testing&rsquo; and
 &lsquo;development&rsquo; can sometimes consist of making changes directly on a server,
@@ -8538,7 +10275,7 @@ everyone at <a href="http://www.puppetlabs.com">Puppet Labs</a>!</p>
   <entry>
     <title type="html"><![CDATA[Using Veewee to Build OS X VMs]]></title>
     <link href="http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms/"/>
-    <updated>2013-01-20T19:36:00-05:00</updated>
+    <updated>2013-01-20T19:36:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms</id>
     <content type="html"><![CDATA[<p>I hate <a href="http://github.com/timsutton">Tim Sutton</a> in the same way I hate <a href="http://ihatestevensinger.com/">Steven Singer</a>. I hate Tim
 because he actually IMPLEMENTS some of the things on my list of &lsquo;shit to tinker
@@ -8849,7 +10586,7 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
   <entry>
     <title type="html"><![CDATA[Managing a Blog Is Insane; Octopress FTW!]]></title>
     <link href="http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/"/>
-    <updated>2013-01-17T00:00:00-05:00</updated>
+    <updated>2013-01-17T00:00:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane</id>
     <content type="html"><![CDATA[<p>Masochists are everywhere. Managing a system by hand appeals to a certain subset
 of the population, but I joined <a href="http://www.puppetlabs.com">Puppet Labs</a> because
@@ -9184,7 +10921,7 @@ if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
   <entry>
     <title type="html"><![CDATA[JAMF NetSUS Appliance]]></title>
     <link href="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/"/>
-    <updated>2012-02-06T11:22:00-05:00</updated>
+    <updated>2012-02-06T11:22:00-08:00</updated>
     <id>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance</id>
     <content type="html"><![CDATA[<h2>JAMF&rsquo;s NetSUS Appliance &ndash; Netboot in a Box</h2>
 
@@ -9351,7 +11088,7 @@ if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
   <entry>
     <title type="html"><![CDATA[Using Git for Mac Sysadmins]]></title>
     <link href="http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins/"/>
-    <updated>2012-01-24T15:25:00-05:00</updated>
+    <updated>2012-01-24T15:25:00-08:00</updated>
     <id>http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins</id>
     <content type="html"><![CDATA[<p>As a former Mac Sysadmin, I frequently felt like I had one toe in the world in which Linux Sysadmins frequently found themselves, but was surrounded by a culture of GUI-Clickery that either feared, scorned, or flat-out avoided tools that were command-line based (or, as many will point out, used the GUI (Graphic User Interface) tools because &lsquo;they worked&rsquo; and that was all they needed).  This sucked because Linux Sysadmins have some tools that, as a current colleague would say, &lsquo;are kind-of awesome.&rsquo;</p>
 
@@ -9742,7 +11479,7 @@ if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
   <entry>
     <title type="html"><![CDATA[Using the Google Macops Crankd and Facter Code]]></title>
     <link href="http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/"/>
-    <updated>2011-12-31T00:00:00-05:00</updated>
+    <updated>2011-12-31T00:00:00-08:00</updated>
     <id>http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code</id>
     <content type="html"><![CDATA[<p>On December 21st, the MacOps team at Google released a Googlecode repository containing a couple of scripts that they use for managing Macs.  The scripts provided interface with <a href="http://code.google.com/p/pymacadmin/">crankd (available in the Pymacadmin code suite)</a> and <a href="http://puppetlabs.com/puppet/related-projects/facter/">Facter</a>, which are a couple of tools with which you MIGHT not be familiar.</p>
 
@@ -9930,7 +11667,7 @@ if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
   <entry>
     <title type="html"><![CDATA[Using Run Stages With Puppet]]></title>
     <link href="http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet/"/>
-    <updated>2011-03-11T11:34:00-05:00</updated>
+    <updated>2011-03-11T11:34:00-08:00</updated>
     <id>http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet</id>
     <content type="html"><![CDATA[<p>As of version 2.6, Puppet introduced a feature called &ldquo;Run Stages&rdquo; that will allow you to better control the order that Puppet configures your system.  The problem with Run Stages (as of right now) is that there&rsquo;s not that much good Documentation out there.  Hopefully this document helps someone else out there who wants to setup Run Stages in their own environment.</p>
 
@@ -10050,524 +11787,6 @@ if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
 <h2>The World is Your Stage</h2>
 
 <p>This might not be the &ldquo;best&rdquo; way to use Run Stages, but it works for me.  Hopefully this little writeup cements the concept for you too.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Getting Started With the Luggage]]></title>
-    <link href="http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage/"/>
-    <updated>2010-12-21T09:47:00-05:00</updated>
-    <id>http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage</id>
-    <content type="html"><![CDATA[<p>With the current movement in the Mac Community toward modular imaging strategies, there&rsquo;s a spike in the need for properly formed package installers. Apple&rsquo;s package format is well documented for its benefits and flaws and there are a string of applications that will help you create your perfect package (from Apple&rsquo;s Packagemaker to the many third-party applications).  While all the various package creation applications will ultimately create a desirable package in the end, very few of them have the triple-threat of easy code-review, replication, and portability.  This is where The Luggage comes in.</p>
-
-<p><a href="http://github.com/unixorn/luggage">The Luggage</a> is a packaging system based on GNU&rsquo;s make command that is found on most every *nix-based operating system (OS X included).  Joe Block, the author, open-sourced the project based on an internal Google tool for creating packages with Makefiles.  By using Makefiles, every member of your team can quickly glance at the file and see exactly what is being inserted into a package.  Changes can be made and committed quickly, errors can be squashed without tearing apart .pkg files, and you can reproduce packages quickly and efficiently without wading through many GUI windows.</p>
-
-<h2>Why do I need to Package?</h2>
-
-<p>Many vendors already ship properly formatted package installers for their software &ndash; and for that we thank them.  There are still a couple of major software vendors that choose to use unique third-party package &ldquo;wrappers&rdquo; to install their software.  While this is fine if you only ever need to install that software on one machine, it makes software deployment&hellip;difficult.  Because of this, systems administrators need to re-package this software into a proper package installer that will deploy and install silently.</p>
-
-<p>If you&rsquo;re a fan of open-source software, you will find that many projects do not offer their software in Apple-friendly packages.  The Luggage will help you wrap their source files into a package format that can be distributed to your machines.</p>
-
-<p>Finally, you may have a whole bevy of scripts that you use for configuration/customization of your clients.  These scripts can easily be deployed via ARD or wrapped into a payload-free package with a single postinstall script.  The Luggage will help you keep track of all your scripts and package them for distribution.</p>
-
-<p>As I&rsquo;ve said before, there are other third-party applications out there that will create a package to your needs.  Many will use snapshotting (or fseventsd monitoring) to create a package based on what&rsquo;s changed on your system.  While this is lightning fast (in most cases), you will need to redo this whole process if something needs to be changed in the resultant package.</p>
-
-<h2>How do we use The Luggage?</h2>
-
-<p>As we said before, The Luggage is just a giant Makefile.  Make has its own unique language, so you need to obey its syntax and formatting standards.  I&rsquo;ve linked to the <a href="http://www.gnu.org/software/make/manual/make.html">GNU make manual here</a> so you can get a quick overview of how it works (WARNING, it&rsquo;s quite large), but this guide will cover all the basics you need to know to get started.</p>
-
-<p>Note that while it is <strong>NOT NECESSARY TO COMPLETELY UNDERSTAND MAKE TO BEGIN USING THE LUGGAGE</strong>, it will help you out tremendously as you start to create complicated packages if you DO understand make&rsquo;s nuances. This article may be long, but that&rsquo;s only to make sure that the reader understands what is going on in the background.</p>
-
-<h2>The luggage.make File</h2>
-
-<p>The base of everything you will do with The Luggage is a file called luggage.make.  It is by no means definitive, and you&rsquo;re encouraged to add to it should you encounter a situation where a recipe doesn&rsquo;t exist for a directory into which you want to install files (Don&rsquo;t worry, we&rsquo;ll get into this later), but it does serve as the basis for all packages you&rsquo;re going to be creating.</p>
-
-<p>At the top of the file are all the variable declarations.  Anything that begins with SOMETHING=somethingelse is setting a variable that we will encounter later.  Many of these variables (such as PACKAGEMAKER, WORK_D, CP, INSTALL, and so on) are paths to various commands that we will need in our rules (setting absolute paths to common commands saves typing later and helps us avoid errors with things like PATH environment variables).  Dereferencing these variables in a Makefile is done with a syntax that looks like this &ndash;> ${CP} (this outputs the value of the CP variable, which is actually <strong>/bin/cp</strong>).  Note that you DO NOT use quotes when you set a variable (i.e. if you want to set the path to CP you do it with CP=/bin/cp and NOT by doing CP=&ldquo;/bin/cp&rdquo;) &ndash; if you DO use quotes, they will be included in the value of that variable (which will cause you all kinds of problems).</p>
-
-<p>Next, we have the target stanzas.  A target (or a rule &ndash; I will use the word rule throughout the article) is setup to look like this:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'>        <span class="k">do</span>-something: l_usr_bin
-</span><span class='line'>        @-echo <span class="s2">&quot;Commands are entered here&quot;</span>
-</span><span class='line'>        @-echo <span class="s2">&quot;Everything below our rule is executed&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In this case, the <strong>target</strong>, or <strong>rule</strong>, is called <strong>do-something</strong> and has dependencies based on ANOTHER rule that&rsquo;s called <strong>l_usr_bin</strong>.  Below this line is called our <strong>recipe</strong>, and right now there are two echo commands.  If the above code was in a blank text file called Makefile we could execute the two echo commands by running the following command from the command line:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>    make <span class="k">do</span>-something
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This would in turn echo the two lines of text below the do-something rule (This is not totally true &ndash; since we haven&rsquo;t defined a rule for l_usr_bin it would probably error out, but I&rsquo;ve kept that dependency in the above example to show you how a rule works.).  Looking specifically at luggage.make, the target stanzas define the behavior for The Luggage&rsquo;s various behaviors (make pkg, make dmg, make zip, and so on).  Note that since many of these rules have dependencies on OTHER rules, a simple command of <strong>make pkg</strong> will trigger.</p>
-
-<p>Next, you will encounter the Target directory rules.  This is the part of the luggage.make file that you may need to edit.  Joe has done a great job of defining the most popular directories into which you will install files/applications/etc. but it would be impossible for him to define EVERY location that you could possibly need.  Here is the structure of creating a Directory Rule:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'>        l_etc_puppet: l_etc
-</span><span class='line'>        @sudo mkdir -p <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/puppet
-</span><span class='line'>        @sudo chown -R root:wheel <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/puppet
-</span><span class='line'>        @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/puppet
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This rule will create an /etc/puppet directory in Luggage&rsquo;s working directory (The variable WORK_D will be used frequently &ndash; it&rsquo;s the temporary directory that The Luggage creates to simulate the target volume onto which it&rsquo;s installing files.  Everything following ${WORK_D} will be the <strong>EXACT PATH</strong> into which files will be installed on the machine that runs your package.)  These Directory Rules become very important when we create custom Makefiles because they serve as dependencies which create the directories in The Luggage&rsquo;s Working Directory. In a nutshell, if you&rsquo;re installing files into a directory with The Luggage, you need to have a Directory Rule that creates this directory first.  Bottom Line: if you don&rsquo;t FIND a Directory Rule for a directory where you will be installing files, then you&rsquo;ll need to create one.</p>
-
-<p>Finally are the File Packaging Rules.  These are handy shortcut rules that will keep your makefiles very short and readable.  In a nutshell, Joe has defined some of the most common directories to which files are installed and created one-line commands that will install specific files into those directories.  For example, say you were creating a custom Makefile in a directory that also had a launchd plist called <strong>com.foo.bar.plist</strong> in it.  If ALL you needed to do was create a package that installed that launchd plist into the /Library/LaunchDaemons directory you could setup your Makefile like this:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="cp">include /usr/local/share/luggage/luggage.make</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>install_foo_launchd_plist
-</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.foo
-</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span>pack-Library-LaunchDaemons-com.foo.bar.plist
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The PAYLOAD variable tells The Luggage which rules to execute.  In this case, it&rsquo;s executing the File Packaging Rule for launchd plists (pack-Library-LaunchDaemons-%) that creates the ${WORK_D}/Library/LaunchDaemons directory, installs the com.foo.bar.plist file into it, sets the correct permissions, and then executes the Packagemaker command line tool to create your package installer. Congratulations, you created a package in 5 lines of code!</p>
-
-<h2>Preparing for using The Luggage</h2>
-
-<p>The Luggage is fairly self contained, but it DOES use Apple&rsquo;s Packagemaker command line tool &ndash; and the way to install THAT is to download and install the Developer Tools for your computer&rsquo;s OS version (There are different Developer Tools packages for 10.6, 10.5, and so on).  The Developer Tools can be downloaded from <a href="http://developer.apple.com">Apple&rsquo;s Developer Site</a>, but you must create a (free) developer account first.  If you&rsquo;re a Mac sysadmin, you should already have all of this.</p>
-
-<p>Once the Developer Tools have been installed you will then need to install The Luggage.  You can use The Luggage to create an installer package for The Luggage (Weird, yes) by first <a href="http://github.com/unixorn/luggage">downloading the source code from Github.</a>  Just click on the big Downloads button in the upper right corner of the screen and download a zip version of the files.  From there, double-click on the downloaded zip file to open it, open up Terminal and change to the folder that was created which contains The Luggage&rsquo;s source code, and execute the following command:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>    sudo make pkg
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This will create an installer package which can be run.  This package installs The Luggage into the /usr/local/share/luggage directory (Don&rsquo;t believe me? Check the Makefile for your self!).  You&rsquo;re now ready to use The Luggage!</p>
-
-<p>Before we get into the package creation examples, we need to talk about directory structure and version control systems (svn, hg, git, etc&hellip;).  When you create new packages with The Luggage, it&rsquo;s necessary to create a new Makefile in a new directory.  I like to use the /usr/local/share/luggage/examples directory to create my packages.  The easiest way to begin a new package is to copy a directory that contains a working Makefile and simply tailor it to your needs.  Unless your job is SOLELY packaging (or you&rsquo;re a unix graybeard), you&rsquo;re NOT going to remember all the syntax and nuances of make.  Don&rsquo;t re-create the wheel &ndash; just copy and edit.</p>
-
-<p>Next, you&rsquo;re going to want to backup your files and/or have a versioning system.  Version control systems (like Subversion, Mercurial, Git, and the like) are becoming increasingly popular <a href="http://www.agileweboperations.com/the-state-of-devops">with the current DevOps movement</a>, so it might be a good idea to start playing with one NOW while you&rsquo;re learning a new skill!  If you&rsquo;re TOTALLY new to this concept, <a href="http://help.github.com/mac-git-installation/">I recommend using git</a>, but it&rsquo;s entirely up to you.  <a href="http://github.com/huronschools/luggage">I maintain a git repository of my Luggage fork</a> that&rsquo;s open to anyone to review and borrow.  If you decide to use something like Git, well then GOOD ON YA, MAN!  If not, make sure you have a backup of your Makefiles.  They&rsquo;re small files; make two backups :)</p>
-
-<h2>Package Creation Examples</h2>
-
-<p>Now that we&rsquo;ve described how make works, how luggage.make works, given a quick example of how to create a package in 5 lines, and had the installation/backup talk let&rsquo;s walk you through some basic package creation examples. We&rsquo;ll create packages that install an application, create a package that installs printers and executes a postinstall script, create a package that installs source code in many directories, and finally create a complex Makefile that uses variables and bash commands.</p>
-
-<h2>An Application Package</h2>
-
-<p>The most common packages will simply install an application file into the /Applications folder on your computer.  Since .app files are actually bundles (a directory that contains subdirectories of executable code), we will need to use tar to wrap these bundles into a single file.  From there we can have The Luggage untar the application into the correct folder. <a href="https://github.com/unixorn/luggage/blob/master/examples/firefox/Makefile">Joe&rsquo;s Firefox example</a> does this, but he also has an added step of curling the tarred/bzipped application from a web server.  I&rsquo;m going to skip that step (for now) so you understand how the basic process works, but it&rsquo;s a best practice to use the curl method so you can keep your applications up-to-date on your fileserver without having to copy the new files to your luggage directory every time.</p>
-
-<p>Let&rsquo;s first create the /usr/local/share/luggage/examples/calculator directory and then make a copy of /Applications/Calculator.app into the /usr/local/share/luggage/examples/calculator directory.  Next, lets open Terminal and change to our /usr/local/share/luggage/examples/calculator directory.  Finally, run the following command to tar.bz2 our Calculator.app:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>    tar cvfj Calculator.app.tar.bz2 Calculator.app
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If you did it correctly, it should create the Calculator.app.tar.bz2 file that we need for The Luggage.  Make sure this file is in the SAME directory (and level &ndash; so don&rsquo;t create subfolders) as the Makefile we&rsquo;re going to create.  You can actually delete the Calculator.app copy that we created &ndash; we won&rsquo;t need it.  From there, our Makefile is simple &ndash; it should look like this:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="cp">include /usr/local/share/luggage/luggage.make</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>Calculator_Install
-</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.yourdomain
-</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span>unbz2-applications-Calculator.app
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>That&rsquo;s it!  The PAYLOAD variable is the magic variable here &ndash; it contains the rule(s) that are to be executed in creating our package.  The unbz2-applications-% File Packaging Rule is defined in our luggage.make file (which we&rsquo;ve included at the top of our Makefile), so we don&rsquo;t NEED anything else in our Makefile.  <strong>MAKE SURE</strong> that the capitalization and spelling of Calculator.app in &ldquo;unbz2-applications-Calculator.app&rdquo; and your &ldquo;Calculator.app.tar.bz2&rdquo; files are IDENTICAL or this package will NOT be created (make relies on this).</p>
-
-<h2>UPDATED: An easier Application Package</h2>
-
-<p>Joe has actually created a Ruby script that will perform all of the actions outlined in the previous example for you.  It&rsquo;s called app2luggage.rb and it can save you a few steps if you know how to use it.  Let&rsquo;s take a look and see what we need to use it.</p>
-
-<p>The first thing you will need to do is install the trollop rubygem as that&rsquo;s what app2luggage.rb uses to parse its options.  You can do this with the following command:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>    sudo gem install trollop
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Next, make sure the app2luggage.rb script exists in your /usr/local/share/luggage directory.  Finally, let&rsquo;s run the command with the following arguments:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>    sudo /usr/local/share/luggage/app2luggage.rb -a /Applications/Calculator.app -i /usr/local/share/luggage/examples/Calculator_Application/ -l /usr/local/share/luggage/luggage.make -r com.huronhs -p Calculator_Application
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Here&rsquo;s what each argument means:</p>
-
-<ol>
-<li>-a is the path to the Application we want to tar up and install with The Luggage &ndash; we&rsquo;re using the path to Calculator.app for now</li>
-<li>-i is the path to the folder that app2luggage.rb will create that contains our Makefile and tarred up application.  This folder SHOULD NOT EXIST or app2luggage.rb will exit (so as not to overwrite your data).</li>
-<li>-l is the path to our luggage.make file</li>
-<li>-r is the reverse domain for our organization</li>
-<li>-p is the package id for the Makefile</li>
-</ol>
-
-
-<p>There are other arguments available, simply run app2luggage.rb with the &mdash;help argument to see them all.  Once app2luggage.rb runs successfully, it will create the directory you specified in the -i argument and populate it with a Makefile and the tarred up application.  The only thing left to do is to make your pkg, zip, or dmg.</p>
-
-<h2>Installing a printer with a preinstall script</h2>
-
-<p>One of the most popular solutions I offer with using The Luggage is to create a package that will install a printer and then install a pre-configured PPD file that sets all the initial settings for the printer.  I do this with Puppet currently, and I know it&rsquo;s popular in Munki too.  You can also optionally install a specific driver (if the drivers for your printer aren&rsquo;t already on your machines).  For those people who like to skip ahead, <a href="https://github.com/huronschools/luggage/tree/master/examples/hhs_printers/Printserver%20Managed/Office_9050">I have this example on my luggage repo</a>.</p>
-
-<p>This Makefile demonstrates the use of a preinstall/preflight script (which isn&rsquo;t actually installed into the payload of the package).  The Luggage has a special packaging rule for this called pack-script-% that works so long as the name of your script corresponds exactly with what you write in the PAYLOAD variable.  This file also demonstrates the use of multiple rules in the PAYLOAD variable by using the \ character.  While this isn&rsquo;t difficult to understand, it is a necessary syntax.</p>
-
-<p><a href="https://github.com/huronschools/luggage/blob/master/examples/hhs_printers/Printserver%20Managed/Office_9050/preflight">My preflight script is right here</a> for those who are interested.  It&rsquo;s copied into the directory we create that contains our makefile and I name it preflight.  Note that it contains variables that need to be changed (all of which are at the top of the script) before you deploy this package.</p>
-
-<p>Next, we need to get a .ppd file that contains all the configuration data for our printer.  The easiest way to do this is to install your printer on a demo machine using the EXACT SAME SETTINGS that will be configured in your script (protip: actually RUN the script on your computer first), configure it how you want (number of trays, memory settings, type of finisher, etc&hellip;), and then open the /etc/cups/ppd directory on your model computer.  Inside should be a .ppd file for your printer containing all the settings you&rsquo;ve just configured.  Copy this .ppd file into the folder that contains your Makefile and preflight script.  Mine (in this example) will be called psm_HHS_Office_9050.ppd</p>
-
-<p>Now, let&rsquo;s look at our Makefile:</p>
-
-<figure class='code'><figcaption><span>Managed Printer Makefile </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="cp">    include /usr/local/share/luggage/luggage.make</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="nv">TITLE</span><span class="o">=</span>HHS_Main_Office_9050_Managed_Installer
-</span><span class='line'>    <span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.huronhs
-</span><span class='line'>    <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>        pack-hp-ppd <span class="se">\</span>
-</span><span class='line'>        pack-script-preflight
-</span><span class='line'>
-</span><span class='line'>    pack-hp-ppd: l_etc_cups_ppd
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./psm_HHS_Office_9050.ppd <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/cups/ppd/psm_HHS_Office_9050.ppd
-</span><span class='line'>      @sudo chmod 644 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/cups/ppd/psm_HHS_Office_9050.ppd
-</span><span class='line'>      @sudo chown root:_lp <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/cups/ppd/psm_HHS_Office_9050.ppd
-</span><span class='line'>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The first thing you should notice is that our PAYLOAD variable starts with a \ and has three lines.  The \ signifies that the contents of our variable spans multiple lines.  In reality, the value of PAYLOAD is actually &ldquo;pack-hp-ppd pack-script-preflight&rdquo; but it&rsquo;s formatted so it&rsquo;s easier to read.  Next, notice that the pack-script-preflight rule contains the word &ldquo;preflight&rdquo; after pack-script-.  This means that our script must be named preflight (EXACTLY &ndash; case is sensitive here).  Finally, we&rsquo;ve also specified a pack-hp-ppd rule.  Since luggage.make DOES NOT define this rule, we&rsquo;ve defined it in our Makefile.</p>
-
-<p>The pack-hp-ppd rule has a dependency on the l_etc_cups_ppd rule.  This rule IS defined in luggage.make (well, it is for me &ndash; I can&rsquo;t remember if I created it or not.  If it isn&rsquo;t there for you, then you&rsquo;ll need to create it using the other folder creation rules as a guide) &ndash; and it creates the /etc/cups/ppd folder structure that we need in our package.  Lets look at the three lines which are called our <strong>recipe</strong>*:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="err">@sudo</span> <span class="err">${CP}</span> <span class="err">./psm_HHS_Office_9050.ppd</span> <span class="err">${WORK_D}/etc/cups/ppd/psm_HHS_Office_9050.ppd</span>
-</span><span class='line'><span class="err">@sudo</span> <span class="err">chmod</span> <span class="err">644</span> <span class="err">${WORK_D}/etc/cups/ppd/psm_HHS_Office_9050.ppd</span>
-</span><span class='line'><span class="nf">@sudo chown root</span><span class="o">:</span><span class="m">_lp ${WORK_D}/etc/cups/ppd/psm_HHS_Office_9050.ppd</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The first line references the CP variable (if you remember &ndash; its value is /bin/cp) to copy the psm_HHS_Office_9050.ppd file from the directory that contains our Makefile into Luggage&rsquo;s working directory/etc/cups/ppd.  The second line sets its mode to 644 (to match the mode for all .ppd files in that directory), and the third line sets the owner to root and the group to _lp (note that this group is ONLY available in 10.5 and 10.6 machines &ndash; so you&rsquo;ll need another package for 10.4 clients or below).</p>
-
-<p>That&rsquo;s it!  The resultant package will run the preflight script and then install the correct .ppd file after the script is run.  This package will successfully install and configure your printer in one fell swoop.</p>
-
-<h2>Installing files into multiple directories</h2>
-
-<p>So far our Makefiles have been pretty easy.  In fact, most of them have been a couple of lines.  Lets look at a package that installs files into multiple locations.  There&rsquo;s a cool open source tool called <a href="http://github.com/ripienaar/angelia">Angelia that was created by R.I Pienaar</a>.  I use it to send alerts to my iPhone and to also process Nagios Alerts.  The problem is that it&rsquo;s only packaged for Linux machines.  Since I manage Mac machines, I thought I&rsquo;d lend R.I. a hand and create a package installer for it.  <a href="https://github.com/huronschools/luggage/tree/master/examples/angelia">This package is also on my luggage repo</a> if you want to work ahead.  Let&rsquo;s look at the Makefile:</p>
-
-<figure class='code'><figcaption><span>Angelia Recipe </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="c">    #  Angelia Package Creation:</span>
-</span><span class='line'>
-</span><span class='line'><span class="cp">    include /usr/local/share/luggage/luggage.make</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="nv">TITLE</span><span class="o">=</span>Angelia_Installer
-</span><span class='line'>    <span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.huronhs
-</span><span class='line'>    <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>        pack-angelia-etc <span class="se">\</span>
-</span><span class='line'>        pack-angelia-binaries <span class="se">\</span>
-</span><span class='line'>        pack-angelia-lib <span class="se">\</span>
-</span><span class='line'>        pack-angelia-spool <span class="se">\</span>
-</span><span class='line'>        pack-angelia-log <span class="se">\</span>
-</span><span class='line'>        pack-angelia-launchd
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>    pack-angelia-launchd: l_Library_LaunchDaemons
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> net.devco.angelia.plist <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/LaunchDaemons
-</span><span class='line'>      @sudo chmod -R 644 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/LaunchDaemons
-</span><span class='line'>
-</span><span class='line'>    pack-angelia-binaries: l_usr_sbin
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia-send.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin/angelia-send
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia-spoold.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin/angelia-spoold
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia-nagios-send.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin/angelia-nagios-send
-</span><span class='line'>      @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin
-</span><span class='line'>
-</span><span class='line'>    pack-angelia-lib: l_Library_Ruby_Site_1_8
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> -R ./angelia <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/Ruby/Site/1.8
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/Ruby/Site/1.8
-</span><span class='line'>      @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/Ruby/Site/1.8
-</span><span class='line'>
-</span><span class='line'>    pack-angelia-etc: l_etc_angelia
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> -R ./templates <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia.cfg <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./COPYING <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./README.markdown <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>      @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>
-</span><span class='line'>    pack-angelia-log: l_var_log_angelia
-</span><span class='line'>      @sudo touch .create
-</span><span class='line'>    pack-angelia-spool: l_var_spool_angelia
-</span><span class='line'>      @sudo touch .create
-</span><span class='line'>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>It&rsquo;s definitely longer, but I don&rsquo;t think it&rsquo;s any more complex than the examples we&rsquo;ve seen before.  The PAYLOAD variable spans multiple lines using the \ character and I&rsquo;ve defined all the custom rules.  All of the rules depend on <a href="https://github.com/huronschools/luggage/blob/master/luggage.make">folder rules in my luggage.make file</a> (which were created if they didn&rsquo;t exist before), and the recipes inside those rules are extremely simple to navigate (mainly copying files and changing permissions).  Creating a script that makes this package would be QUITE A BIT longer than this Makefile, and the Makefile itself took less than 3 minutes to create.  The only caveat is that we need to make sure all the files/directories we&rsquo;re copying into Luggage&rsquo;s WORK_D directory are in the folder that contains the Makefile.  Because of this, anytime Angelia is updated I will need to copy over new files.</p>
-
-<p>It would be much easier to create a Makefile that downloaded the current version of all of these files before it copied them into our package&hellip;</p>
-
-<h2>Creating a more complex Makefile</h2>
-
-<p>The basis of this example was my thought that it would be MUCH easier for me to have a Makefile that downloaded the newest versions of the files that I need before it copies them into the package.  Make supports this through its support of shell commands and variables &ndash; it only requires you to code it up.  Let&rsquo;s look at a package I created for Marionette-Collective.</p>
-
-<p><a href="http://github.com/puppetlabs/marionette-collective">Marionette-Collective is awesome software</a> (also created by R.I Pienaar and now owned by Puppet Labs) that allows you to communicate with multiple nodes at once.  They DID have a script that created their packages, but I wanted to create a Makefile that would create a package of ANY version of their software.  Let&rsquo;s look at the Makefile first and I&rsquo;ll break it down:</p>
-
-<figure class='code'><figcaption><span>MCollective Recipe </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-<span class='line-number'>56</span>
-<span class='line-number'>57</span>
-<span class='line-number'>58</span>
-<span class='line-number'>59</span>
-<span class='line-number'>60</span>
-<span class='line-number'>61</span>
-<span class='line-number'>62</span>
-<span class='line-number'>63</span>
-<span class='line-number'>64</span>
-<span class='line-number'>65</span>
-<span class='line-number'>66</span>
-<span class='line-number'>67</span>
-<span class='line-number'>68</span>
-<span class='line-number'>69</span>
-<span class='line-number'>70</span>
-<span class='line-number'>71</span>
-<span class='line-number'>72</span>
-<span class='line-number'>73</span>
-<span class='line-number'>74</span>
-<span class='line-number'>75</span>
-<span class='line-number'>76</span>
-<span class='line-number'>77</span>
-<span class='line-number'>78</span>
-<span class='line-number'>79</span>
-<span class='line-number'>80</span>
-<span class='line-number'>81</span>
-<span class='line-number'>82</span>
-<span class='line-number'>83</span>
-<span class='line-number'>84</span>
-<span class='line-number'>85</span>
-<span class='line-number'>86</span>
-<span class='line-number'>87</span>
-<span class='line-number'>88</span>
-<span class='line-number'>89</span>
-<span class='line-number'>90</span>
-<span class='line-number'>91</span>
-<span class='line-number'>92</span>
-<span class='line-number'>93</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="c">    #  Example:  A dynamic installer for Marionette-Collective</span>
-</span><span class='line'><span class="c">    #</span>
-</span><span class='line'><span class="c">    #  Author:  Gary Larizza</span>
-</span><span class='line'><span class="c">    #  Created: 12/17/2010</span>
-</span><span class='line'><span class="c">    #  Last Modified: 12/18/2010</span>
-</span><span class='line'><span class="c">    #</span>
-</span><span class='line'><span class="c">    #  Description:  This Makefile will download the version of MCollective specified</span>
-</span><span class='line'><span class="c">    #    in the PACKAGE_VERSION variable from the Puppet Labs website, untar it,</span>
-</span><span class='line'><span class="c">    #    and then install the source files into their Mac-specific locations.  </span>
-</span><span class='line'><span class="c">    #    The MAJOR and MINOR versions must be specified for the Info.plist file</span>
-</span><span class='line'><span class="c">    #    that Packagemaker requires, but I use awk on the PACKAGE_VERSION to </span>
-</span><span class='line'><span class="c">    #    get these.  See inline comments.</span>
-</span><span class='line'><span class="c">    #</span>
-</span><span class='line'><span class="cp">    include /usr/local/share/luggage/luggage.make</span>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'><span class="c">    # Luggage Variables:</span>
-</span><span class='line'><span class="c">    #    If the TYPE variable isn&#39;t specified via the CLI, we will install everything</span>
-</span><span class='line'><span class="c">    #    into the resultant package</span>
-</span><span class='line'>    <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Full
-</span><span class='line'>    <span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.puppetlabs
-</span><span class='line'>    <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>        unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
-</span><span class='line'>        pack-mc-libexec <span class="se">\</span>
-</span><span class='line'>        pack-mc-binaries <span class="se">\</span>
-</span><span class='line'>        pack-mc-lib <span class="se">\</span>
-</span><span class='line'>        pack-mc-config <span class="se">\</span>
-</span><span class='line'>        pack-mc-config-server <span class="se">\</span>
-</span><span class='line'>        pack-mc-config-client <span class="se">\</span>
-</span><span class='line'>        pack-mc-launchd <span class="se">\</span>
-</span><span class='line'>        pack-mc-mcollectived <span class="se">\</span>
-</span><span class='line'>        pack-mc-preflight-all
-</span><span class='line'>
-</span><span class='line'><span class="c">    # Variable Declarations:  </span>
-</span><span class='line'><span class="c">    #    Any variable can be set from the command line by doing this:</span>
-</span><span class='line'><span class="c">    #    &quot;make pkg PACKAGE_VERSION=1.0.0&quot;</span>
-</span><span class='line'>    <span class="nv">PACKAGE_VERSION</span><span class="o">=</span>1.0.0
-</span><span class='line'>    <span class="nv">PACKAGE_MAJOR_VERSION</span><span class="o">=</span><span class="sb">`</span><span class="nb">echo</span> <span class="k">${</span><span class="nv">PACKAGE_VERSION</span><span class="k">}</span> | awk -F <span class="s1">&#39;.&#39;</span> <span class="s1">&#39;{print $$1}&#39;</span><span class="sb">`</span>
-</span><span class='line'>    <span class="nv">PACKAGE_MINOR_VERSION</span><span class="o">=</span><span class="sb">`</span><span class="nb">echo</span> <span class="k">${</span><span class="nv">PACKAGE_VERSION</span><span class="k">}</span> | awk -F <span class="s1">&#39;.&#39;</span> <span class="s1">&#39;{print $$2$$3}&#39;</span><span class="sb">`</span>
-</span><span class='line'>    <span class="nv">MCFILE</span><span class="o">=</span>mcollective-<span class="k">${</span><span class="nv">PACKAGE_VERSION</span><span class="k">}</span>
-</span><span class='line'>    <span class="nv">MCURL</span><span class="o">=</span>http://puppetlabs.com/downloads/mcollective/<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>.tgz
-</span><span class='line'>
-</span><span class='line'><span class="c">    # Package Creation Limiters:</span>
-</span><span class='line'><span class="c">    #    These if-statements will check for one of three values for the TYPE variable:</span>
-</span><span class='line'><span class="c">    #    &quot;COMMON, CLIENT, or BASE&quot;  If either of these values are present (CASE SENSITIVE)</span>
-</span><span class='line'><span class="c">    #    the PAYLOAD variable will be changed to limit what is installed into the package.</span>
-</span><span class='line'>
-</span><span class='line'><span class="c">    # COMMON Package:</span>
-</span><span class='line'><span class="c">    #    This package includes the Ruby libraries and MCollective plugins with nothing else.</span>
-</span><span class='line'><span class="cp">    ifeq (${TYPE},COMMON)</span>
-</span><span class='line'>      <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>          unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
-</span><span class='line'>          pack-mc-libexec <span class="se">\</span>
-</span><span class='line'>          pack-mc-lib <span class="se">\</span>
-</span><span class='line'>          pack-mc-preflight-common
-</span><span class='line'>      <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Common
-</span><span class='line'><span class="cp">    endif</span>
-</span><span class='line'>
-</span><span class='line'><span class="c">    # CLIENT Package:</span>
-</span><span class='line'><span class="c">    #    This package includes the MCollective Binaries and the configuration file for</span>
-</span><span class='line'><span class="c">    #    MCollective&#39;s client binaries.  </span>
-</span><span class='line'><span class="cp">    ifeq (${TYPE},CLIENT)</span>
-</span><span class='line'>      <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>          unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
-</span><span class='line'>          pack-mc-config <span class="se">\</span>
-</span><span class='line'>          pack-mc-binaries <span class="se">\</span>
-</span><span class='line'>          pack-mc-config-client <span class="se">\</span>
-</span><span class='line'>          pack-mc-preflight-client
-</span><span class='line'>      <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Client
-</span><span class='line'><span class="cp">    endif</span>
-</span><span class='line'>
-</span><span class='line'><span class="c">    # BASE Package:</span>
-</span><span class='line'><span class="c">    #    This package includes the mcollectived daemon, Ruby Libraries, a launchd plist</span>
-</span><span class='line'><span class="c">    #    to call mcollectived, and the configuration files for the MCollective server.</span>
-</span><span class='line'><span class="cp">    ifeq (${TYPE},BASE)</span>
-</span><span class='line'>      <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>          unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
-</span><span class='line'>          pack-mc-config <span class="se">\</span>
-</span><span class='line'>          pack-mc-config-server <span class="se">\</span>
-</span><span class='line'>          pack-mc-launchd <span class="se">\</span>
-</span><span class='line'>          pack-mc-mcollectived <span class="se">\</span>
-</span><span class='line'>          pack-mc-lib <span class="se">\</span>
-</span><span class='line'>          pack-mc-preflight-base
-</span><span class='line'>      <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Base
-</span><span class='line'><span class="cp">    endif</span>
-</span><span class='line'>
-</span><span class='line'><span class="c">    # This rule will curl the selected version of MCollective and untar it into the directory</span>
-</span><span class='line'><span class="c">    #    in which the Makefile resides.</span>
-</span><span class='line'>    unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>:
-</span><span class='line'>      curl <span class="k">${</span><span class="nv">MCURL</span><span class="k">}</span> -o <span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>.tgz
-</span><span class='line'>      @sudo <span class="k">${</span><span class="nv">TAR</span><span class="k">}</span> xzf <span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>.tgz
-</span><span class='line'>
-</span><span class='line'><span class="c">    # This rule will install MCollective&#39;s plugin files to /usr/libexec/mcollective</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
 ]]></content>
   </entry>
   
