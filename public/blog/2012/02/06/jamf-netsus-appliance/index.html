@@ -1,0 +1,486 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>JAMF NetSUS Appliance - Shit Gary Says</title>
+  <meta name="author" content="Gary larizza">
+
+  
+  <meta name="description" content="JAMF&rsquo;s NetSUS Appliance &ndash; Netboot in a Box Today, JAMF released a new appliance VM based on Ubuntu 10.04 LTS (Lucid) that, for once, &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Shit Gary Says" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-37766331-2']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Shit Gary Says</a></h1>
+  
+    <h2>...things I don't want to forget</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:garylarizza.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">JAMF NetSUS Appliance</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-02-06T11:22:00-08:00" pubdate data-updated="true">Feb 6<span>th</span>, 2012</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><h2>JAMF&rsquo;s NetSUS Appliance &ndash; Netboot in a Box</h2>
+
+<p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">Today, JAMF released a new appliance VM</a> based on Ubuntu 10.04 LTS (Lucid) that, for once, provides an &lsquo;out of the box&rsquo; implementation of Netboot and Software Update Service WITHOUT requiring OS X hardware (based on <a href="http://github.com/wdas/reposado">Reposado</a>) and <a href="http://twitpic.com/8glygw">other open-source technologies.</a></p>
+
+<p>For those people who are relatively new to Linux, I thought I&rsquo;d provide an easy walkthrough of how to get started using this VM on your Laptop.  I&rsquo;m going to demo this using VMware Fusion instead of VirtualBox mainly because I prefer how Fusion handles Networking.  I&rsquo;ve used many VMs, and Fusion always tends to be much more solid and stable for me.  If you don&rsquo;t have Fusion or don&rsquo;t WANT to use Fusion, feel free to use VirtualBox.</p>
+
+<h2>Download and Convert the OVA File</h2>
+
+<p><a href="https://jamfnation.jamfsoftware.com/viewProduct.html?id=180">The appliance can be downloaded directly from JAMF</a> and comes as a VirtualBox OVA file.  <a href="http://derflounder.wordpress.com/2012/02/06/converting-jamfs-netbootsus-appliance-to-vmware/">Rich Trouton has provided a great walkthrough</a> on converting the OVA file to a VMX file, so I&rsquo;ll link you to that post (since he did it so well).</p>
+
+<h2>Start up the VM</h2>
+
+<p>Once you have your VMX file, you can open it up with Fusion and import it into your Virtual Machine Library.  There is one change we&rsquo;ll want to make, so click on the VM and open its Settings panel (this is different from Fusion 3.0 and 4.0 &ndash; I&rsquo;ll be describing the 4.0 method).  In the Settings panel, you&rsquo;ll want to select the Network Adapter icon and make sure the radio button next to &ldquo;Share the Mac&rsquo;s network connection (NAT)&rdquo; is selected.  This will create a local IP address so we can contact it directly from our Laptop.  Once you&rsquo;ve done that, start the VM and get to the login screen (you&rsquo;ll need to click the Ok button through the message about logging into the NetSUS instance).  Feel free to login with the username &lsquo;shelluser&rsquo; and the password &lsquo;shelluser&rsquo;.  You should see a Message of the Day splash with one of the sections being &ldquo;IP address for eth0:&rdquo;.  Note the IP address, we&rsquo;ll need it in the next section (if you don&rsquo;t see this, just run <code>ifconfig</code> from the command line and look for the IP address for the eth0 adapter &ndash; it should be in the format of 192.168.x.x).</p>
+
+<h2>Prepare to Break Free!</h2>
+
+<p>It really sucks to work with VMs from WITHIN the VM window for various reasons (lack of Copy/Paste, loss of mouse, etc…), so we&rsquo;re going to setup a host entry on your local laptop so we can SSH into the VM as we need.  I&rsquo;m going to give my VM a hostname of &lsquo;netsus.puppetlabs.vm&rsquo; but you can name it whatever you want.  Let&rsquo;s first edit the /etc/hosts file on your laptop (NOT within the VM, this is ON your laptop) by running the following from the command line:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo vim /etc/hosts</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Feel free to use pico/nano to edit /etc/hosts in case you don&rsquo;t have any experience with vim.  We want to add the following line in the /etc/hosts file:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>192.168.217.154 netsus.puppetlabs.vm</span></code></pre></td></tr></table></div></figure>
+
+
+<p><strong>NOTE</strong> SUBSTITUTE 192.168.217.154 WITH THE IP ADDRESS YOU GOT FROM THE PREVIOUS STEP!  That&rsquo;s the IP address that was assigned on MY laptop, and it will definitely be different from the IP address you got on YOUR computer.  Also, you don&rsquo;t HAVE to use &lsquo;netsus.puppetlabs.vm&rsquo; &ndash; you can assign it any name you want.  Save and close /etc/hosts and then let&rsquo;s test connectivity from the command line by doing a ping:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>ping 192.168.217.154</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As long as we have connection, we&rsquo;re fine (remember, substitute your IP Address for mine).  If you DON&rsquo;T have connectivity, make sure your VM is running and review your /etc/hosts file to make sure the changes were saved (also, check the IP address on your VM again).</p>
+
+<h2>Snapshot Time</h2>
+
+<p>The beauty of Fusion is that you can take snapshots and revert to them should you mess things up.  Let&rsquo;s take a snapshot now in case we screw things up in the following steps.  I&rsquo;m using VMware Fusion 4.0, so I take a snapshot by clicking on the VM window, clicking on the Virtual Machine menu at the top, and then down to Snapshots.  From there, you can click the &lsquo;Take Snapshot&rsquo; button and let it do its thing.  When it&rsquo;s done, hit the close button and return to the VM</p>
+
+<h2>Enable SSH and Login</h2>
+
+<p>By default, the VM doesn&rsquo;t have the SSHD process running, so we can&rsquo;t yet SSH in from our laptop.  Enable this by doing the following from within the VM:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo apt-get install openssh-server</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Hit &ldquo;Y&rdquo; when it asks if it should download and install.  When it completes, switch back to your LAPTOP (i.e. NOT inside the VM), open up Terminal, and do the following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>ssh shelluser@netsus.puppetlabs.vm</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Type yes to add the SSH key to your known_hosts file and use the password &lsquo;shelluser&rsquo; to login.  Tada! Now you can work directly from Terminal and enable copy/pasting directly from your Terminal window.  You can always type <code>exit</code> to close the ssh connection when you&rsquo;re done.</p>
+
+<h2>Install Puppet</h2>
+
+<p>So, it wouldn&rsquo;t be one of my write-ups if I DIDN&rsquo;T get Puppet installed.  Actually, if you&rsquo;ve only managed Macs, then you might not have seen the benefit of Puppet before.  Now that we&rsquo;re on Linux, you&rsquo;ll definitely see the benefit of Puppet (especially if you&rsquo;re not familiar with the service/package manipulation commands).  Puppet can help abstract that for you, so we&rsquo;re going to enable it.</p>
+
+<p>The version of Puppet that&rsquo;s in the main package repository is quite old (0.25 as opposed to the current 2.7.10 version we support).  Let&rsquo;s add Puppet Labs&#8217; Apt Repository to the list of repositories queried so we can get a recent version of Puppet.  Do that by opening up the /etc/apt/sources.list file for editing with the following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo vim /etc/apt/sources.list</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If it prompts you for your password, go ahead and enter it.  Also, if you&rsquo;re not familiar with vi or vim, I&rsquo;ll try and help you with the basics.  Arrow down to the line JUST above the line that begins with &ldquo;deb <a href="http://">http://</a>&rdquo; and press the i button on your keyboard to insert the following lines:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>deb http://apt.puppetlabs.com/ubuntu lucid main
+</span><span class='line'>deb-src http://apt.puppetlabs.com/ubuntu lucid main</span></code></pre></td></tr></table></div></figure>
+
+
+<p>When you&rsquo;re done, hit the escape key and press ZZ (hold shift and hit Z twice, you want two capital-Z&rsquo;s) to save and close the file.  This will add Puppet Labs&#8217; repository to the list of repos queried.</p>
+
+<p>Next, we&rsquo;ll need to add Puppet Labs&#8217; GPG key to the system so we can validate the packages that are downloaded.  From the terminal, execute the following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> gpg --recv-key 4BD6EC30</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The first time you run it, it will bother you about needing to create the keyserver file and won&rsquo;t run correctly.  Let&rsquo;s execute it correctly to receive the key:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> gpg --recv-key 4BD6EC30</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Great, we should have the key, now we want to load it.  Do that with this command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>gpg -a --export 4BD6EC30 | sudo apt-key add -</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Finally, let&rsquo;s update apt so that it knows about the repository.  Do that with this command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo apt-get update</span></code></pre></td></tr></table></div></figure>
+
+
+<p>When it finishes running, you can finally install Puppet with the following command:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo apt-get install puppet</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Type &ldquo;Y&rdquo; when it asks you if it should download and install all the dependencies.  That&rsquo;s it!  Puppet should be installed!  Run the following to see what version we&rsquo;ve installed:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>puppet --version</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As of this writing, 2.7.10 is the current version.  As long as you don&rsquo;t have version 0.25 you should be good!</p>
+
+<h2>Snapshots away</h2>
+
+<p>It would be wise to take another snapshot at this point.  Don&rsquo;t worry, I&rsquo;ll wait.</p>
+
+<h2>Inspect the System</h2>
+
+<p>Puppet lets us see what&rsquo;s been installed on the VM.  Take a look at all the packages on the system by doing the following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo puppet resource package</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Type your password when prompted and Puppet will return you with a list of all packages on the system and the versions that are running.  Similarly, you can see what services are running with the following:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo puppet resource service</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Notice that sshd is running and other services like netatalk (that enables AFP on Linux) should also be running.  Sweet.  We&rsquo;ll come back to Puppet later.</p>
+
+<h2>Login to the Web GUI</h2>
+
+<p>If your VM is running, you should be able to open a web browser on your Laptop and navigate to the following address:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>https://netsus.puppetlabs.vm</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note the httpS as we&rsquo;ll need to use SSL to get into the Web GUI.  When it asks if you want to accept the self-signed cert, make sure to choose Yes.  You can login with the user &lsquo;webadmin&rsquo; and the password &lsquo;webadmin&rsquo;</p>
+
+<p>Once you&rsquo;re logged in, <a href="https://s3.amazonaws.com/jamfsoftware-content/downloads/NetBootSUS+Appliance_v1.0.pdf">feel free to read through JAMF&rsquo;s instructions for enabling their services.</a>  They do a much better job than I about walking you through that.</p>
+
+<h2>Access to the Raw Files</h2>
+
+<p>Back in the Terminal window, you can access all the PHP/Shell magic that comprises the Web GUI in the /var/www/webadmin directory.  You can poke around through all the files (and use sudo to open some of the key bits) at your leisure.</p>
+
+<p>Note that /etc/dhcpd.conf is the main configuration file for the DHCPD service and it&rsquo;s got some special bits to accommodate Apple Hardware.</p>
+
+<p>Also, /var/appliance has some magic (and the /var/appliance/configurefornetboot script has some sed statements for fixing a stock dhcpd.conf file and enabling those Apple Hardware bits).</p>
+
+<h2>More Later?</h2>
+
+<p>That&rsquo;s it for now &ndash; I just wanted to get something online to show people how to setup and poke around in the VM.  Later I can show you how to manipulate and manage the VM with Puppet, which is pretty fun.  Your VM should get you started and let you play around locally, but if you want to test out Netboot and the like then you&rsquo;ll need an externally-accessible IP address (as apposed to the 192.168.x.x IP, which is only accessible from your Laptop).  You can change the settings in VMware Fusion to enable that (like we did in step 2).</p>
+
+<p>Hope this helped you out!</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Gary larizza</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-02-06T11:22:00-08:00" pubdate data-updated="true">Feb 6<span>th</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/netboot/'>netboot</a>, <a class='category' href='/blog/categories/os-x/'>os x</a>, <a class='category' href='/blog/categories/os-x-and-linux/'>os x and linux</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/" data-via="glarizza" data-counturl="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/01/24/using-git-for-mac-sysadmins/" title="Previous Post: Using Git for Mac Sysadmins">&laquo; Using Git for Mac Sysadmins</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2013/01/17/managing-a-blog-is-insane/" title="Next Post: Managing a blog is insane; Octopress FTW!">Managing a blog is insane; Octopress FTW! &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/08/31/r10k-plus-directory-environments/">R10k + Directory Environments</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/03/26/random-r10k-workflow-ideas/">On R10k and 'Environments'</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/03/11/when-yellow-ruled-the-world/">When Yellow Ruled the World</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/03/07/puppet-workflow-part-3b/">Building a Functional Puppet Workflow Part 3b: More R10k Madness</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/02/18/puppet-workflow-part-3/">Building a Functional Puppet Workflow Part 3: Dynamic Environments With R10k</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li class="loading">Status updating...</li>
+  </ul>
+  
+  <a href="https://github.com/glarizza">@glarizza</a> on GitHub
+  
+  <script type="text/javascript">
+    $(document).ready(function(){
+        if (!window.jXHR){
+            var jxhr = document.createElement('script');
+            jxhr.type = 'text/javascript';
+            jxhr.src = '/javascripts/libs/jXHR.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(jxhr, s);
+        }
+
+        github.showRepos({
+            user: 'glarizza',
+            count: 0,
+            skip_forks: true,
+            target: '#gh_repos'
+        });
+    });
+  </script>
+  <script src="/javascripts/github.js" type="text/javascript"> </script>
+</section>
+
+
+<section>
+  <h1>Twitter</h1>
+  <a class="twitter-timeline" href="https://twitter.com/glarizza" data-widget-id="406925439601348608">Tweets by @glarizza</a>
+  <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+</section>
+
+
+
+
+
+<section>
+  <h1>Coderwall Badges</h1>
+  <ul id="cw_badges">
+    <li class="loading">Status updating...</li>
+  </ul>
+  <p id="badges"></p>
+  <script type="text/javascript">
+    function show_achievements(args) {
+      var badges = args["data"]["badges"];
+      var achievements = "";
+      for (var i = 0; i < badges.length; i++) {
+        var alt_text = badges[i]["name"];
+        var title_text = badges[i]["name"] + ' - ' + badges[i]["description"];
+        achievements += '<a href="http://coderwall.com/glarizza/"><img src="'
+          + badges[i]["badge"]
+          + '" width="48" height="48" alt="' + alt_text
+          + '" title="' + title_text
+          + '" style="margin-top: 7px;margin-right: 4px;"'
+          + '"/></a>';
+      };
+      document.getElementById("cw_badges").style.display = "none";
+      document.getElementById("badges").innerHTML = achievements;
+    }
+  </script>
+  <script src="http://coderwall.com/glarizza.json?callback=show_achievements"></script>
+  
+</section>
+
+<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Second Add -->
+<ins class="adsbygoogle"
+     style="display:inline-block;width:300px;height:250px"
+     data-ad-client="ca-pub-7679900559570586"
+     data-ad-slot="4934599358"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Gary larizza -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'shitgarysays';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/';
+        var disqus_url = 'http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

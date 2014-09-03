@@ -1,0 +1,3009 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: puppet | Shit Gary Says]]></title>
+  <link href="http://garylarizza.com/blog/categories/puppet/atom.xml" rel="self"/>
+  <link href="http://garylarizza.com/"/>
+  <updated>2014-08-31T14:19:23-07:00</updated>
+  <id>http://garylarizza.com/</id>
+  <author>
+    <name><![CDATA[Gary larizza]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[R10k + Directory Environments]]></title>
+    <link href="http://garylarizza.com/blog/2014/08/31/r10k-plus-directory-environments/"/>
+    <updated>2014-08-31T12:00:00-07:00</updated>
+    <id>http://garylarizza.com/blog/2014/08/31/r10k-plus-directory-environments</id>
+    <content type="html"><![CDATA[<p>If you&rsquo;ve read anything I&rsquo;ve posted in the past year, you know my feelings about
+the word &lsquo;environments&rsquo; and about how well we tend to name things here at
+Puppet Labs (and if you don&rsquo;t, <a href="http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas/">you can check out that post here</a>).
+Since then, Puppet Labs has released a new feature called <a href="https://docs.puppetlabs.com/puppet/latest/reference/environments.html">directory
+environments (click this link for further reading)</a>
+that replace the older &lsquo;config file environments&rsquo; that we all used to use (i.e.
+stanzas in puppet.conf).  Directory environments weren&rsquo;t without their false
+starts and issues, but further releases of Puppet, and their inclusion in
+Puppet Enterprise 3.3.0, have allowed more people
+to ask about them.  SO, I thought I&rsquo;d do a quick writeup about them&hellip;</p>
+
+<h2>R10k had a child: Directory Environments</h2>
+
+<p>The Puppet platform team had a couple of problems with config file environments
+in puppet.conf &ndash; namely:</p>
+
+<ul>
+<li>Entering them in puppet.conf meant that you couldn&rsquo;t use environments named &lsquo;master&rsquo;, &lsquo;main&rsquo;, or &lsquo;agent&rsquo;</li>
+<li>There was no easy/reliable way to determine all the available/used Puppet environments without making assumptions (and hacky code) &ndash; especially if someone were using R10k + dynamic environments</li>
+<li>Adding more environments to <code>puppet.conf</code> made managing that file something of a nightmare (<code>environments.d</code> anyone?)</li>
+</ul>
+
+
+<p>Combine this with the fact that <a href="http://bit.ly/puppetworkflows3">most of the Professional Services team was
+rolling out R10k to create dynamic environments</a> (which meant we
+were abusing <code>$environment</code> inside <code>puppet.conf</code> and creating environments&hellip;well&hellip;
+dynamically and on-the-fly), and they knew something needed to be done.
+Because R10k was so popular and widely deployed, an environment solution that
+was a simple step-up from an R10k deployment was made the target, and directory
+environments were born.</p>
+
+<h2>How does it work?</h2>
+
+<p>Directory environments, essentially, are born out of a folder on the Puppet master
+(typically <code>$confdir/environments</code>, where <code>$confdir</code> is <code>/etc/puppetlabs/puppet</code>
+in Puppet Enterprise) wherein every subfolder is a new Puppet environment. Every
+subfolder contains a couple of key items:</p>
+
+<ul>
+<li>A <code>modules</code> folder containing all modules for that environment</li>
+<li>A <code>manifests/site.pp</code> file containing the site.pp file for that environment</li>
+<li>A new <code>environment.conf</code> file which can be used to set the <code>modulepath</code>, the <code>environment_timeout</code>, and, a new and often-requested feature, the ability to have environment-specific <code>config_version</code> settings</li>
+</ul>
+
+
+<p>Basically, it&rsquo;s everything that R10k ALREADY does with a couple of added goodies
+dropped into an <code>environment.conf</code> file. <a href="https://docs.puppetlabs.com/puppet/latest/reference/environments_configuring.html">Feel free to read the official docs
+on configuring directory environments</a> for further information
+on all of the goodies!</p>
+
+<h2>Cool, how do we set it up?</h2>
+
+<p>It wouldn&rsquo;t be one of my blog posts if it didn&rsquo;t include exact steps to configure
+shit, would it? For this walkthrough, I&rsquo;m using a Centos 6.5 vm with DNS working
+(i.e. the node can ping itself and knows its own hostname and FQDN), and I&rsquo;ve
+already installed an All-in-one installation of Puppet Enterprise 3.3.0. For
+the walkthrough, we&rsquo;re going to setup:</p>
+
+<ul>
+<li>Directory environments based on a control repo</li>
+<li>Hiera data inside a <code>hieradata</code> folder in the control repo</li>
+<li>Hiera to use the per-environment hieradata folder</li>
+</ul>
+
+
+<p>Let&rsquo;s start to break down the components:</p>
+
+<h3>The &lsquo;Control Repo&rsquo;?</h3>
+
+<p>Sometime between <a href="http://bit.ly/puppetworkflows3">my initial R10k post</a> and THIS post, the Puppet Labs PS
+team has come to call the repository that contains the Puppetfile and is used
+to track Puppet environments on all Puppet masters the &lsquo;Control Repo&rsquo; (because
+it &lsquo;Controls the creation of Puppet environments&rsquo;, ya dig?  Zack Smith and
+James Sweeny are actually pretty tickled about making that name stick). For
+the purpose of this demonstration, I&rsquo;m using a repository on Github:</p>
+
+<p><a href="https://github.com/glarizza/puppet_repository">https://github.com/glarizza/puppet_repository</a></p>
+
+<p>Everything you will need for this walkthrough is in that repository, and we
+will refer to it frequently. You DO NOT need to use my repository, and it&rsquo;s
+definitely going to be required that you create your OWN, but it&rsquo;s there
+for reference purposes (and to give you a couple of Puppet manifests to
+make setup a bit easier).</p>
+
+<h3>Configuring the Puppet master</h3>
+
+<p>We&rsquo;re going to first clone my control repo to <code>/tmp</code> so we can use it to
+configure R10k and the Puppet master itself:</p>
+
+<p>```
+[root@master ~]# cd /tmp</p>
+
+<p>[root@master /tmp]# git clone <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+Initialized empty Git repository in /tmp/puppet_repository/.git/
+remote: Counting objects: 164, done.
+remote: Compressing objects: 100% (134/134), done.
+remote: Total 164 (delta 54), reused 81 (delta 16)
+Receiving objects: 100% (164/164), 22.68 KiB, done.
+Resolving deltas: 100% (54/54), done.</p>
+
+<p>[root@master /tmp]# cd puppet_repository
+```</p>
+
+<p>Great, I&rsquo;ve cloned my repo. To configure R10k, we&rsquo;re going to need to pull
+down Zack Smith&rsquo;s R10k module from the forge with <code>puppet module install zack/r10k</code>
+and then use <code>puppet apply</code> on a manifest in my repo with
+<code>puppet apply configure_r10k.pp</code>.  <strong>DO NOTE: If you want to use YOUR Control
+Repo, and NOT the one I use on Github, then you need to modify the
+<code>configure_r10k.pp</code> file and replace the <code>remote</code> property with the URL to
+YOUR Control Repo that&rsquo;s housed on a git repository!</strong></p>
+
+<p>```
+[root@master /tmp/puppet_repository:production]# puppet module install zack/r10k</p>
+
+<p>Notice: Preparing to install into /etc/puppetlabs/puppet/modules &hellip;
+Notice: Downloading from <a href="https://forgeapi.puppetlabs.com">https://forgeapi.puppetlabs.com</a> &hellip;
+Notice: Found at least one version of puppetlabs-stdlib compatible with PE (3.3.0);
+Notice: Skipping versions which don&rsquo;t express PE compatibility. To install
+the most recent version of the module regardless of compatibility
+with PE, use the &lsquo;&mdash;ignore-requirements&rsquo; flag.
+Notice: Found at least one version of puppetlabs-inifile compatible with PE (3.3.0);
+Notice: Skipping versions which don&rsquo;t express PE compatibility. To install
+the most recent version of the module regardless of compatibility
+with PE, use the &lsquo;&mdash;ignore-requirements&rsquo; flag.
+Notice: Found at least one version of puppetlabs-vcsrepo compatible with PE (3.3.0);
+Notice: Skipping versions which don&rsquo;t express PE compatibility. To install
+the most recent version of the module regardless of compatibility
+with PE, use the &lsquo;&mdash;ignore-requirements&rsquo; flag.
+Notice: Found at least one version of puppetlabs-concat compatible with PE (3.3.0);
+Notice: Skipping versions which don&rsquo;t express PE compatibility. To install
+the most recent version of the module regardless of compatibility
+with PE, use the &lsquo;&mdash;ignore-requirements&rsquo; flag.
+Notice: Installing &mdash; do not interrupt &hellip;
+/etc/puppetlabs/puppet/modules
+└─┬ zack-r10k (v2.2.7)
+  ├─┬ gentoo-portage (v2.2.0)
+  │ └── puppetlabs-concat (v1.0.3) [/opt/puppet/share/puppet/modules]
+  ├── mhuffnagle-make (v0.0.2)
+  ├── puppetlabs-gcc (v0.2.0)
+  ├── puppetlabs-git (v0.2.0)
+  ├── puppetlabs-inifile (v1.1.0) [/opt/puppet/share/puppet/modules]
+  ├── puppetlabs-pe_gem (v0.0.1)
+  ├── puppetlabs-ruby (v0.2.1)
+  ├── puppetlabs-stdlib (v3.2.2) [/opt/puppet/share/puppet/modules]
+  └── puppetlabs-vcsrepo (v1.1.0)</p>
+
+<p>[root@master /tmp/puppet_repository:production]# puppet apply configure_r10k.pp</p>
+
+<p>Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.71 seconds
+Warning: The package type&rsquo;s allow_virtual parameter will be changing its default value from false to true in a future release. If you do not want to allow virtual packages, please explicitly set allow_virtual to false.
+   (at /opt/puppet/lib/ruby/site_ruby/1.9.1/puppet/type.rb:816:in `set_default')
+Notice: /Stage[main]/R10k::Install/Package[r10k]/ensure: created
+Notice: /Stage[main]/R10k::Install::Pe_gem/File[/usr/bin/r10k]/ensure: created
+Notice: /Stage[main]/R10k::Config/File[r10k.yaml]/ensure: defined content as &lsquo;{md5}5cda58e8a01e7ff12544d30105d13a2a&rsquo;
+Notice: Finished catalog run in 11.24 seconds
+```</p>
+
+<p>Performing those commands will successfully setup R10k to point to my Control
+Repo out on Github (and, again, if you don&rsquo;t WANT that, then you need to make
+the change to the <code>remote</code> property in <code>configure_r10k.pp</code>). We next need to
+configure Directory Environments in <code>puppet.conf</code> by setting two attributes:</p>
+
+<ul>
+<li><code>environmentpath</code> (Or the path to the folder containing environments)</li>
+<li><code>basemodulepath</code> (Or, the set of modules that will be shared across ALL ENVIRONMENTS)</li>
+</ul>
+
+
+<p>I have created a Puppet manifest that will set these attributes, and this
+manifest requires the <code>puppetlabs/inifile</code> module from the Puppet Forge.
+Fortunately, since I&rsquo;m using Puppet Enterprise, that module is already installed.
+If you&rsquo;re using open source Puppet and the module is NOT installed, feel free
+to install it by running <code>puppet module install puppetlabs/inifile</code>. Once
+this is done, go ahead and execute the manifest by running
+<code>puppet apply configure_directory_environments.pp</code>:</p>
+
+<p>```
+[root@master /tmp/puppet_repository:production]# puppet apply configure_directory_environments.pp</p>
+
+<p>Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.05 seconds
+Notice: /Stage[main]/Main/Ini_setting[Configure environmentpath]/ensure: created
+Notice: /Stage[main]/Main/Ini_setting[Configure basemodulepath]/value: value changed &lsquo;/etc/puppetlabs/puppet/modules:/opt/puppet/share/puppet/modules&rsquo; to &lsquo;$confdir/modules:/opt/puppet/share/puppet/modules&rsquo;
+Notice: Finished catalog run in 0.20 seconds
+```</p>
+
+<p>The last step to configuring the Puppet master is to execute an R10k run.
+We can do that by running <code>r10k deploy environment -pv</code>:</p>
+
+<p>```
+[root@master /tmp/puppet_repository:production]# r10k deploy environment -pv</p>
+
+<p>[R10K::Source::Git &ndash; INFO] Determining current branches for &ldquo;<a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>&rdquo;
+[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment production
+[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync &ndash; INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment webinar_env
+[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync &ndash; INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying haproxy into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying haproxy into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/webinar_env/modules
+[R10K::Task::Deployment::PurgeEnvironments &ndash; INFO] Purging stale environments from /etc/puppetlabs/puppet/environments
+```</p>
+
+<p>Great!  Everything should be setup (if you&rsquo;re using my repo)!  My repository has
+a production branch, which is what Puppet&rsquo;s default environment is named,
+so we can test that everything works by listing out all modules in the main
+production environment with the <code>puppet module list</code> command:</p>
+
+<p>```
+[root@master /tmp/puppet_repository:production]# puppet module list</p>
+
+<p>Warning: Module &lsquo;puppetlabs-stdlib&rsquo; (v3.2.2) fails to meet some dependencies:
+  &lsquo;puppetlabs-ntp&rsquo; (v3.1.2) requires &lsquo;puppetlabs-stdlib&rsquo; (>= 4.0.0)
+/etc/puppetlabs/puppet/environments/production/modules
+├── notifyme (???)
+├── profiles (???)
+├── puppetlabs-apache (v1.1.1)
+└── puppetlabs-ntp (v3.1.2)
+/etc/puppetlabs/puppet/modules
+├── gentoo-portage (v2.2.0)
+├── mhuffnagle-make (v0.0.2)
+├── puppetlabs-gcc (v0.2.0)
+├── puppetlabs-git (v0.2.0)
+├── puppetlabs-pe_gem (v0.0.1)
+├── puppetlabs-ruby (v0.2.1)
+├── puppetlabs-vcsrepo (v1.1.0)
+└── zack-r10k (v2.2.7)
+/opt/puppet/share/puppet/modules
+├── puppetlabs-apt (v1.5.0)
+├── puppetlabs-auth_conf (v0.2.2)
+├── puppetlabs-concat (v1.0.3)
+├── puppetlabs-firewall (v1.1.2)
+├── puppetlabs-inifile (v1.1.0)
+├── puppetlabs-java_ks (v1.2.4)
+├── puppetlabs-pe_accounts (v2.0.2-3-ge71b5a0)
+├── puppetlabs-pe_console_prune (v0.1.1-4-g293f45b)
+├── puppetlabs-pe_mcollective (v0.2.10-15-gb8343bb)
+├── puppetlabs-pe_postgresql (v1.0.4-4-g0bcffae)
+├── puppetlabs-pe_puppetdb (v1.1.1-7-g8cb11bf)
+├── puppetlabs-pe_razor (v0.2.1-1-g80acb4d)
+├── puppetlabs-pe_repo (v0.7.7-32-gfd1c97f)
+├── puppetlabs-pe_staging (v0.3.3-2-g3ed56f8)
+├── puppetlabs-postgresql (v2.5.0-pe2)
+├── puppetlabs-puppet_enterprise (v3.2.1-27-g8f61956)
+├── puppetlabs-reboot (v0.1.4)
+├── puppetlabs-request_manager (v0.1.1)
+└── puppetlabs-stdlib (v3.2.2)  invalid
+```</p>
+
+<p>Notice a couple of things:</p>
+
+<ul>
+<li>First, I&rsquo;ve got some dependency issues&hellip;oh well, nothing that&rsquo;s a game-stopper</li>
+<li>Second, the path to the production environment&rsquo;s module is correct at: <code>/etc/puppetlabs/puppet/environments/production/modules</code></li>
+</ul>
+
+
+<h3>Configuring Hiera</h3>
+
+<p>The last dinghy to be configured on this dreamboat is Hiera. Hiera is Puppet&rsquo;s
+data lookup mechanism, and is used to gather specific bits of data (such
+as versions of packages, hostnames, passwords, and other business-specific
+data). Explaining HOW Hiera works is beyond the scope of this article, but
+configuring Hiera data on a per-environment basis IS absolutely a worthwhile
+endeavor.</p>
+
+<p>In this example, I&rsquo;m going to demonstrate coupling Hiera data with the Control
+Repo for simple replication of Hiera data across environments. You COULD also
+choose to put your Hiera data in a separate repository and set it up in
+<code>/etc/r10k.yaml</code> as another source, but that exercise is left to the reader
+<a href="http://bit.ly/puppetworkflows3b">(and if you&rsquo;re interested, I talk about it in this post).</a></p>
+
+<p>You&rsquo;ll notice that my demonstration repository ALREADY includes Hiera data,
+and so that data is automatically being replicated to all environments. By
+default, Hiera&rsquo;s configuration file (<code>hiera.yaml</code>) has no YAML data directory
+specified, so we&rsquo;ll need to make that change.  <a href="https://github.com/glarizza/puppet_repository/blob/production/hiera.yaml">In my demonstration control
+repository, I&rsquo;ve included a sample <code>hiera.yaml</code>,</a> but let&rsquo;s take a look at
+one below:</p>
+
+<p>```yaml</p>
+
+<h2>/etc/puppetlabs/puppet/hiera.yaml</h2>
+
+<hr />
+
+<p>:backends:
+  &ndash; yaml
+:hierarchy:
+  &ndash; &ldquo;%{clientcert}&rdquo;
+  &ndash; &ldquo;%{application_tier}&rdquo;
+  &ndash; common</p>
+
+<p>:yaml:</p>
+
+<h1>datadir is empty here, so hiera uses its defaults:</h1>
+
+<h1>&ndash; /var/lib/hiera on *nix</h1>
+
+<h1>&ndash; %CommonAppData%\PuppetLabs\hiera\var on Windows</h1>
+
+<h1>When specifying a datadir, make sure the directory exists.</h1>
+
+<p>  :datadir: &ldquo;/etc/puppetlabs/puppet/environments/%{environment}/hieradata&rdquo;
+```</p>
+
+<p>This hiera.yaml file specifies a hierarchy with three levels &ndash; a node-specific,
+level, a level for different application tiers (like &lsquo;dev&rsquo;, &lsquo;test&rsquo;, &lsquo;prod&rsquo;, and
+etc), and finally makes the change we need: mapping the data directory to each
+environment&rsquo;s hieradata folder.  The path to <code>hiera.yaml</code> is Puppet&rsquo;s
+configuration directory (which is <code>/etc/puppetlabs/puppet</code> for Puppet
+Enterprise, or <code>/etc/puppet</code> for the open source version of Puppet), so open
+the file there, make your changes, and finally you&rsquo;ll need to need to restart
+the Puppet master service to have the changes picked up.</p>
+
+<p>Next, let&rsquo;s perform a test by executing the <code>hiera</code> binary from the command
+line before running puppet:</p>
+
+<p>```
+[root@master /etc/puppetlabs/puppet/environments]# hiera message environment=production
+This node is using common data</p>
+
+<p>[root@master /etc/puppetlabs/puppet/environments]# hiera message environment=webinar_env -d
+DEBUG: 2014-08-31 19:55:44 +0000: Hiera YAML backend starting
+DEBUG: 2014-08-31 19:55:44 +0000: Looking up message in YAML backend
+DEBUG: 2014-08-31 19:55:44 +0000: Looking for data source common
+DEBUG: 2014-08-31 19:55:44 +0000: Found message in common
+This node is using common data</p>
+
+<p>[root@master /etc/puppetlabs/puppet/environments]# hiera message environment=bad_env -d
+DEBUG: 2014-08-31 19:58:22 +0000: Hiera YAML backend starting
+DEBUG: 2014-08-31 19:58:22 +0000: Looking up message in YAML backend
+DEBUG: 2014-08-31 19:58:22 +0000: Looking for data source common
+DEBUG: 2014-08-31 19:58:22 +0000: Cannot find datafile /etc/puppetlabs/puppet/environments/bad_env/hieradata/common.yaml, skipping
+nil
+```</p>
+
+<p>You can see that for the first example, I passed the environment of <code>production</code>
+and did a simple lookup for a key called <code>message</code> &ndash; Hiera then returned me
+the value of out that environment&rsquo;s <code>common.yaml</code> file.  Next, I did another
+lookup, but added <code>-d</code> to enable debug mode (debug mode on the <code>hiera</code>
+binary is REALLY handy for debugging problems with Hiera &ndash; combine it with
+specifying values from the command line, and you can pretty quickly simulate
+what value a node is going to get).  Notice the last example where I specified
+an invalid environment &ndash; Hiera logged that it couldn&rsquo;t find the datafile
+requested and ultimately returned a nil, or empty, value.</p>
+
+<p>Since we&rsquo;re working on the Puppet master machine, we can even check for a value
+using <code>puppet apply</code> combined with the notice function:</p>
+
+<p><code>
+[root@master /etc/puppetlabs/puppet/environments]# puppet apply -e "notice(hiera('message'))"
+Notice: Scope(Class[main]): This node is using common data
+Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.09 seconds
+Notice: Finished catalog run in 0.19 seconds
+</code></p>
+
+<p>Great, it&rsquo;s working, but let&rsquo;s look at pulling data from a higher level in the
+hierarchy &ndash; like from the <code>application_tier</code> level. We haven&rsquo;t defined an
+<code>application_tier</code> fact, however, so we&rsquo;ll need to fake it. First, let&rsquo;s do
+that with the <code>hiera</code> binary:</p>
+
+<p><code>
+[root@master /etc/puppetlabs/puppet/environments]# hiera message environment=production application_tier=dev -d
+DEBUG: 2014-08-31 20:04:12 +0000: Hiera YAML backend starting
+DEBUG: 2014-08-31 20:04:12 +0000: Looking up message in YAML backend
+DEBUG: 2014-08-31 20:04:12 +0000: Looking for data source dev
+DEBUG: 2014-08-31 20:04:12 +0000: Found message in dev
+You are in the development application tier
+</code></p>
+
+<p>And then also with <code>puppet apply</code>:</p>
+
+<p><code>
+[root@master /etc/puppetlabs/puppet/environments]# FACTER_application_tier=dev puppet apply -e "notice(hiera('message'))"
+Notice: Scope(Class[main]): You are in the development application tier
+Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.09 seconds
+Notice: Finished catalog run in 0.18 seconds
+</code></p>
+
+<h2>Tuning <code>environment.conf</code></h2>
+
+<p>The brand-new, per-environment  <code>environment.conf</code> file is meant to be (for
+the most part) a one-stop-shop for your Puppet environment tuning needs. Right
+now, the only things you&rsquo;ll need to tune will be the <code>modulepath</code>,
+<code>config_version</code>, and possibly the <code>environment_timeout</code>.</p>
+
+<h3>Module path</h3>
+
+<p>Before directory environments, every environment had its own <code>modulepath</code> that
+needed to be tuned to allow for modules that were to be used by this
+machine/environment, as well as shared modules.  That <code>modulepath</code> worked like
+<code>$PATH</code> in that it was a priority-based lookup for modules (i.e. the first
+directory in <code>modulepath</code> that had a module matching the module name you wanted
+won).  It also previously required the FULL path to be used for every path in
+<code>modulepath</code>.</p>
+
+<p>Those days are over.</p>
+
+<p>As I mentioned before, the main <code>puppet.conf</code> configuration file has a new
+parameter called <code>basemodulepath</code> that can be used to specify modules that are
+to be shared across ALL modules in ALL environments. Paths defined here
+(typically <code>$confdir/modules</code> and <code>/opt/puppet/share/puppet/modules</code>) are
+usually put at the END of a <code>modulepath</code> so Puppet can search for any
+overridden modules that show up in earlier <code>modulepath</code> paths. In the previous
+configuration steps, we executed a manifest that setup <code>basemodulepath</code> to
+look like:</p>
+
+<p><code>
+basemodulepath = $confdir/modules:/opt/puppet/share/puppet/modules
+</code></p>
+
+<p>Again, feel free to add or remove paths (except don&rsquo;t remove
+<code>/opt/puppet/share/puppet/modules</code> if you&rsquo;re using Puppet Enterprise, because
+that&rsquo;s where all Puppet Enterprise modules are located), especially if you&rsquo;re
+using a giant monolithic repo of modules (which was typically done before things
+like R10k evolved).</p>
+
+<p>With <code>basemodulepath</code> configured, it&rsquo;s now time to configure the <code>modulepath</code>
+to be defined for every environment. My demonstration control repo contains
+a sample <code>environment.conf</code> that defines a <code>modulepath</code> like so:</p>
+
+<p><code>
+modulepath = modules:$basemodulepath
+</code></p>
+
+<p>You&rsquo;ll notice, now, that there are relative paths in <code>modulepath</code>. This is
+possible because now each environment contains an <code>environment.conf</code>, and thus
+relative paths make sense. In this example, nodes in the production environment
+(<code>/etc/puppetlabs/puppet/environments/production</code>) will look for a module by its
+name FIRST by looking in a folder called <code>modules</code> inside the current
+environment folder (i.e. <code>/etc/puppetlabs/puppet/environments/production/modules/&lt;module_name&gt;</code>).
+If the module wasn&rsquo;t found there, it looks for the module in the order that
+paths are defined for <code>basemodulepath</code> above. If Puppet fails to find a module
+in ANY of the paths, a compile error is raised.</p>
+
+<h3>Per-environment <code>config_version</code></h3>
+
+<p><a href="https://docs.puppetlabs.com/references/stable/configuration.html#configversion">Setting <code>config_version</code> has been around for awhile</a> &ndash; hell,
+I remember video of Jeff McCune talking about it at the first Puppetcamp Europe
+in like 2010 &ndash; but the new directory environments implementation has fine
+tuned it a bit. Previously, <code>config_version</code> was a command executed on the
+Puppet master at compile time to determine a string used for versioning the
+configuration enforced during that Puppet run. When it&rsquo;s not set it defaults
+to something of a time/date stamp off the parser, but it&rsquo;s way more useful to
+make it do something like determine the most recent commit hash from a repository.</p>
+
+<p>In the past when we used a giant monolithic repository containing all Puppet
+modules, it was SUPER easy to get a single commit hash and be done. As everyone
+moved their modules into individual repositories, determining <em>WHAT</em> you were
+enforcing became harder. With the birth of R10k an the control repo, we
+suddenly had something we could query for the state of our modules being
+enforced. The problem existed, though, that with multiple dynamic environments
+using multiple git branches, <code>config_version</code> wasn&rsquo;t easily tuned to be able
+to grab the most recent commit from every branch.</p>
+
+<p>Now that <code>config_version</code> is set in a per-environment <code>environment.conf</code>, we
+can make <code>config_version</code> much smarter. Again, looking in the <code>environment.conf</code>
+defined in my demonstration control repo produces this:</p>
+
+<p><code>
+config_version = '/usr/bin/git --git-dir $confdir/environments/$environment/.git rev-parse HEAD'
+</code></p>
+
+<p>This setting will cause the Puppet master to produce the most recent commit ID
+for whatever environment you&rsquo;re in and embed it in the catalog and the report
+that is sent back to the Puppet master after a Puppet run.</p>
+
+<p><a href="https://tickets.puppetlabs.com/browse/PUP-3150">I actually discovered a bug in <code>config_version</code> while writing this post</a>,
+and it&rsquo;s that <code>config_version</code> is subject to the relative pathing fun that other
+<code>environment.conf</code> settings are subject to. Relative pathing is great for things like
+<code>modulepath</code>, and it&rsquo;s even good for <code>config_version</code> if you&rsquo;re including the
+script you want to run to gather the <code>config_version</code> string inside the control
+repo, but using a one-line command that tries to execute a binary on the system
+that DOESN&rsquo;T include the full path to the binary causes an error (because Puppet
+attempts to look for that binary in the current environment path, and NOT by
+searching <code>$PATH</code> on the system).  Feel free to follow or comment on the bug
+if the mood hits you.</p>
+
+<h3>Caching and environment_timeout</h3>
+
+<p>The Puppet master loads environments on-request, but it also caches data associated
+with each environment to make things faster. This caching is finally tunable on a
+per-environment basis by defining the <code>environment_timeout</code> setting in
+<code>environment.conf</code>.  The default setting is 3 minutes, which means the Puppet master
+will invalidate its caches and reload environment data every 3 minutes, but that&rsquo;s
+now tunable. <a href="https://docs.puppetlabs.com/puppet/3.6/reference/environments_configuring.html#environmenttimeout">Definitely read up on this setting before making changes.</a></p>
+
+<h2>Classification</h2>
+
+<p>One of the last new features of directory environments is the ability to include
+an environment-specific <code>site.pp</code> file for classification. You could ALWAYS do
+this by modifying the <code>manifest</code> configuration item in <code>puppet.conf</code>, but now
+each environment can have its own <code>manifest</code> setting. The default behavior is
+to have the Puppet master look for <code>manifests/site.pp</code> in every environment
+directory, and I really wouldn&rsquo;t change that unless you have a good reason. DO
+NOTE, however, that if you&rsquo;re using Puppet Enterprise, you&rsquo;ll need to be careful
+with your <code>site.pp</code> file.  Puppet Enterprise defines things like the Filebucket
+and overrides for the File resource in <code>site.pp</code>, so if you&rsquo;re using Puppet Enterprise,
+you&rsquo;ll need to copy those changes into the <code>site.pp</code> file you add into your control
+repo (as I did).</p>
+
+<p>It may take you a couple of times to change your thinking from looking at the main
+<code>site.pp</code> in <code>$confdir/manifests</code> to looking at each environment-specific <code>site.pp</code>
+file, but definitely take advantage of Puppet&rsquo;s commandline tool to help you track
+which <code>site.pp</code> Puppet is monitoring:</p>
+
+<p>```
+[root@master /etc/puppetlabs/puppet/environments]# puppet config print manifest
+/etc/puppetlabs/puppet/environments/production/manifests</p>
+
+<p>[root@master /etc/puppetlabs/puppet/environments]# puppet config print manifest &mdash;environment webinar_env
+/etc/puppetlabs/puppet/environments/webinar_env/manifests
+```</p>
+
+<p>You can see that <code>puppet config print</code> can be used to get the path to the
+directory that contains <code>site.pp</code>.  Even cooler is what happens when you
+specify an environment that doesn&rsquo;t exist:</p>
+
+<p><code>
+[root@master /etc/puppetlabs/puppet/environments]# puppet config print manifest --environment bad_env
+no_manifest
+</code></p>
+
+<p>Yep, Puppet tells you if it can&rsquo;t find the manifest file.  That&rsquo;s pretty cool.</p>
+
+<h2>Wrapping Up</h2>
+
+<p>Even though the new implementation of directory environments is meant to map
+closely to a workflow most of us have been using (if you&rsquo;ve been using R10k, that is),
+there are still some new features that may take you by surprise. Hopefully this
+post gets you started with just enough information to setup your own test
+environment and start playing. PLEASE DO make sure to file bugs on any behavior
+that comes as unexpected or stops you from using your existing workflow. Cheers!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[On R10k and 'Environments']]></title>
+    <link href="http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas/"/>
+    <updated>2014-03-26T01:00:00-07:00</updated>
+    <id>http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas</id>
+    <content type="html"><![CDATA[<p>There have been more than a couple of moments where I&rsquo;m on-site with a customer
+who asks a seemingly simple question and I&rsquo;ve gone &ldquo;Oh shit; that&rsquo;s a great
+question and I&rsquo;ve never thought of that&hellip;&rdquo;  Usually that&rsquo;s followed by me
+changing up the workflow and immediately regretting things I&rsquo;ve done on prior
+gigs. Some people call that &lsquo;agile&rsquo;; I call it &lsquo;me not having the
+forethought to consider conditions properly&rsquo;.</p>
+
+<h2>&lsquo;Environment&rsquo;, like &lsquo;scaling&rsquo;, &lsquo;agent&rsquo;, and &lsquo;test&rsquo;, has many meanings</h2>
+
+<p>It&rsquo;s not a secret that we&rsquo;ve made some shitty decisions in the past with regard
+to naming things in Puppet (and anyone who asks me what <code>puppet agent -t</code>
+stands for usually gets a heavy sigh, a shaken head, and an explanation emitted
+in dulcet, apologetic tones). It&rsquo;s also very easy to conflate certain concepts
+that unfortunately share very common labels (quick &ndash; what&rsquo;s the difference
+between properties and parameters, and give me the lowdown on MCollective
+agents versus Puppet agents!).</p>
+
+<p>And then we have &lsquo;environments&rsquo; + Hiera + R10k.</p>
+
+<h3>Puppet &lsquo;environments&rsquo;</h3>
+
+<p>Puppet has the concept of &lsquo;environments&rsquo;, which, to me, exist to provide a
+means of compiling a catalog using different paths to Puppet modules on the
+Puppet master. Using a Puppet environment is the same as saying &ldquo;I made some
+changes to my tomcat class, but I don&rsquo;t want to push it DIRECTLY to my production
+machines yet because I don&rsquo;t drink Dos Equis. It would be great if I could stick
+this code somewhere and have a couple of my nodes test how it works before
+merging it in!&rdquo;</p>
+
+<p>Puppet environments suffer some &lsquo;seepage&rsquo; issues,
+<a href="http://projects.puppetlabs.com/issues/12173">which you can read about here,</a> but do a reasonable job of quickly
+testing out changes you&rsquo;ve made to the Puppet DSL (as opposed to custom
+plugins, as detailed in the bug). Puppet environments work well when you
+need a pipeline for testing your Puppet code (again, when you&rsquo;re refactoring
+or adding new functionality), and using them for that purpose is great.</p>
+
+<h3>Internal &lsquo;environments&rsquo;</h3>
+
+<p>What I consider &lsquo;internal environments&rsquo; have a couple of names &ndash; sometimes
+they&rsquo;re referred to as application or deployment gateways, sometimes as &lsquo;tiers&rsquo;, but
+in general they&rsquo;re long-term groupings that machines/nodes are attached to
+(usually for the purpose of phased-out application deployments). They
+frequently have names such as &lsquo;dev&rsquo;, &lsquo;test&rsquo;, &lsquo;prod&rsquo;, &lsquo;qa&rsquo;, &lsquo;uat&rsquo;, and the
+like.</p>
+
+<p>For the purpose of distinguishing them from Puppet environments, I&rsquo;m going to
+refer to them as &lsquo;application tiers&rsquo; or just &lsquo;tiers&rsquo; because, fuck it, it&rsquo;s a
+word.</p>
+
+<h3>Making both of them work</h3>
+
+<p>The problems with having Puppet environments and application tiers are:</p>
+
+<ul>
+<li>Puppet environments are usually assigned to a node for short periods of time,
+while application tiers are usually assigned to a node for the life of the node.</li>
+<li>Application tiers usually need different bits of data (i.e. NTP server
+addresses, versions of packages, etc), while Puppet environments usually
+use/involve differences to the Puppet DSL.</li>
+<li>Similarly to the first point, the goal of Puppet environments is to eventually
+merge code differences into the main production Puppet environment. Application
+tiers, however, may always have differences about them and never become unified.</li>
+</ul>
+
+
+<p>You can see where this would be problematic &ndash; especially when you might want to
+do things like use different Hiera values between different application tiers,
+but you want to TEST out those values before applying them to all nodes in an
+application tier. If you previously didn&rsquo;t have a way to separate Puppet
+environments from application tiers, and you used R10k to generate Puppet
+environments, you would have things like long-term branches in your repositories
+that would make it difficult/annoying to manage.</p>
+
+<p><strong>NOTE: This is all assuming you&rsquo;re managing component modules, Hiera data,
+and Puppet environments using R10k.</strong></p>
+
+<p>The first step in making both monikers work together is to have two separate
+variables in Puppet &ndash; namely <code>$environment</code> for Puppet environments, and
+something ELSE (say, <code>$tier</code>) for the application tier. The &ldquo;something else&rdquo; is
+going to depend on how your workflow works. For example, do you have something
+centrally that can correlate nodes to the tier in which they belong? If so, you
+can write a custom fact that will query that service. If you don&rsquo;t have this
+magical service, you can always just attach an application tier to a node in
+your classification service (i.e. the Puppet Enterprise Console or Foreman).
+Failing both of those, <a href="http://docs.puppetlabs.com/guides/custom_facts.html#external-facts">you can look to external facts.</a> External Fact
+support was introduced into Facter 1.7 (but Puppet Enterprise has supported
+them through the standard lib for quite awhile). External facts give you the
+ability to create a text file inside the facts.d directory in the format of:</p>
+
+<p><code>
+tier=qa
+location=portland
+</code></p>
+
+<p>Facter will read this text file and store the values as facts for a Puppet run,
+so <code>$tier</code> will be <code>qa</code> and <code>$location</code> will be <code>portland</code>. This is handy for
+when you have arbitrary information that can&rsquo;t be easily discovered by the
+node, but DOES need to be assigned for the node on a reasonably consistent
+basis.  Usually these files are created during the provisioning process, but
+can also be managed by Puppet.  At any rate, having <code>$environment</code> and <code>$tier</code>
+available allow us to start to make decisions based on the values.</p>
+
+<h3>Branch with $environment, Hiera with $tier</h3>
+
+<p>Like we said above, Puppet environments are frequently short-term assignments,
+while application tiers are usually long-term residencies. Relating those back
+to the R10k workflow: branches to the main puppet repo (containing the
+<code>Puppetfile</code>) are usually short-lived, while data in Hiera is usually
+longer-lived. It would then make sense that the name of the branches to the
+main puppet repo would resolve to being <code>$environment</code> (and thus the Puppet
+environment name), and <code>$tier</code> (and thus the application tier) would be used
+in the Hiera hierarchy for lookups of values that would remain different across
+application tiers (like package versions, credentials, and etc&hellip;).</p>
+
+<p>Wins:</p>
+
+<ul>
+<li>Puppet environment names (like repository branch names) become relatively
+meaningless and are the &ldquo;means&rdquo; to the end of getting Puppet code merged into
+the PUPPET CODE&rsquo;s production branch (i.e. code that has been tested to work
+across all application tiers)</li>
+<li>Puppet environments become short lived and thus have less opportunity to
+deviate from the main production codebase</li>
+<li>Differences across application tiers are locked in one place (Hiera)</li>
+<li>Differences to Puppet DSL code (i.e. in Manifests) can be pushed up to the
+profile level, and you have a fact (<code>$tier</code>) to catch those differences.</li>
+</ul>
+
+
+<p>The ultimate reason why I&rsquo;m writing about this is because I&rsquo;ve seen people try
+to incorporate both the Puppet environment and application tier into both the
+environment name and/or the Hiera hierarchy. Many times, they run into all
+kinds of unscalable issues (large hierarchies, many Puppet environments,
+confusing testing paths to &lsquo;production&rsquo;). I tend to prefer this workflow
+choice, but, like everything I write about, take it and model it toward what
+works for you (because what works now may not work 6 months from now).</p>
+
+<h2>Thoughts?</h2>
+
+<p>Like I said before, I tend to discover new corner cases that change my mind
+on things like this, so it&rsquo;s quite possible that this theory isn&rsquo;t the most
+solid in the world. It HAS helped out some customers to clean up their code
+and make for a cleaner pipeline, though, and that&rsquo;s always a good thing. Feel
+free to comment below &ndash; I look forward to making the process better for all!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 3b: More R10k Madness]]></title>
+    <link href="http://garylarizza.com/blog/2014/03/07/puppet-workflow-part-3b/"/>
+    <updated>2014-03-07T08:00:00-08:00</updated>
+    <id>http://garylarizza.com/blog/2014/03/07/puppet-workflow-part-3b</id>
+    <content type="html"><![CDATA[<p><a href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/">In the last workflows post,</a> I talked about dynamic Puppet
+environments and introduced R10k, which is an awesome tool for mapping modules
+to their environments which are dynamically generated by git branches. I didn&rsquo;t
+get out everything I wanted to say because:</p>
+
+<ul>
+<li>I was tired of that post sitting stale in a Google Doc</li>
+<li>It was already goddamn long</li>
+</ul>
+
+
+<p>So because of that, consider this a continuation of that previous monstrosity
+that talks about additional uses of R10k beyond the ordinary</p>
+
+<h2>Let&rsquo;s talk Hiera</h2>
+
+<p>But seriously, let&rsquo;s not actually talk about what Hiera does since
+<a href="http://docs.puppetlabs.com/hiera/1/complete_example.html">there are better docs</a> out there for that. I&rsquo;m
+also not going to talk about WHEN to use Hiera because
+<a href="http://garylarizza.com/blog/2013/12/08/when-to-hiera/">I&rsquo;ve already done that before.</a> Instead, let&rsquo;s talk about a workflow
+for submitting changes to Hiera data and testing it out before it enters into
+production.</p>
+
+<p>Most people store their Hiera data (if they&rsquo;re using a backend that reads Hiera
+data from disk anyways) in separate repos as their Puppet repo. Some DO tie the
+Hiera datadir folder to something like the main Puppet repo that houses their
+<code>Puppetfie</code> (if they&rsquo;re using R10k), but for the most part it&rsquo;s a separate
+repo because you may want separate permissions for accessing that data.
+For the purposes of this post, I&rsquo;m going to refer to
+<a href="https://github.com/glarizza/hiera_environment">a repository I use for storing Hiera data</a> that&rsquo;s out on Github.</p>
+
+<p>The next logical step would be to integrate that Hiera repo into R10k so R10k can
+track and create paths for Hiera data just like it did for Puppet.</p>
+
+<p><strong>NOTE: Fundamentally, all that R10k does is checkout modules to a specific
+path whose folder name comes from a git branch. PUPPET ties its environment
+to this folder name with some <code>puppet.conf</code> trickery. So, to say that R10k
+&ldquo;creates dynamic environments&rdquo; is the end-result, but not the actual job
+of the tool.</strong></p>
+
+<p>We COULD add Hiera&rsquo;s repository to the <code>/etc/r10k.yaml</code> file to track and
+create folders for us, and if we did it EXACTLY like we did for Puppet we
+would most definitely run into <a href="https://github.com/adrienthebo/r10k/issues/48">this R10k bug</a> (AND,
+<a href="https://github.com/adrienthebo/r10k/issues/90">it comes up again in this bug</a>).</p>
+
+<p><strong>UPDATE: So, I originally wrote this post BEFORE R10k version 1.1.4 was
+released. Finch released version 1.1.4 which FIXES THESE BUGS&hellip;so the workflow
+I&rsquo;m going to describe (i.e. using prefixing to solve the problem of using
+multiple repos in <code>/etc/r10k.yaml</code> that could possibly share branch names)
+TECHNICALLY does NOT need to be followed &lsquo;to the T&rsquo;, as it were. You can
+disable prefixing when it comes to that step, and modify
+<code>/etc/puppetlabs/puppet/hiera.yaml</code> so you don&rsquo;t prepend &lsquo;hiera_&rsquo; to the
+path of each environment&rsquo;s folder, and you should be totally fine&hellip;you know,
+as long as you use version 1.1.4 or greater of R10k.  So, be forewarned</strong></p>
+
+<p>The issue is those bugs is that R10k collects the names of ALL the environments
+from ALL the sources at once, so if you have multiple source repositories and
+they share branch names, then you have clashes (since it only stores ONE branch
+name internally). The solution that Finch came up with was prefixing (or,
+prefixing the name of the branch with the name of the source). When you prefix,
+however, it creates a folder on-disk that matches the prefixed name (e.g.
+NameOfTheSource_NameOfTheBranch ). This is actually fine since we&rsquo;ll catch it
+and deal with it, but you should be aware of it. Future versions of R10k may
+most likely deal with this in a different manner, so make sure to check out the
+R10k docs before blindly copying my code, okay? (Update: See the previous, bolded
+paragraph where I describe how Finch DID JUST THAT).</p>
+
+<p><a href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/">In the previous post</a> I setup a file called <code>r10k_installation.pp</code>
+to setup R10k. Let&rsquo;s revisit that manifest it and modify it for
+<a href="https://github.com/glarizza/hiera_environment">my Hiera repo:</a></p>
+
+<p>{% codeblock lang:puppet /var/tmp/r10k_installation.pp %}
+class { &lsquo;r10k&rsquo;:
+  version           => &lsquo;1.1.4&rsquo;,
+  sources           => {</p>
+
+<pre><code>'puppet' =&gt; {
+  'remote'  =&gt; 'https://github.com/glarizza/puppet_repository.git',
+  'basedir' =&gt; "${::settings::confdir}/environments",
+  'prefix'  =&gt; false,
+},
+'hiera' =&gt; {
+  'remote'  =&gt; 'https://github.com/glarizza/hiera_environment.git',
+  'basedir' =&gt; "${::settings::confdir}/hiera",
+  'prefix'  =&gt; true,
+}
+</code></pre>
+
+<p>  },
+  purgedirs         => [&ldquo;${::settings::confdir}/environments&rdquo;],
+  manage_modulepath => true,
+  modulepath        => &ldquo;${::settings::confdir}/environments/\$environment/modules:/opt/puppet/share/puppet/modules&rdquo;,
+}
+{% endcodeblock %}</p>
+
+<p><strong>NOTE: For the duration of this post, I&rsquo;ll be referring to Puppet Enterprise
+specific paths (like <code>/etc/puppetlabs/puppet</code> for $confdir). Please do the
+translation for open source Puppet, as R10k will work just fine with either
+the open source edition or the Enterprise edition of Puppet</strong></p>
+
+<p>You&rsquo;ll note that I added a source called &lsquo;hiera&rsquo; that tracks my Hiera
+repository, creates sub-folders in <code>/etc/puppetlabs/puppet/hiera</code>, and enables
+prefixing to deal with the bug I mentioned in the previous paragraph. Now,
+let&rsquo;s run Puppet and do an R10k synchronization:</p>
+
+<p>```
+[root@master1 garysawesomeenvironment]# puppet apply /var/tmp/r10k_installation.pp
+Notice: Compiled catalog for master1 in environment production in 1.78 seconds
+Notice: /Stage[main]/R10k::Config/File[r10k.yaml]/content: content changed &lsquo;{md5}c686917fcb572861429c83f1b67cfee5&rsquo; to &lsquo;{md5}69d38a14b5de0d9869ebd37922e7dec4&rsquo;
+Notice: Finished catalog run in 1.24 seconds</p>
+
+<p>[root@master1 puppet]# r10k deploy environment -pv
+[R10K::Task::Deployment::DeployEnvironments &ndash; INFO] Loading environments from all sources
+[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment hiera_testing
+[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment hiera_production
+[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment hiera_master
+[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment production
+[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying redis into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying make into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying concat into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying portage into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying git into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying ruby into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying redis into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying make into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying concat into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying portage into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying git into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying ruby into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment master
+[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync &ndash; INFO] Deploying redis into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying portage into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying git into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying redis into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying portage into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying git into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment garysawesomeenvironment
+[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying redis into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying make into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying concat into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying portage into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying git into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying ruby into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment development
+[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync &ndash; INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync &ndash; INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Deployment::PurgeEnvironments &ndash; INFO] Purging stale environments from /etc/puppetlabs/puppet/environments
+[R10K::Task::Deployment::PurgeEnvironments &ndash; INFO] Purging stale environments from /etc/puppetlabs/puppet/hiera</p>
+
+<p>[root@master1 puppet]# ls /etc/puppetlabs/puppet/hiera
+hiera_master  hiera_production  hiera_testing</p>
+
+<p>[root@master1 puppet]# ls /etc/puppetlabs/puppet/environments/
+development  garysawesomeenvironment  master  production
+```</p>
+
+<p>Great, so it configured R10k to clone the Hiera repository to
+<code>/etc/puppetlabs/puppet/hiera</code> like we wanted it to, and you can see that with
+prefixing enabled we have folders named &ldquo;hiera_${branchname}&rdquo;.</p>
+
+<p>In Puppet, the magical connection that maps these subfolders to Puppet
+environments is in <code>puppet.conf</code>, but for Hiera that&rsquo;s the <code>hiera.yaml</code> file.
+I&rsquo;ve included that file in my <a href="https://github.com/glarizza/hiera_environment">Hiera repo</a>, so let&rsquo;s look at the
+copy at <code>/etc/puppetlabs/puppet/hiera/hiera_production/hiera.yaml</code>:</p>
+
+<h2>{% codeblock lang:yaml /etc/puppetlabs/puppet/hiera/hiera_production/hiera.yaml %}</h2>
+
+<p>:backends:
+  &ndash; yaml
+:hierarchy:
+  &ndash; &ldquo;%{clientcert}&rdquo;
+  &ndash; &ldquo;%{environment}&rdquo;
+  &ndash; global</p>
+
+<p>:yaml:
+  :datadir: &lsquo;/etc/puppetlabs/puppet/hiera/hiera_%{environment}/hieradata&rsquo;
+{% endcodeblock %}</p>
+
+<p>The magical line is in the <code>:datadir:</code> setting of the <code>:yaml:</code> section; it
+uses <code>%{environment}</code> to evaluate the environment variable set by Puppet and
+set the path accordingly.</p>
+
+<p>As of right now R10k is configured to clone Hiera data from a known repository
+to <code>/etc/puppetlabs/puppet/hiera</code>, to create sub-folders based on branches to
+that repository, and to tie data provided to each Puppet environment to the
+respective subfolder of <code>/etc/puppetlabs/puppet/hiera</code> that matches the pattern
+of <strong>&ldquo;hiera_(environment_name)&rdquo;</strong>.</p>
+
+<h3>The problem with <code>hiera.yaml</code></h3>
+
+<p>You&rsquo;ll notice that each subfolder to <code>/etc/puppetlabs/puppet/hiera</code> contains
+its own copy of <code>hiera.yaml</code>.  You&rsquo;re probably drawing the conclusion that
+each Puppet environment can read from its own <code>hiera.yaml</code> for Hiera configuration.</p>
+
+<p>And you would be wrong.</p>
+
+<p><a href="http://projects.puppetlabs.com/issues/11784">For information on this bug, check out this link.</a> You&rsquo;ll see
+that we provide a &lsquo;hiera_config&rsquo; configuration option in Puppet that allows
+you to specify the path to <code>hiera.yaml</code>, but Puppet loads that config as
+singleton, which means that it&rsquo;s read initially when the Puppet master process
+starts up and it&rsquo;s NOT environment-aware. The workaround is to use one
+<code>hiera.yaml</code> for all environments on a Puppet master but to dynamically change
+the <code>:datadir:</code> path according to the current environment (in the same way that
+dynamic Puppet environments abuse &lsquo;$environment&rsquo; in <code>puppet.conf</code>). You gain
+the ability to have per-environment changes to Hiera data but lose the ability
+to do things like using different hierarchies for different environments. As
+of right now, if you want a different hierarchy then you&rsquo;re going to need to
+use a different master (or do some hacky things that I don&rsquo;t even want to
+BEGIN to approach in this article).</p>
+
+<p>In summary &ndash; there will be a hiera.yaml per environment, but they will not
+be consulted on a per-environment basis.</p>
+
+<h3>Workflow for per-environment Hiera data</h3>
+
+<p><a href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/">Looking back on the previous post,</a> you&rsquo;ll see that the workflow
+for updating Hiera data is identical to the workflow for updating code to your
+Puppet environments.  Namely, to create a new environment for testing Hiera
+data, you will:</p>
+
+<ul>
+<li>Push a branch to the Hiera repository and name it accordingly (remembering
+that the name you choose will be a new environment).</li>
+<li>Run R10k to synchronize the data down to the Puppet master</li>
+<li>Add your node to that environment and test out the changes</li>
+</ul>
+
+
+<p>For existing environments, simply push changes to that environment&rsquo;s branch
+and repeat the last two steps.</p>
+
+<p><strong>NOTE: Puppet environments and Hiera environments are linked &ndash; both tools use
+the same &lsquo;environment&rsquo; concept and so environment names MUST match for the data
+to be shared (i.e. if you create an environment in Puppet called &lsquo;yellow&rsquo;, you
+will need a Hiera environment called &lsquo;yellow&rsquo; for that data).</strong></p>
+
+<p>This tight-coupling can cause issues, and will ultimately mean that certain
+branches are longer-lived than others. It&rsquo;s also the reason why I don&rsquo;t use
+defaults in my <code>hiera()</code> lookups inside Puppet manifests &ndash; I WANT the early
+failure of a compilation error to alert me of something that needs fixed.</p>
+
+<p>You will need to determine whether this tight-coupling is worth it for your
+organization to tie your Hiera repository directly into R10k or to handle it
+out-of-band.</p>
+
+<h2>R10k and monolithic module repositories</h2>
+
+<p>One of the first requirements you encounter when working with R10k is that your
+component modules need to be stored in their own repositories.  That convention
+is still relatively new &ndash; it wasn&rsquo;t so long ago that we were recommending that
+modules be locked away in a giant repo. Why?</p>
+
+<ul>
+<li>It&rsquo;s easier to clone</li>
+<li>The state of module reusability was poor</li>
+</ul>
+
+
+<p>The main reason was that it was easier to put everything in one repo and clone
+it out on all your Puppet master servers. This becomes insidious as your module
+count rises and people start doing lovely things like committing large binaries
+into modules, pulling in old versions of modules they find out on the web, and
+the like. It also becomes an issue when you start needing to lock committers
+out of specific directories due to sensitive data, and blah blah blah blah&hellip;</p>
+
+<p>There are better posts out there justifying/villafying the choice of one or
+multiple repositories, this section&rsquo;s meant only to show you how to incorporate
+a single repository containing multiple modules into your R10k workflow.</p>
+
+<p><a href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/">From the last post</a> you&rsquo;ll remember that the <code>Puppetfile</code> allows
+you to tie a repository, and some version reference, to a directory using
+R10k. Incorporating a monolithic repository starts with an entry in the
+<code>Puppetfile</code> like so:</p>
+
+<p>{% codeblock lang:ruby Puppetfile %}
+mod &ldquo;my_big_module_repo&rdquo;,
+  :git => &ldquo;git://github.com/glarizza/my_big_module_repo.git&rdquo;,
+  :ref => &lsquo;1.0.0&rsquo;
+{% endcodeblock %}</p>
+
+<p><strong>NOTE: That git repository doesn&rsquo;t exist. I don&rsquo;t HAVE a monolithic repo to
+demonstrate, so I&rsquo;ve chosen an arbitrary URI. Also note that you can use ANY
+name you like after the <code>mod</code> syntax to name the resultant folder &ndash; it doesn&rsquo;t
+HAVE to mirror the URI of the repository.</strong></p>
+
+<p>Adding this entry to the <code>Puppetfile</code> would checkout that repository to
+wherever all the other modules are checked out with a folder name of
+&lsquo;my_big_module_repo&rsquo;. Within that folder would most-likely (again, depending
+on how you&rsquo;ve laid out your repository) contain subfolders containing Puppet
+modules. This entry gets the modules onto your Puppet master, but it doesn&rsquo;t
+make Puppet aware of their location. For that, we&rsquo;re going to need to add an
+entry to the &lsquo;modulepath&rsquo; configuration item in <code>puppet.conf</code></p>
+
+<p>Inside <code>/etc/puppetlabs/puppet/puppet.conf</code> you should see a configuration item
+called &lsquo;modulepath&rsquo; that currently has a value of:</p>
+
+<p><code>
+modulepath = /etc/puppetlabs/puppet/environments/$environment/modules:/opt/puppet/share/puppet/modules
+</code></p>
+
+<p>The modulepath itself works like a PATH environment variable in Linux &ndash; it&rsquo;s
+a priority-based lookup mechanism that Puppet uses to find modules. Currently,
+Puppet will first look in <code>/etc/puppetlabs/puppet/environments/$environment/modules</code>
+for a module. If a the module that Puppet was looking for was found, Puppet
+will use it and not inspect the second path. If the module was not found at the
+FIRST path, it will inspect the second path. Failing to find the module at the
+second path results in a compilation error for Puppet. Using this to our
+advantage, we can add the path to the monolithic repository checked-out by the
+<code>Puppetfile</code> AFTER the path to where all the individual modules are checked-out.
+This should look something like this:</p>
+
+<p><code>
+modulepath = /etc/puppetlabs/puppet/environments/$environment/modules:/etc/puppetlabs/puppet/environments/$environment/modules/my_big_module_repo:/opt/puppet/share/puppet/modules
+</code></p>
+
+<p><strong>Note: This assumes all modules are in the root of the monolithic repo. If
+they&rsquo;re in a subdirectory, you must adjust accordingly</strong></p>
+
+<p>That&rsquo;s a huge line (and if you&rsquo;re afraid of anything over 80 column-widths then
+I&rsquo;m sorry&hellip;and you should probably buy a new monitor&hellip;and the 80s are over),
+but the gist is that we&rsquo;re first going to look for modules checked out by R10k,
+THEN we&rsquo;re going to look for modules in our monolithic repo, then we&rsquo;re going
+to look in Puppet Enterprise&rsquo;s vendored module directory, and finally, like I
+said above, we&rsquo;ll fail if we can&rsquo;t find our module. This will allow you to KEEP
+using your monolithic repository and also slowly cut modules inside that
+monolithic repo over to their own repositories (since when they gain their own
+repository, they will be located in a path that COMES before the monolithic
+repo, and thus will be given priority).</p>
+
+<h2>Using MCollective to perform R10k synchronizations</h2>
+
+<p>This section is going to be much less specific than the rest because the piece
+that does the ACTION is part of <a href="http://forge.puppetlabs.com/zack/r10k">a module for R10k</a>. As of the time
+of this writing, this agent is in one state, but that could EASILY change. I
+will defer to <a href="http://forge.puppetlabs.com/zack/r10k">the module in question</a> (and specifically its
+README file) should you need specifics (or if my module is dated). What I CAN
+tell you, however, is that <a href="http://forge.puppetlabs.com/zack/r10k">the R10k module</a> does come with a class
+that will setup and configure both an MCollective agent for R10k and also a
+helper application that should make doing R10k synchroniations on multiple
+Puppet masters much easier than doing them by hand.  First, you&rsquo;ll need to
+INSTALL the MCollective agent/application, and you can do that by pulling
+down <a href="http://forge.puppetlabs.com/zack/r10k">the module</a> and its dependencies, and classifying all Puppet
+masters with R10k enabled by doing the following:</p>
+
+<p><code>puppet
+include r10k::mcollective
+</code></p>
+
+<p>Terribly difficult, huh? With that, both the MCollective agent and application
+should be available to MCollective on that node. The way to trigger a
+syncronization is to login to an account on a machine that has MCollective
+client access (in Puppet Enterprise, this would be any Puppet master that&rsquo;s
+allowed the role, and then, specifically, the <code>peadmin</code> user&hellip;so doing a
+<code>su - peadmin</code> should afford you access to that user), and perform the following
+command:</p>
+
+<p><code>
+mco r10k deploy
+</code></p>
+
+<p>This is where the README differs a bit, and the reason for that is because Finch
+changed the syntax that R10k uses to synchronize and deploy modules to a Master.
+The CURRENTLY accepted command (because, knowing Finch, that shit might change)
+is <code>r10k deploy environment -p</code>, and the action to the MCollective agent that
+EXECUTES that command is the &lsquo;deploy&rsquo; action.  The README refers to the
+&lsquo;synchronize&rsquo; action, which executes the <code>r10k synchronize</code> command. This command
+MAY STILL WORK, but it&rsquo;s deprecated, and so it&rsquo;s NOT recommended to be used.</p>
+
+<p>Like I said before, this agent is subject to change (mainly do to R10k command
+deprecation and maturation), so definitely refer to the README and the code
+itself for more information (or
+<a href="http://github.com/acidprime/puppet-r10k">file issues and pull requests on the module repo directly</a>).</p>
+
+<h2>Tying R10k to CI workflows</h2>
+
+<p>I spent a year doing some presales work for the Puppet Labs SE team, so I can
+hand-wave and tapdance like a motherfucker. I&rsquo;m going to need those skills for
+this next section, because if you thought the previous section glossed over the
+concepts pretty quickly and without much detail, then this section is going to
+feel downright vaporous (is that a word? Fuck it; I&rsquo;m handwaving &ndash; it&rsquo;s
+a word). I really debated whether to include the following sections in this
+post because I don&rsquo;t really give you much specific information; it&rsquo;s all very
+generic and full of &ldquo;ideas&rdquo; (though I do list some testing libraries below that
+are helpful if you&rsquo;ve never heard of them). Feel free to abandon ship and skip
+to the FINAL section right now if you don&rsquo;t want to hear about &lsquo;ideas&rsquo;.</p>
+
+<p>For the record, I&rsquo;m going to just pick and use the term &ldquo;CI&rdquo; when I&rsquo;m referring
+to the process of automating the testing and deployment of, in this case,
+Puppet code.  There have definitely been posts arging about which definition is
+more appropriate, but, frankly, I&rsquo;m just going to pick a term and go with it,</p>
+
+<p>The issue at hand is that when you talk &ldquo;CI&rdquo; or &ldquo;CD&rdquo; or &ldquo;Continuous (fill_in_the_blank)&rdquo;, you&rsquo;re
+talking about a workflow that&rsquo;s tailored to each organization (and sometimes
+each DEPARTMENT of an organization). Sometimes places can agree on a specific
+tool to assist them with this process (be it Jenkins, Hudson, Bamboo, or
+whatever), but beyond that it&rsquo;s anyone&rsquo;s game.</p>
+
+<p>Since we&rsquo;re talking PUPPET code, though, you&rsquo;re restricted to certain tasks
+that will show up in any workflow&hellip;and THAT is what I want to talk about here.</p>
+
+<p>To implement some sort of CI workflow means laying down a &lsquo;pipeline&rsquo; that takes a
+change of your Puppet code (a new module, a change to an existing module, some
+Hiera data updates, whatever) from the developer&rsquo;s/operations engineer&rsquo;s workstation
+right into production.  The way we do this with R10k currently is to:</p>
+
+<ul>
+<li>Make a change to an individual module</li>
+<li>Commit/push those changes to the module&rsquo;s remote repository</li>
+<li>Create a test branch of the puppet_repository</li>
+<li>Modify the <code>Puppetfile</code> and tie your module&rsquo;s changes to this environment</li>
+<li>Commit/push those changes to the puppet_repository</li>
+<li>Perform an R10k synchronization</li>
+<li>Test</li>
+<li>Repeat steps 1-7 as necessary until shit works how you like it</li>
+<li>Merge the changes in the test branch of the puppet_repository with the production branch</li>
+<li>Perform an R10k synchronization</li>
+<li>Watch code changes become active in your production environment</li>
+</ul>
+
+
+<p>Of those steps, there&rsquo;s arguably about 3 unique steps that could be automated:</p>
+
+<ul>
+<li>R10k synchronizations</li>
+<li>&lsquo;Testing&rsquo; (whatever that means)</li>
+<li>Merging the changes in the test branch of the puppet_repository with the production branch</li>
+</ul>
+
+
+<p><strong>NOTE: As we get progressively-more-handwavey (also probably not a word, but fuck it &ndash; let&rsquo;s
+be thought leaders and CREATE IT), each one of these steps is going to be more
+and more&hellip;generic. For example &ndash; to say &ldquo;test your code&rdquo; is a great idea, but,
+seriously, defining how to do that could (and should) be multiple blog posts.</strong></p>
+
+<h3>Laying down the pipeline</h3>
+
+<p>If I were building an automated workflow, the first thing I would do is
+setup something like Jenkins and configure it to watch the puppet_repository
+that contains the <code>Puppetfile</code> mapping all my modules and versions to Puppet
+environments. On changes to this repository, we want Jenkins to perform an R10k
+synchronization, run tests, and then, possibly, merge those changes into
+production (depending on the quality of your tests and how &lsquo;webscale&rsquo; you think
+you are on that day).</p>
+
+<h3>R10k synchronizations</h3>
+
+<p>If you&rsquo;re paying attention, we solved this problem in the previous section with
+the R10k MCollective agent. Jenkins should be running on a machine that has the
+ability to execute MCollective client commands (such as triggering
+<code>mco r10k deploy</code> when necessary).  You&rsquo;ll want to tailor your calls from
+Jenkins to only deploy environments it&rsquo;s currently testing (remember in the
+puppet_repository that topic branches map to Puppet environments, so this
+is a per-branch action) as opposed to deploying ALL environments every time.</p>
+
+<p>Also, if you&rsquo;re buiding a pipeline, you might not want to do R10k
+synchronizations on ALL of your Puppet Masters at this point. Why not? Well,
+if your testing framework is good enough and has sufficient coverage that
+you&rsquo;re COMPLETELY trusting it to determine whether code is acceptable or not,
+then this is just the FIRST step &ndash; making the code available to be tested. It&rsquo;s
+not passed tests yet, so pushing it out to all of your Puppet masters is a bit
+wasteful. You&rsquo;ll probably want to only synchronize with a single master that&rsquo;s
+been identified for testing (and a master that has the ability to spin up
+fresh nodes, enforce the Puppet code on them, submit those nodes to a battery
+of tests, and then tear them down when everything has been completed).</p>
+
+<p>If you&rsquo;re like the VAST majority of Puppet users out there that DON&rsquo;T have a
+completely automated testing framework that has such complete coverage that you
+trust it to determine whether code changes are acceptable or not, then you&rsquo;re
+probably &lsquo;testing&rsquo; changes manually. For these people, you&rsquo;ll probably want to
+synchronize code to whichever Puppet master(s) are suitable.</p>
+
+<p>The cool thing about these scenarios is that MCollective is flexible enough
+to handle this. MCollective has the ability to filter your nodes based on
+things like available MCollective agents, Facter facts, Puppet classes, and
+even things like the MD5 hashes of arbitrary files on the filesystem&hellip;so
+however you want to restrict synchronization, you can do it with MCollective.</p>
+
+<p>After all of that, the answer here is &ldquo;Use MCollective to do R10k syncs/deploys.&rdquo;</p>
+
+<h3>Testing</h3>
+
+<p>This section needs its own subset of blog posts. There are all kinds of tools
+that will allow you to test all sorts of things about your Puppet code (from
+basic syntax checking and linting, to integration tests that check for the
+presence of resources in the catalog, to acceptance-level tests that check
+the end-state of the system to make sure Puppet left it in a state that&rsquo;s
+acceptable).  The most common tools for these types of tests are:</p>
+
+<ul>
+<li><a href="http://puppet-lint.com">Puppet-lint</a></li>
+<li><a href="http://rspec-puppet.com">Rspec-puppet</a></li>
+<li><a href="http://github.com/puppetlabs/beaker">Beaker</a></li>
+<li><a href="https://github.com/serverspec/serverspec">Serverspec</a></li>
+<li>And more&hellip;</li>
+</ul>
+
+
+<p>Unfortunately, the point of this section is NOT to walk you through setting up
+one or more of those tools (I&rsquo;d love to write those posts soon&hellip;), but rather
+to make you aware of their presence and identify where they fit in our Pipeline.</p>
+
+<p>Once you&rsquo;ve synchronized/deployed code changes to a specific machine (or
+subset of machines), the next step is to trigger tests.</p>
+
+<p>Backing up the train a bit, certain kinds of &lsquo;tests&rsquo; should be done WELL in
+advance of this step. For example, if code changes don&rsquo;t even pass basic syntax
+checking and linting, they shouldn&rsquo;t even MAKE it into your repository. Things
+like pre-commit hooks will allow you to trigger syntactical checks and linting
+before a commit is allowed. We&rsquo;re assuming you&rsquo;ve already set those up (and
+if you&rsquo;ve NOT, then you should probably do that RIGHT NOW).</p>
+
+<p>Rather, in this section, we&rsquo;re talking about doing some basic integration
+smoke testing (i.e. running the rspec-puppet tests on all the modules to ensure
+that what we EXPECT in the catalog is actually IN the catalog), moving into
+acceptance level testing (i.e. spinning up pristine/clean nodes, actually
+applying the Puppet code to the nodes, and then running things like Beaker
+or Serverspec on the nodes to check the end-state of things like services, open
+ports, configuration files, and whatever to ensure that Puppet ACTUALLY left
+the system in a workable state), and then returning a &ldquo;PASS&rdquo; or
+&ldquo;FAIL&rdquo; response to Jenkins (or whatever is controlling your pipeline).</p>
+
+<p>These tests can be as thorough or as loose as is acceptable to you (obviously,
+the goal is to automate ALL of your tests so you don&rsquo;t have to manually check
+ANY changes, but that&rsquo;s the nerd-nirvana state where we&rsquo;re all browsing the web
+all day), but they should catch the most NOTORIOUS and OBVIOUS things FIRST.
+Follow the same rules you did when you got started with Puppet &ndash; catch the
+things that are easiest to catch and start building up your cache of &ldquo;Total
+Time Saved.&rdquo;</p>
+
+<p>Jenkins needs to be able to trigger these tests from wherever it&rsquo;s running,
+so your Jenkins box needs the ability to, say, spin up nodes in ESX, or
+locally with something like Vagrant, or even cloud nodes in EC2 or GCE, then
+TRIGGER the tests, and finally get a &ldquo;PASS&rdquo; or &ldquo;FAIL&rdquo; response back. The
+HARDEST part here, by far, is that you have to define what level of testing
+you&rsquo;re going to implement, how you&rsquo;re going to implement it, and devise
+the actual process to perform the testing. Like I said before, there are other
+blog posts that talk about this (and I hope to tackle this topic in the very
+near future), so I&rsquo;ll leave it to them for the moment.</p>
+
+<h3>To merge or not to merge</h3>
+
+<p>The final step for any test code is to determine whether it should be merged
+into production or not. Like I said before, if your tests are sufficient and
+are adequate at determining whether a change is &lsquo;good&rsquo; or not, then you can
+look at automating the process of merging those changes into production and
+killing off the test branch (or, NOT merging those changes, and leaving the
+branch open for more changes).</p>
+
+<p>Automatically merging is scary for obvious reasons, but it&rsquo;s also a good &lsquo;test&rsquo;
+for your test coverage. Committing to a &lsquo;merge upon success&rsquo; workflow takes
+trust, and there&rsquo;s absolutely no shame in leaving this step to a human,
+to a change review board, or to some out-of-band process.</p>
+
+<h2>Use your illusion</h2>
+
+<p>These are the most common questions I get asked after the initial shock of R10k,
+and its workflow, wears off. Understand that I do these posts NOT from a &ldquo;Here&rsquo;s
+what you should absolutely be doing!&rdquo; standpoint, but more from a &ldquo;Here&rsquo;s what&rsquo;s
+going on out there.&rdquo; vantage. Every time I&rsquo;m called on-site with a customer, I
+evaluate:</p>
+
+<ul>
+<li>The size and experience level of the team involved</li>
+<li>The processes that the team must adhere to</li>
+<li>The Puppet experience level of the team</li>
+<li>The goals of the team</li>
+</ul>
+
+
+<p>Frankly, after all those observations, sometimes I ABSOLUTELY come to the
+conclusion that something like R10k is entirely-too-much process for
+not-enough benefit. For those who are a fit, though, we go down the checklists
+and tailor the workflow to the environment.</p>
+
+<h2>What more IS there on R10k?</h2>
+
+<p>I do have at least a couple of more posts in me on some specific issues I&rsquo;ve
+hit when consulting with companies using R10k, such as:</p>
+
+<ul>
+<li>How best to use Hiera and R10k with Puppet &lsquo;environments&rsquo; and internal, long-term &lsquo;environments&rsquo;</li>
+<li>Better ideas on &lsquo;what to branch and why&rsquo; with regard to component modules and the puppet_repository</li>
+<li>To inherit or not to inherit with Roles</li>
+<li>How to name things (note that I work for Puppet Labs, so I&rsquo;m most likely very WRONG with this section)</li>
+<li>Other random things I&rsquo;ve noticed&hellip;</li>
+</ul>
+
+
+<p>Also, I apologize if it&rsquo;s been awhile since I&rsquo;ve replied to a couple of
+comments. I&rsquo;m booked out 3 months in advance and things are pretty wild at
+the moment, but I&rsquo;m REALLY thankful of everyone who cares enough to drop a
+note, and I hope I&rsquo;m providing some good info you can actually use! Cheers!</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 3: Dynamic Environments with R10k]]></title>
+    <link href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/"/>
+    <updated>2014-02-18T09:48:18-08:00</updated>
+    <id>http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3</id>
+    <content type="html"><![CDATA[<p>Workflows are like kickball games: everyone knows the general idea of what&rsquo;s
+going on, there&rsquo;s an orderly progression towards an end-goal, nobody wants to
+be excluded, and people lose their shit when they get hit in the face by a big
+rubber ball.  Okay, so maybe it&rsquo;s not a perfect mapping but you get the idea.</p>
+
+<p>The previous two posts (<a href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/">one</a> and <a href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2/">two</a>) focused on
+writing modules, wrapping modules, and classification. While BOTH of these
+things are very important in the grand scheme of things, one of the biggest
+problems people get hung-up on is how do you iterate upon your modules, and,
+more importantly, how do you eventually get these changes pushed into production
+in a reasonably orderly fashion?</p>
+
+<p>This post is going to be all over the place. We&rsquo;re gonna cover the idea of
+separate environments in Puppet, touch on dynamic environments, and round it
+out with that mother-of-a-shell-script-turned-personal-savior, R10k. Hold on
+to your shit.</p>
+
+<h2>Puppet Environments</h2>
+
+<p><a href="http://docs.puppetlabs.com/guides/environment.html">Puppet has the concept of &lsquo;environments&rsquo;</a> where you can logically
+separate your modules and manifest (read: <code>site.pp</code>) into separate folders
+to allow for nodes to get entirely separate bits of code based on which
+&lsquo;environment&rsquo; the node belongs to.</p>
+
+<p>Puppet environments are statically set in <code>puppet.conf</code>, but,
+<a href="http://bit.ly/puppetgit">as other blog posts have noted</a>, you can do some crafty things in
+<code>puppet.conf</code> to give you the solution of having &lsquo;dynamic environments&rsquo;.</p>
+
+<p><strong>NOTE</strong>: The solutions in this post are going to rely on Puppet environments,
+however environments aren&rsquo;t without their own shortcomings
+<a href="http://projects.puppetlabs.com/issues/12173">namely, this bug on Ruby plugins in Puppet</a>). For testing and
+promoting Puppet classes written in the DSL, environments will help you out
+greatly. For complete separation of Ruby instances and any plugins to Puppet
+written in Ruby, however, you&rsquo;ll need separate masters (which is something that
+I won&rsquo;t be covering in this article).</p>
+
+<h2>One step further &ndash; &lsquo;dynamic&rsquo; environments</h2>
+
+<p>Adrien Thebo, hitherto known as &lsquo;Finch&rsquo;, &ndash; who is known for building awesome
+things and talking like he&rsquo;s fresh from a Redbull binge &ndash; created the
+<a href="http://bit.ly/puppetgit">now-famous blog post on creating dynamic environments in Puppet with git.</a>
+That post relied upon a post-commit hook to do all the jiggery-pokery necessary
+to checkout the correct branches in the correct places, and thus it had a heavy
+reliance upon git.</p>
+
+<p>Truly, the only magic in <code>puppet.conf</code> was the inclusion of &lsquo;$environment&rsquo; in
+the <code>modulepath</code> configuration entry on the Puppet master (literally that
+string and not the evaluated form of your environment). By doing that, the
+Puppet master would replace the string &lsquo;$environment&rsquo; with the environment
+of the node checking in and would look to that path for Puppet manifests
+and modules. If you use something OTHER than git, it would be up to you to
+create a post-receive hook that populated those paths, but you could still
+replicate the results (albiet with a little work on your part).</p>
+
+<p>People used this pattern and it worked fairly well. Hell, it STILL works
+fairly well, nothing has changed to STOP you from using it. What changed,
+however, was the ecosystem around modules, the need for individual module
+testing, and the further need to automate this whole goddamn process.</p>
+
+<p>Before we deliver the &lsquo;NEW SOLUTION&rsquo;, let&rsquo;s provide a bit of history and
+context.</p>
+
+<h2>Module repositories: the one-to-many problem</h2>
+
+<p>I <a href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/">touched on this topic in the first post</a>, but one of the first
+problems you encounter when putting your modules in version control is whether
+or not to have ONE GIANT REPO with all of your modules, or a repository for
+every module you create. In the past we recommended putting every module in
+one repository (namely because it was easier, the module sharing landscape
+was pretty barren, and teams were smaller). Now, we recommend the opposite
+for the following reasons:</p>
+
+<ul>
+<li>Individual repos mean individual module development histories</li>
+<li>Most VCS solutions don&rsquo;t have per-folder ACLs for a single repositories;
+having multiple repos allows per-module security settings.</li>
+<li>With the one-repository-per-module solution, modules you pull down from the
+Forge (or Github) must be committed to your repo. Having multiple
+repositories for each module allow you to keep everything separate</li>
+<li>Publishing this module to the Forge (or Github/Stash/whatever) is easier
+with separate repos (rather than having to split-out the module later).</li>
+</ul>
+
+
+<p>The problem with having a repository for every Puppet module you create is that
+you need a way to map every module with every Puppet master (and, also which
+version of every module should be installed in which Puppet environment).</p>
+
+<p><a href="https://github.com/rodjek/librarian-puppet">A project called librarian-puppet</a> sprang up that created the
+&lsquo;<code>Puppetfile</code>&rsquo;, a file that would map modules and their versions to a
+specific directory. Librarian was awesome,
+<a href="http://somethingsinistral.net/blog/scaling-puppet-environment-deployment/">but, as Finch noted in his post</a>, it had some shortcomings
+when used in an environment with many and fast-changing modules.
+<a href="http://somethingsinistral.net/blog/scaling-puppet-environment-deployment/">His solution, that he documented here,</a>, was the tool we now come
+to know as R10k.</p>
+
+<h2>Enter R10k</h2>
+
+<p>R10k is essentially a Ruby project that wraps a bunch of shell commands you
+would NORMALLY use to maintain an environment of ever-changing Puppet modules.
+Its power is in its ability to use Git branches combined with a <code>Puppetfile</code>
+to keep your Puppet environments in-sync. Because of this, R10k is CURRENTLY
+restricted to git. There have been rumblings of porting it to Hg or svn, but
+I know of no serious attempts at doing this (and if you ARE doing this, may
+god have mercy on your soul). Great, so how does it work?</p>
+
+<p>Well, you&rsquo;ll need one main repository SIMPLY for tracking the <code>Puppetfile</code>.
+<a href="https://github.com/glarizza/puppet_repository">I&rsquo;ve got one right here,</a> and it only has my <code>Puppetfile</code> and a
+<code>site.pp</code> file for classification (should you use it).</p>
+
+<p><strong>NOTE</strong>: The Puppetfile and librarian-puppet-like capabilities under the hood
+are going to be doing most of the work here &ndash; this repository is solely so you
+can create topic branches with changes to your <code>Puppetfile</code> that will
+eventually become dynamically-created Puppet environments.</p>
+
+<p>Let&rsquo;s take a look at the <code>Puppetfile</code> and see what&rsquo;s going on:</p>
+
+<p>{% codeblock lang:ruby Puppetfile %}
+forge &ldquo;<a href="http://forge.puppetlabs.com">http://forge.puppetlabs.com</a>&rdquo;</p>
+
+<h1>Modules from the Puppet Forge</h1>
+
+<p>mod &ldquo;puppetlabs/stdlib&rdquo;
+mod &ldquo;puppetlabs/apache&rdquo;, &ldquo;0.11.0&rdquo;
+mod &ldquo;puppetlabs/pe_gem&rdquo;
+mod &ldquo;puppetlabs/mysql&rdquo;
+mod &ldquo;puppetlabs/firewall&rdquo;
+mod &ldquo;puppetlabs/vcsrepo&rdquo;
+mod &ldquo;puppetlabs/git&rdquo;
+mod &ldquo;puppetlabs/inifile&rdquo;
+mod &ldquo;zack/r10k&rdquo;
+mod &ldquo;gentoo/portage&rdquo;
+mod &ldquo;thias/vsftpd&rdquo;</p>
+
+<h1>Modules from Github using various references</h1>
+
+<p>mod &ldquo;wordpress&rdquo;,
+  :git => &ldquo;git://github.com/hunner/puppet-wordpress.git&rdquo;,
+  :ref => &lsquo;0.4.0&rsquo;</p>
+
+<p>mod &ldquo;property_list_key&rdquo;,
+  :git => &ldquo;git://github.com/glarizza/puppet-property_list_key.git&rdquo;,
+  :ref => &lsquo;952a65d9ea2c5809f4e18f30537925ee45548abc&rsquo;</p>
+
+<p>mod &lsquo;redis&rsquo;,
+  :git => &lsquo;git://github.com/glarizza/puppet-redis&rsquo;,
+  :ref => &lsquo;feature/debian_support&rsquo;
+{% endcodeblock %}</p>
+
+<p>This example lists the syntax for dealing with modules from both the
+Forge and Github, as well as pulling specific versions of modules (whether
+versions in the case of the Forge, or Github references as tags, branches,
+or even specific commits). The syntax is not hard to follow &ndash; just remember
+that we&rsquo;re mapping modules and their versions to a set/known environment.</p>
+
+<p>For every topic branch on this repository (containing the <code>Puppetfile</code>), R10k
+will in turn create a Puppet environment with the same name. For this reason,
+it&rsquo;s convention to rename the &lsquo;master&rsquo; branch to &lsquo;production&rsquo; since that&rsquo;s the
+default environment in Puppet (note that renaming branches locally is easy &ndash;
+renaming the branch on Github can sometimes be a pain in the ass). You will
+also note why it&rsquo;s going to be somewhat hard to map R10k to subversion, for
+example, due to the lack of lightweight branching schemes.</p>
+
+<p>To explain any more of R10k reads just as if I were describing its installation,
+so let&rsquo;s quit screwing around and actually INSTALL/SETUP the damn thing.</p>
+
+<h2>Setting up R10k</h2>
+
+<p>As I mentioned before, we <a href="https://github.com/glarizza/puppet_repository">have the main repository</a> that will be
+used to track the <code>Puppetfile</code>, which in turn will track the modules to
+be installed (whether from The Forge, Github, or some internal git repo). Like
+any good Puppet component, R10k itself can be setup with a Puppet module.
+<a href="http://forge.puppetlabs.com/zack/r10k">The module I&rsquo;ll be using</a> was developed by <a href="https://github.com/acidprime">Zack Smith</a>,
+and is pretty simple to get started. Let&rsquo;s download it from the forge first:</p>
+
+<p><code>
+[root@master1 vagrant]# puppet module install zack/r10k
+Notice: Preparing to install into /etc/puppetlabs/puppet/modules ...
+Notice: Downloading from https://forge.puppetlabs.com ...
+Notice: Installing -- do not interrupt ...
+/etc/puppetlabs/puppet/modules
+└─┬ zack-r10k (v1.0.2)
+  ├─┬ gentoo-portage (v2.1.0)
+  │ └── puppetlabs-concat (v1.0.1)
+  ├── mhuffnagle-make (v0.0.2)
+  ├── puppetlabs-gcc (v0.1.0)
+  ├── puppetlabs-git (v0.0.3)
+  ├── puppetlabs-inifile (v1.0.1)
+  ├── puppetlabs-pe_gem (v0.0.1)
+  ├── puppetlabs-ruby (v0.1.0)
+  └── puppetlabs-vcsrepo (v0.2.0)
+</code></p>
+
+<p>The module will be installed into the first path in your modulepath, which in
+the case above is <code>/etc/puppetlabs/puppet/modules</code>. This modulepath will change
+due to the way we&rsquo;re going to setup our dynamic Puppet environments. For this
+example, I&rsquo;m going to have environments dynamically generated at
+<code>/etc/puppetlabs/puppet/environments</code>, so let&rsquo;s create that directory first:</p>
+
+<p><code>
+[root@master1 vagrant]# mkdir -p /etc/puppetlabs/puppet/environments
+</code></p>
+
+<p>Now, we need to setup R10k on this machine. The module we downloaded will
+allow us to do that, but we&rsquo;ll need to create a small Puppet manifest that
+will allow us to setup R10k out-of-band from a regular Puppet run (you CAN
+continuously-enforce R10k configuration in-band with your regular Puppet
+run, but if we&rsquo;re setting up a Puppet master to use R10k to serve out dynamic
+environments it&rsquo;s possible to create a chicken-and-egg situation.). Let&rsquo;s
+generate a file called <code>r10k_installation.pp</code> in <code>/var/tmp</code> and have it look
+like the following:</p>
+
+<p>{% codeblock lang:puppet /var/tmp/r10k_installation.pp %}
+class { &lsquo;r10k&rsquo;:
+  version           => &lsquo;1.1.3&rsquo;,
+  sources           => {</p>
+
+<pre><code>'puppet' =&gt; {
+  'remote'  =&gt; 'https://github.com/glarizza/puppet_repository.git',
+  'basedir' =&gt; "${::settings::confdir}/environments",
+  'prefix'  =&gt; false,
+}
+</code></pre>
+
+<p>  },
+  purgedirs         => [&ldquo;${::settings::confdir}/environments&rdquo;],
+  manage_modulepath => true,
+  modulepath        => &ldquo;${::settings::confdir}/environments/\$environment/modules:/opt/puppet/share/puppet/modules&rdquo;,
+}
+{% endcodeblock %}</p>
+
+<p>So what is every section of that declaration doing?</p>
+
+<ul>
+<li><strong><code>version =&gt; '1.1.3'</code></strong> sets the version of the R10k gem to install</li>
+<li><strong><code>sources =&gt; {...}</code></strong> is a hash of sources that R10k is going to track. For
+now it&rsquo;s only our <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>, but you can also track a Hiera
+installation too. This hash accepts key/value pairs for configuration settings
+that are going to be written to <code>/etc/r10k.yaml</code>, which is R10k&rsquo;s main
+configuration file. The keys in-use are <code>remote</code>, which is the path to the
+repository to-be-checked-out by R10k, <code>basedir</code>, which is the path on-disk
+to where dynamic environments are to be created (we&rsquo;re using the
+<code>$::settings::confdir</code> variable which maps to the Puppet master&rsquo;s configuration
+directory, or <code>/etc/puppetlabs/puppet</code>), and <code>prefix</code> which is a boolean
+to determine whether to use R10k&rsquo;s source-prefixing feature. <strong>NOTE: the <code>false</code>
+value is a BOOLEAN value, and thus SHOULD NOT BE QUOTED. Quoting it turns it
+into a string, which matches as a boolean TRUE value. Don&rsquo;t quote <code>false</code> &ndash;
+that&rsquo;s bad, mmkay.</strong></li>
+<li><strong><code>purgedirs=&gt; ["${::settings::confdir}/environments"]</code></strong> is configuring R10k
+to implement purging on the environments directory (so any folders that R10k
+doesn&rsquo;t create it will delete). This configuration MAY be moot with newer
+versions of R10k as I believe it implements this behavior by default.</li>
+<li><strong><code>manage_modulepath =&gt; true</code></strong> will ensure that this module sets the <code>modulepath</code>
+configuration item in <code>/etc/puppetlabs/puppet/puppet.conf</code></li>
+<li><strong><code>modulepath =&gt; ...</code></strong> sets the <code>modulepath</code> value to be dropped into
+<code>/etc/puppetlabs/puppet/puppet.conf</code>. Note that we are interpolating variables
+(<code>$::settings::confdir</code> again), AND inserting the LITERAL string of <code>$environment</code>
+into the <code>modulepath</code> &ndash; this is because Puppet will replace <code>$environment</code> with
+the value of the agent&rsquo;s environment at catalog compilation.</li>
+</ul>
+
+
+<p><strong>JUST IN CASE YOU MISSED IT: Don&rsquo;t quote the <code>false</code> value for the prefix setting
+in the <code>sources</code> block. That is all.</strong></p>
+
+<p>Okay, we have our one-time Puppet manifest, and now the only thing left to do
+is to run it:</p>
+
+<p><code>
+[root@master1 tmp]# puppet apply /var/tmp/r10k_installation.pp
+Notice: Compiled catalog for master1 in environment production in 2.05 seconds
+Notice: /Stage[main]/R10k::Config/File[r10k.yaml]/ensure: defined content as '{md5}0b619d5148ea493e2d6a5bb205727f0c'
+Notice: /Stage[main]/R10k::Config/Ini_setting[R10k Modulepath]/value: value changed '/etc/puppetlabs/puppet/modules:/opt/puppet/share/puppet/modules' to '/etc/puppetlabs/puppet/environments/$environment/modules:/opt/puppet/share/puppet/modules'
+Notice: /Package[r10k]/ensure: created
+Notice: /Stage[main]/R10k::Install::Pe_gem/File[/usr/bin/r10k]/ensure: created
+Notice: Finished catalog run in 10.55 seconds
+</code></p>
+
+<p>At this point, it goes without saying that <code>git</code> needs to be installed, but
+if you&rsquo;re firing up a new VM that DOESN&rsquo;T have <code>git</code>, then R10k is going to
+spit out an awesome error &ndash; so ensure that <code>git</code> is installed.  After that,
+let&rsquo;s synchronize R10k with the <code>r10k deploy environment -pv</code> command (<code>-p</code>
+for <code>Puppetfile</code> synchronization and <code>-v</code> for verbose mode):</p>
+
+<p><code>
+[root@master1 puppet]# r10k deploy environment -pv
+[R10K::Task::Deployment::DeployEnvironments - INFO] Loading environments from all sources
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment production
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying redis into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying make into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying concat into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying portage into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying git into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying ruby into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying redis into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying make into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying concat into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying portage into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying git into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying ruby into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/production/modules
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment master
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying redis into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying portage into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying git into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying redis into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying portage into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying git into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying vcsrepo into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/master/modules
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment development
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying r10k into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying property_list_key into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying wordpress into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying inifile into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying vsftpd into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying firewall into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying pe_gem into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying apache into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Module::Sync - INFO] Deploying stdlib into /etc/puppetlabs/puppet/environments/development/modules
+[R10K::Task::Deployment::PurgeEnvironments - INFO] Purging stale environments from /etc/puppetlabs/puppet/environments
+</code></p>
+
+<p>I ran this first synchronization with verbose mode so you can see exactly what&rsquo;s
+getting copied where. Futher synchronizations don&rsquo;t have to be in verbose mode,
+but it&rsquo;s good for debugging. After all of that, we have an
+<code>/etc/puppetlabs/puppet/environments</code> folder containing our dynamic Puppet
+environments based off of the branches of the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>:</p>
+
+<p>```
+[root@master1 puppet]# ls -lah /etc/puppetlabs/puppet/environments/
+total 20K
+drwxr-xr-x 5 root root 4.0K Feb 19 11:44 .
+drwxr-xr-x 7 root root 4.0K Feb 19 11:25 ..
+drwxr-xr-x 4 root root 4.0K Feb 19 11:44 development
+drwxr-xr-x 5 root root 4.0K Feb 19 11:43 master
+drwxr-xr-x 5 root root 4.0K Feb 19 11:42 production</p>
+
+<p>[root@master1 puppet]# cd /etc/puppetlabs/puppet/environments/production/
+[root@master1 production]# git branch -a
+  master
+* production
+  remotes/origin/HEAD &ndash;> origin/master
+  remotes/origin/development
+  remotes/origin/master
+  remotes/origin/production
+```</p>
+
+<p>As you can see (at the time of this writing), my <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>
+has three main branches: <code>development</code>, <code>master</code>, and <code>production</code>, and so
+R10k created three Puppet environments matching those names. It&rsquo;s somewhat
+of a convention to rename the master branch to <code>production</code>, but in this
+case I left it alone to demonstrate how this works.</p>
+
+<p><strong>ONE OTHER BIG GOTCHA</strong>: R10k does NOT resolve dependencies, and
+so it is UP TO YOU to track them in your Puppetfile.  Check this out:</p>
+
+<p><code>
+[root@master1 production]# puppet module list
+Warning: Module 'puppetlabs-firewall' (v1.0.0) fails to meet some dependencies:
+  'puppetlabs-puppet_enterprise' (v3.1.0) requires 'puppetlabs-firewall' (v0.3.x)
+Warning: Module 'puppetlabs-stdlib' (v4.1.0) fails to meet some dependencies:
+  'puppetlabs-pe_accounts' (v2.0.1) requires 'puppetlabs-stdlib' (v3.2.x)
+  'puppetlabs-pe_mcollective' (v0.1.14) requires 'puppetlabs-stdlib' (v3.2.x)
+  'puppetlabs-puppet_enterprise' (v3.1.0) requires 'puppetlabs-stdlib' (v3.2.x)
+  'puppetlabs-request_manager' (v0.0.10) requires 'puppetlabs-stdlib' (v3.2.x)
+Warning: Missing dependency 'cprice404-inifile':
+  'puppetlabs-pe_puppetdb' (v0.0.11) requires 'cprice404-inifile' (&gt;=0.9.0)
+  'puppetlabs-puppet_enterprise' (v3.1.0) requires 'cprice404-inifile' (v0.10.x)
+  'puppetlabs-puppetdb' (v1.5.1) requires 'cprice404-inifile' (&gt;= 0.10.3)
+Warning: Missing dependency 'puppetlabs-concat':
+  'puppetlabs-apache' (v0.11.0) requires 'puppetlabs-concat' (&gt;= 1.0.0)
+  'gentoo-portage' (v2.1.0) requires 'puppetlabs-concat' (v1.0.x)
+Warning: Missing dependency 'puppetlabs-gcc':
+  'zack-r10k' (v1.0.2) requires 'puppetlabs-gcc' (&gt;= 0.0.3)
+/etc/puppetlabs/puppet/environments/production/modules
+├── gentoo-portage (v2.1.0)
+├── mhuffnagle-make (v0.0.2)
+├── property_list_key (???)
+├── puppetlabs-apache (v0.11.0)
+├── puppetlabs-firewall (v1.0.0)  invalid
+├── puppetlabs-git (v0.0.3)
+├── puppetlabs-inifile (v1.0.1)
+├── puppetlabs-mysql (v2.2.1)
+├── puppetlabs-pe_gem (v0.0.1)
+├── puppetlabs-ruby (v0.1.0)
+├── puppetlabs-stdlib (v4.1.0)  invalid
+├── puppetlabs-vcsrepo (v0.2.0)
+├── redis (???)
+├── ripienaar-concat (v0.2.0)
+├── thias-vsftpd (v0.2.0)
+├── wordpress (???)
+└── zack-r10k (v1.0.2)
+/opt/puppet/share/puppet/modules
+├── cprice404-inifile (v0.10.3)
+├── puppetlabs-apt (v1.1.0)
+├── puppetlabs-auth_conf (v0.1.7)
+├── puppetlabs-firewall (v0.3.0)  invalid
+├── puppetlabs-java_ks (v1.1.0)
+├── puppetlabs-pe_accounts (v2.0.1)
+├── puppetlabs-pe_common (v0.1.0)
+├── puppetlabs-pe_mcollective (v0.1.14)
+├── puppetlabs-pe_postgresql (v0.0.5)
+├── puppetlabs-pe_puppetdb (v0.0.11)
+├── puppetlabs-postgresql (v2.5.0)
+├── puppetlabs-puppet_enterprise (v3.1.0)
+├── puppetlabs-puppetdb (v1.5.1)
+├── puppetlabs-reboot (v0.1.2)
+├── puppetlabs-request_manager (v0.0.10)
+├── puppetlabs-stdlib (v3.2.0)  invalid
+└── ripienaar-concat (v0.2.0)
+</code></p>
+
+<p>I&rsquo;ve installed Puppet Enterprise 3.1.0, and so <code>/opt/puppet/share/puppet/modules</code>
+reflects the state of the Puppet Enterprise (also known as &lsquo;PE&rsquo;) modules at that
+time. You can see that there are some conflicts because certain modules require
+certain versions of other modules. This is currently the nature of the beast
+with regard to Puppet modules. Some of these errors are loud and incidental
+(i.e. someone set a dependency on a version and forgot to update it), some
+are due to namespace changes (i.e. <code>cfprice-inifile</code> being ported over to
+<code>puppetlabs-inifile</code>), and so on. Basically, ensure that you handle the
+dependencies you care about inside the <code>Puppetfile</code> as R10k won&rsquo;t do it for you.</p>
+
+<p>There &ndash; we&rsquo;ve done it!  We&rsquo;ve configured R10k!  Now how the hell do you use it?</p>
+
+<h2>R10k demonstration &ndash; from module iteration to environment iteration</h2>
+
+<p>Let&rsquo;s take the environment we&rsquo;ve setup in the previous steps and walk you
+through adding a new module to your production environment, iterating upon
+that module, pushing the changes to that module, pushing the changes to a
+Puppet environment, and then promoting those changes to production.</p>
+
+<p><strong>NOTES ON THE SETUP OF THIS DEMO:</strong></p>
+
+<ul>
+<li>In this demonstration, classification method is going to be left to the user
+(i.e. it&rsquo;s not a part of the magic).  So, when I tell you to classify your
+node with a specific class, I don&rsquo;t care if you use the Puppet Enterprise
+Console, <code>site.pp</code>, or any other manner.</li>
+<li>I&rsquo;m using Github for my repositories so that you folk watching and playing
+along at home can have something to follow. Feel free to substitute Github
+for something like Atlassian Stash/Bitbucket, internal repos, or whatever.</li>
+</ul>
+
+
+<h3>Add the module to an environment</h3>
+
+<p>The module we&rsquo;ll be working with, <a href="https://github.com/glarizza/puppet-notifyme">a simple module called &lsquo;notifyme&rsquo;</a>,
+will notify a message that will help us track the module&rsquo;s process through all
+phases of iteration.</p>
+
+<p>The first thing we need to do is to add the module to an environment, so let&rsquo;s
+dynamically create a NEW environment by creating a new topic branch and pushing
+it up to <a href="https://github.com/glarizza/puppet_repository">the main puppet repo</a>. I will perform this step on my laptop
+and outside of the VM I&rsquo;m using to test R10k:</p>
+
+<p>```
+└(~/src/puppet_repository)▷ git branch
+  master
+* production</p>
+
+<p>└(~/src/puppet_repository)▷ git checkout -b notifyme
+Switched to a new branch &lsquo;notifyme&rsquo;</p>
+
+<p>└(~/src/puppet_repository)▷ vim Puppetfile</p>
+
+<h1>Perform the changes to Puppetfile here</h1>
+
+<p>└(~/src/puppet_repository)▷ git add Puppetfile
+└(~/src/puppet_repository)▷ git commit
+[notifyme 5239538] Add the &lsquo;notifyme&rsquo; module
+ 1 file changed, 3 insertions(+)</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin notifyme:notifyme
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 348 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+ * [new branch]      notifyme &ndash;> notifyme
+```</p>
+
+<p>The contents I added to my <code>Puppetfile</code> look like this:</p>
+
+<p>{% codeblock lang:ruby Puppetfile %}
+mod &ldquo;notifyme&rdquo;,
+  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;
+{% endcodeblock %}</p>
+
+<h3>Perform an R10k synchronization</h3>
+
+<p>To pull the new dynamic environment down to the Puppet master, do another
+R10k synchronization with <code>r10k deploy environment -pv</code>:</p>
+
+<p><code>
+[root@master1 production]# r10k deploy environment -pv
+[R10K::Task::Deployment::DeployEnvironments - INFO] Loading environments from all sources
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment production
+&lt;snip for brevity&gt;
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment notifyme
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/notifyme/modules
+&lt;more snipping&gt;
+</code></p>
+
+<p>I only included the relevant messages, but you can see that it pulled in a new
+environment called &lsquo;notifyme&rsquo; that ALSO pulled in a module called &lsquo;notifyme&rsquo;</p>
+
+<h3>Rename the branch to avoid confusion</h3>
+
+<p>Suddenly I realize that this may get confusing having both an environment called
+&lsquo;notifyme&rsquo; with a module/class called &lsquo;notifyme&rsquo;. No worries, how about we rename
+that branch?</p>
+
+<p>```
+└(~/src/puppet_repository)▷ git branch -m notifyme garysawesomeenvironment</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin :notifyme
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+ &ndash; [deleted]         notifyme</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin garysawesomeenvironment:garysawesomeenvironment
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 348 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+ * [new branch]      garysawesomeenvironment &ndash;> garysawesomeenvironment
+```</p>
+
+<p>That bit of <code>git</code> renamed the &lsquo;notifyme&rsquo; branch to &lsquo;garysawesomeenvironment&rsquo;.
+The next git command is a bit tricky &ndash; when you <code>git push</code> to a remote, it&rsquo;s
+supposed to be:</p>
+
+<p><strong><code>git push name_of_origin local_branch_name:remote_branch_name</code></strong></p>
+
+<p>In our case, the name of our origin is LITERALLY &lsquo;origin&rsquo;, but we actually want
+to DELETE a remote branch. The way to delete a local branch is with
+<code>git branch -d branch_name</code>, but the way to delete a REMOTE branch is to push
+<strong>NOTHING</strong> to it.  So consider the following command:</p>
+
+<p><strong><code>git push origin :notifyme</code></strong></p>
+
+<p>We&rsquo;re pushing to the origin named &lsquo;origin&rsquo;, but providing NO local branch name
+and pushing that bit of nothing to the remote branch of &lsquo;notifyme&rsquo;. This
+kills (deletes) the remote branch.</p>
+
+<p>Finally, we push to our origin named &lsquo;origin&rsquo; again and push the contents of
+the local branch &lsquo;garysawesomeenvironment&rsquo; to the remote branch of
+&lsquo;garysawesomeenvironment&rsquo; which in turn CREATES that branch if it doesn&rsquo;t exist.
+Whew.  Let&rsquo;s run another damn synchronization:</p>
+
+<p><code>
+[root@master1 production]# `r10k deploy environment -pv`
+[R10K::Task::Deployment::DeployEnvironments - INFO] Loading environments from all sources
+&lt;more snippage&gt;
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment garysawesomeenvironment
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+[R10K::Task::Module::Sync - INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/garysawesomeenvironment/modules
+&lt;more of that snipping shit&gt;
+R10K::Task::Deployment::PurgeEnvironments - INFO] Purging stale environments from /etc/puppetlabs/puppet/environments
+</code></p>
+
+<p>Cool, let&rsquo;s check out our <code>environments</code> folder on our VM:</p>
+
+<p>```
+[root@master1 production]# ls -lah /etc/puppetlabs/puppet/environments/
+total 24K
+drwxr-xr-x 6 root root 4.0K Feb 19 13:34 .
+drwxr-xr-x 7 root root 4.0K Feb 19 12:09 ..
+drwxr-xr-x 4 root root 4.0K Feb 19 11:44 development
+drwxr-xr-x 5 root root 4.0K Feb 19 13:33 garysawesomeenvironment
+drwxr-xr-x 5 root root 4.0K Feb 19 11:43 master
+drwxr-xr-x 5 root root 4.0K Feb 19 11:42 production</p>
+
+<p>[root@master1 production]# cd /etc/puppetlabs/puppet/environments/garysawesomeenvironment/</p>
+
+<p>[root@master1 garysawesomeenvironment]# git branch
+* garysawesomeenvironment
+  master
+```</p>
+
+<h3>Run Puppet to test the new environment</h3>
+
+<p>Perfect!  Now classify your node to include the &lsquo;notifyme&rsquo; class, and let&rsquo;s run
+Puppet to see what we get when we try to join the environment called
+&lsquo;garysawesomeenvronment&rsquo;:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment garysawesomeenvironment
+Info: Retrieving plugin
+&lt;snipping facts loading for brevity&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392845863'
+Notice: This is the notifyme module and its master branch
+Notice: /Stage[main]/Notifyme/Notify[This is the notifyme module and its master branch]/message: defined 'message' as 'This is the notifyme module and its master branch'
+Notice: Finished catalog run in 11.10 seconds
+</code></p>
+
+<p>Cool!  Now let&rsquo;s try to run Puppet with another environment, say &lsquo;production&rsquo;:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment production
+Info: Retrieving plugin
+&lt;snipping facts loading for brevity&gt;
+Error: Could not retrieve catalog from remote server: Error 400 on SERVER: Could not find class notifyme for master1 on node master1
+Warning: Not using cache on failed catalog
+Error: Could not retrieve catalog; skipping run
+</code></p>
+
+<p>We get an error because that module hasn&rsquo;t been loaded by R10k for that
+environment.</p>
+
+<h3>Tie a module version to an environment</h3>
+
+<p>Okay, so we added a module to a new environment, but what if we want to test
+out a specific commit, branch, or tag of a module and test it in this new
+environment? This is frequently what you&rsquo;ll be doing &ndash; making a change to
+an existing module, pushing your change to a topic branch of that module&rsquo;s
+repository, tying it to an environment (or creating a new environment by
+branching the main Puppet repository), and then testing the change.</p>
+
+<p>Let&rsquo;s go back to my &lsquo;notifyme&rsquo; module that I&rsquo;ve cloned to my laptop and push
+a change to a BRANCH of that module&rsquo;s Github repository:</p>
+
+<p>```
+└(~/src/puppet-notifyme)▷ git branch
+* master</p>
+
+<p>└(~/src/puppet-notifyme)▷ git checkout -b change_the_message
+Switched to a new branch &lsquo;change_the_message&rsquo;</p>
+
+<p>└(~/src/puppet-notifyme)▷ vim manifests/init.pp</p>
+
+<h2>Make changes to the notify message</h2>
+
+<p>└(~/src/puppet-notifyme)▷ git add manifests/init.pp</p>
+
+<p>└(~/src/puppet-notifyme)▷ git commit
+[change_the_message bc3975b] Change the Message
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet-notifyme)▷ git push origin change_the_message:change_the_message
+Counting objects: 7, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (4/4), 448 bytes, done.
+Total 4 (delta 0), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet-notifyme.git">https://github.com/glarizza/puppet-notifyme.git</a>
+ * [new branch]      change_the_message &ndash;> change_the_message</p>
+
+<p>└(~/src/puppet-notifyme)▷ git branch -a
+* change_the_message
+  master
+  remotes/origin/change_the_message
+  remotes/origin/master</p>
+
+<p>└(~/src/puppet-notifyme)▷ git log
+commit bc3975bb5c75ada86bfc2c45db628b5a156f85ce
+Author: Gary Larizza <a href="&#x6d;&#x61;&#x69;&#x6c;&#116;&#111;&#58;&#103;&#97;&#114;&#121;&#x40;&#112;&#117;&#x70;&#112;&#x65;&#x74;&#x6c;&#97;&#x62;&#115;&#x2e;&#99;&#111;&#x6d;">&#103;&#x61;&#114;&#x79;&#x40;&#x70;&#x75;&#x70;&#x70;&#x65;&#x74;&#x6c;&#x61;&#98;&#x73;&#46;&#x63;&#x6f;&#109;</a>
+Date:   Wed Feb 19 13:55:26 2014 -0800</p>
+
+<pre><code>Change the Message
+
+This commit changes the message to test my workflow.
+</code></pre>
+
+<p>```</p>
+
+<p>What I&rsquo;m showing you is the workflow that creates a new local branch called
+&lsquo;change_the_message&rsquo; to the notifyme module, changes the message in my notify
+resource, commits the change, and pushes the changes to a remote branch ALSO
+called &lsquo;change_the_message&rsquo;.</p>
+
+<p>Because I created a topic branch, I can provide that branch name in the
+<code>Puppetfile</code> located in the &lsquo;garysawesomeenvironment&rsquo; branch of the
+<a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>. THAT is the piece that ties together the specific
+version of the module with the Puppet environment we want on the Puppet master.
+Here&rsquo;s that change:</p>
+
+<p>{% codeblock lang:ruby Puppetfile %}
+mod &ldquo;notifyme&rdquo;,
+  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;,
+  :ref => &lsquo;change_the_message&rsquo;
+{% endcodeblock %}</p>
+
+<p>Again, that change gets put into the &lsquo;garysawesomeenvironment&rsquo; branch of the
+<a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a> and pushed up to the remote:</p>
+
+<p>```
+└(~/src/puppet_repository)▷ vim Puppetfile</p>
+
+<h2>Make changes</h2>
+
+<p>└(~/src/puppet_repository)▷ git add Puppetfile</p>
+
+<p>└(~/src/puppet_repository)▷ git commit
+[garysawesomeenvironment 89b139c] Update garysawesomeenvironment
+ 1 file changed, 2 insertions(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin garysawesomeenvironment:garysawesomeenvironment
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 411 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+   5239538..89b139c  garysawesomeenvironment &ndash;> garysawesomeenvironment</p>
+
+<p>└(~/src/puppet_repository)▷ git log -p
+commit 89b139c8c2faa888a402b98ea76e4ca138b3463d
+Author: Gary Larizza <a href="&#109;&#97;&#105;&#x6c;&#x74;&#111;&#x3a;&#x67;&#x61;&#x72;&#x79;&#64;&#x70;&#117;&#112;&#x70;&#101;&#116;&#108;&#x61;&#x62;&#x73;&#46;&#99;&#111;&#109;">&#x67;&#97;&#114;&#x79;&#x40;&#112;&#x75;&#x70;&#112;&#101;&#x74;&#x6c;&#x61;&#98;&#115;&#46;&#x63;&#111;&#109;</a>
+Date:   Wed Feb 19 14:04:18 2014 -0800</p>
+
+<pre><code>Update garysawesomeenvironment
+
+Tie this environment to the 'change_the_message' branch of my notifyme module.
+</code></pre>
+
+<p>diff &mdash;git a/Puppetfile b/Puppetfile
+index 5e5d091..27fc06e 100644
+&mdash;&ndash; a/Puppetfile
++++ b/Puppetfile
+@@ -31,4 +31,5 @@ mod &lsquo;redis&rsquo;,
+   :ref => &lsquo;feature/debian_support&rsquo;</p>
+
+<p> mod &ldquo;notifyme&rdquo;,
+&ndash;  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;
++  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;,
++  :ref => &lsquo;change_the_message&rsquo;
+```</p>
+
+<p>Now let&rsquo;s synchronize again!!</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# `r10k deploy environment -pv`
+[R10K::Task::Deployment::DeployEnvironments - INFO] Loading environments from all sources
+&lt;snip&gt;
+[R10K::Task::Environment::Deploy - NOTICE] Deploying environment garysawesomeenvironment
+[R10K::Task::Puppetfile::Sync - INFO] Loading modules from Puppetfile into queue
+&lt;snip&gt;
+</code></p>
+
+<p>Cool, let&rsquo;s check our work on the VM:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# pwd
+/etc/puppetlabs/puppet/environments/garysawesomeenvironment
+[root@master1 garysawesomeenvironment]# git branch
+* garysawesomeenvironment
+  master
+</code></p>
+
+<p>And finally, let&rsquo;s run Puppet:</p>
+
+<p><code>
+root@master1 garysawesomeenvironment]# puppet agent -t --environment garysawesomeenvironment
+Info: Retrieving plugin
+&lt;snip fact loading&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392847743'
+Notice: This is the changed message in the change_the_message branch
+Notice: /Stage[main]/Notifyme/Notify[This is the changed message in the change_the_message branch]/message: defined 'message' as 'This is the changed message in the change_the_message branch'
+Notice: Finished catalog run in 12.10 seconds
+</code></p>
+
+<p>TADA! We&rsquo;ve successfully tied a specific version of a module to a specific
+dynamic environment, deployed it to a master, and tested it out! Smell that?
+That&rsquo;s the smell of awesome. Or Jeff in the next cubicle eating a burrito.
+Either way, I like it.</p>
+
+<h3>Merge your changes with master/production</h3>
+
+<p>It&rsquo;s green &ndash; fuck it; ship it! NOW you&rsquo;re speaking &lsquo;agile&rsquo;! Assuming everything
+went according to plan, let&rsquo;s merge our changes in with the production
+environment and synchronize.  This is up to your company&rsquo;s workflow docs
+(whether you use pull requests, a merge master, or poke Patrick and tell
+him to tell Andy to merge in your change). I&rsquo;m using git and Github, so
+let&rsquo;s merge.</p>
+
+<p>First, do the Module:</p>
+
+<p>```
+└(~/src/puppet-notifyme)▷ git checkout master
+Switched to branch &lsquo;master&rsquo;</p>
+
+<p>└(~/src/puppet-notifyme)▷ git merge change_the_message
+Updating d44a790..bc3975b
+Fast-forward
+ manifests/init.pp | 2 +&ndash;
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet-notifyme)▷ git push origin master:master
+Total 0 (delta 0), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet-notifyme.git">https://github.com/glarizza/puppet-notifyme.git</a>
+   d44a790..bc3975b  master &ndash;> master</p>
+
+<p>└(~/src/puppet-notifyme)▷ cat manifests/init.pp
+class notifyme {
+  notify { &ldquo;This is the changed message in the change_the_message branch&rdquo;: }
+}
+```</p>
+
+<p>So now we have an issue, and that issue is that the production environment
+has YET to have the &lsquo;notifyme&rsquo; module added to it.  If we merge the contents
+of the &lsquo;garysawesomeenvironment&rsquo; branch with the &lsquo;production&rsquo; branch of the
+<a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>, then we&rsquo;re going to be pointing at the
+&lsquo;change_the_message&rsquo; branch of the &lsquo;notifyme&rsquo; module (because that was our last
+commit).</p>
+
+<p>Because of this, I can&rsquo;t do a straight merge, can I? For posterity&rsquo;s sake (in
+the event that someone in the future wants to look for that branch on my Github
+repo), I&rsquo;m going to keep that branch alive. In a production environment, I
+most likely would NOT have additional branches open for all my component modules
+as that would get pretty annoying/confusing. Understand that this is a one-off
+case because I&rsquo;m doing a demo. BECAUSE of this, I&rsquo;m going to modify the
+<code>Puppetfile</code> in the &lsquo;production&rsquo; branch of the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>:</p>
+
+<p>```
+└(~/src/puppet_repository)▷ git checkout production
+Switched to branch &lsquo;production&rsquo;</p>
+
+<p>└(~/src/puppet_repository)▷ vim Puppetfile</p>
+
+<h2>Make changes here</h2>
+
+<p>└(~/src/puppet_repository)▷ git add Puppetfile</p>
+
+<p>└(~/src/puppet_repository)▷ git commit
+[production a74f269] Add notifyme module to Production environment
+ 1 file changed, 4 insertions(+)</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin production:production
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 362 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+   5ecefc8..a74f269  production &ndash;> production</p>
+
+<p>└(~/src/puppet_repository)▷ git log -p
+commit a74f26975102f3786eedddace89bda086162d801
+Author: Gary Larizza <a href="&#x6d;&#x61;&#105;&#x6c;&#x74;&#x6f;&#58;&#103;&#97;&#114;&#121;&#64;&#112;&#x75;&#112;&#x70;&#101;&#x74;&#108;&#x61;&#x62;&#115;&#46;&#99;&#x6f;&#109;">&#103;&#x61;&#x72;&#121;&#x40;&#x70;&#x75;&#112;&#112;&#101;&#x74;&#x6c;&#97;&#x62;&#x73;&#x2e;&#99;&#x6f;&#109;</a>
+Date:   Wed Feb 19 14:24:05 2014 -0800</p>
+
+<pre><code>Add notifyme module to Production environment
+</code></pre>
+
+<p>diff &mdash;git a/Puppetfile b/Puppetfile
+index 0b1da68..9168a81 100644
+&mdash;&ndash; a/Puppetfile
++++ b/Puppetfile
+@@ -29,3 +29,7 @@ mod &ldquo;property_list_key&rdquo;,
+ mod &lsquo;redis&rsquo;,
+   :git => &lsquo;git://github.com/glarizza/puppet-redis&rsquo;,
+   :ref => &lsquo;feature/debian_support&rsquo;
++
++mod &lsquo;notifyme&rsquo;,
++  :git => &lsquo;git://github.com/glarizza/puppet-notifyme&rsquo;
++
+```</p>
+
+<p>Alright, we&rsquo;ve updated the production environment, now synchronize again
+(I&rsquo;ll spare you and do it WITHOUT verbose mode):</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# r10k deploy environment -p
+</code></p>
+
+<p>Okay, now run Puppet with the PRODUCTION environment:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment production
+Info: Retrieving plugin
+&lt;snipping fact loading&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392848588'
+Notice: This is the changed message in the change_the_message branch
+Notice: /Stage[main]/Notifyme/Notify[This is the changed message in the change_the_message branch]/message: defined 'message' as 'This is the changed message in the change_the_message branch'
+Notice: Finished catalog run in 12.66 seconds
+</code></p>
+
+<p>Beautiful, we&rsquo;re synchronized!!!</p>
+
+<h3>Making a change to an EXISTING module in an environment</h3>
+
+<p>Okay, so we saw previously how to add a NEW module to an environment, but what
+if we already HAVE a module in an environment and we want to make an update/change
+to it?  Well, it&rsquo;s largely the same process:</p>
+
+<ul>
+<li>Cut a branch to the module</li>
+<li>Commit your code and push it up to the module&rsquo;s repo</li>
+<li>Cut a branch to the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a></li>
+<li>Push that branch up to the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a></li>
+<li>Perform an R10k synchronization to sync the environments</li>
+<li>Test your changes</li>
+<li>Merge the changes with the master branch of the module</li>
+<li>DONE!</li>
+</ul>
+
+
+<p>Let&rsquo;s go back and change that notify message again, shall we?</p>
+
+<p>```
+└(~/src/puppet-notifyme)▷ git checkout -b &lsquo;another_change&rsquo;
+Switched to a new branch &lsquo;another_change&rsquo;</p>
+
+<p>└(~/src/puppet-notifyme)▷ vim manifests/init.pp</p>
+
+<h2>Make changes to the message</h2>
+
+<p>└(~/src/puppet-notifyme)▷ git add manifests/init.pp</p>
+
+<p>└(~/src/puppet-notifyme)▷ git commit
+[another_change 608166e] Change the message that already exists!
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet-notifyme)▷ git push origin another_change:another_change
+Counting objects: 7, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (4/4), 426 bytes, done.
+Total 4 (delta 0), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet-notifyme.git">https://github.com/glarizza/puppet-notifyme.git</a>
+ * [new branch]      another_change &ndash;> another_change
+```</p>
+
+<p>Okay, let&rsquo;s re-use &lsquo;garysawesomeenvironment&rsquo; because I like the name, but
+tie it to the new &lsquo;another_change&rsquo; branch of the &lsquo;notifyme&rsquo; module:</p>
+
+<p>```
+└(~/src/puppet_repository)▷ git checkout garysawesomeenvironment
+Switched to branch &lsquo;garysawesomeenvironment&rsquo;</p>
+
+<p>└(~/src/puppet_repository)▷ vim Puppetfile</p>
+
+<h2>Make change to Puppetfile to tie it to &lsquo;another_change&rsquo; branch</h2>
+
+<p>└(~/src/puppet_repository)▷ git add Puppetfile</p>
+
+<p>└(~/src/puppet_repository)▷ git commit
+[garysawesomeenvironment ce84a30] Tie garysawesomeenvironment to &lsquo;another_change&rsquo;
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet_repository)▷ git push origin garysawesomeenvironment:garysawesomeenvironment
+Counting objects: 5, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 386 bytes, done.
+Total 3 (delta 1), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
+   89b139c..ce84a30  garysawesomeenvironment &ndash;> garysawesomeenvironment
+```</p>
+
+<p>The <code>Puppetfile</code> for that branch now has an entry for the &lsquo;notifyme&rsquo; module
+that looks like this:</p>
+
+<p>{% codeblock lang:ruby Puppetfile %}
+mod &ldquo;notifyme&rdquo;,
+  :git => &ldquo;git://github.com/glarizza/puppet-notifyme.git&rdquo;,
+  :ref => &lsquo;another_change&rsquo;
+{% endcodeblock %}</p>
+
+<p>Okay, synchronize again!</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# r10k deploy environment -p
+</code></p>
+
+<p>And now run Puppet in the &lsquo;garysawesomeenvironment&rsquo; environment:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment garysawesomeenvironment
+Info: Retrieving plugin
+&lt;snip fact loading&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392849521'
+Notice: This changes the message that already exists!!!!
+Notice: /Stage[main]/Notifyme/Notify[This changes the message that already exists!!!!]/message: defined 'message' as 'This changes the message that already exists!!!!'
+Notice: Finished catalog run in 12.54 seconds
+</code></p>
+
+<p>There&rsquo;s the message that I changed in the &lsquo;another_change&rsquo; branch of my &lsquo;notifyme&rsquo;
+module!  What&rsquo;s it look like if I run in the &lsquo;production&rsquo; environment, though?</p>
+
+<p>```</p>
+
+<p>ot@master1 garysawesomeenvironment]# puppet agent -t &mdash;environment production
+Info: Retrieving plugin
+<snip fact loading>
+Info: Caching catalog for master1
+Info: Applying configuration version &lsquo;1392848588&rsquo;
+Notice: This is the changed message in the change_the_message branch
+Notice: /Stage[main]/Notifyme/Notify[This is the changed message in the change_the_message branch]/message: defined &lsquo;message&rsquo; as &lsquo;This is the changed message in the change_the_message branch&rsquo;
+Notice: Finished catalog run in 14.11 seconds
+```</p>
+
+<p>There&rsquo;s the old message that&rsquo;s in the &lsquo;master&rsquo; branch of the &lsquo;notifyme&rsquo;
+module (which is where the &lsquo;production&rsquo; branch <code>Puppetfile</code> is pointing).
+To merge the changes into the production environment, we now only have to
+do one thing: that&rsquo;s merge the changes in the &lsquo;another_change&rsquo; branch of
+the &lsquo;notifyme&rsquo; module to the &lsquo;master&rsquo; branch &ndash; that&rsquo;s it!  Why? Because
+the <code>Puppetfile</code> in the <code>production</code> branch of the <a href="https://github.com/glarizza/puppet_repository">main Puppet repo</a>
+(and thus the production Puppet ENVIRONMENT) is already POINTING at the
+master branch of the &lsquo;notifyme&rsquo; module.  Let&rsquo;s do the merge:</p>
+
+<p>```
+└(~/src/puppet-notifyme)▷ git checkout master
+Switched to branch &lsquo;master&rsquo;</p>
+
+<p>└(~/src/puppet-notifyme)▷ git merge another_change
+Updating bc3975b..608166e
+Fast-forward
+ manifests/init.pp | 2 +&ndash;
+ 1 file changed, 1 insertion(+), 1 deletion(&ndash;)</p>
+
+<p>└(~/src/puppet-notifyme)▷ git push origin master:master
+Total 0 (delta 0), reused 0 (delta 0)
+To <a href="https://github.com/glarizza/puppet-notifyme.git">https://github.com/glarizza/puppet-notifyme.git</a>
+   bc3975b..608166e  master &ndash;> master
+```</p>
+
+<p>Another R10k synchronization is needed on the master:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# r10k deploy environment -p
+</code></p>
+
+<p>And now let&rsquo;s run Puppet in the production environment:</p>
+
+<p><code>
+[root@master1 garysawesomeenvironment]# puppet agent -t --environment production
+Info: Retrieving plugin
+&lt;snip fact loading&gt;
+Info: Caching catalog for master1
+Info: Applying configuration version '1392850004'
+Notice: This changes the message that already exists!!!!
+Notice: /Stage[main]/Notifyme/Notify[This changes the message that already exists!!!!]/message: defined 'message' as 'This changes the message that already exists!!!!'
+Notice: Finished catalog run in 11.82 seconds
+</code></p>
+
+<p>There&rsquo;s the message that was previously in the &lsquo;another_change&rsquo; branch that&rsquo;s
+been merged to the &lsquo;master&rsquo; branch (and thus is entered into the production
+Puppet environment).</p>
+
+<h3>OR, use tags</h3>
+
+<p>One more note &ndash; for production environments that want a BIT more stability
+(rather than hoping that someone follows the policy of pushing commits to
+a BRANCH of a module rather than pushing directly to master &ndash; by accident or
+otherwise &ndash; and allowing that commit to make DIRECTLY it into production), the
+better way is to tie all modules to some sort of release version. For modules
+released to the Puppet Forge, that&rsquo;s a version, for modules stored in git
+repositories, that would be a tag. Tying all modules in your production
+environment (and thus production <code>Puppetfile</code>) to specific tags in git
+repositories IS a &ldquo;best practice&rdquo; to ensure that the code that&rsquo;s executed in
+production has some sort of &lsquo;safe guard&rsquo;.</p>
+
+<p>TL;DR: Example tied to &lsquo;master&rsquo; branch above was demo, and not necessarily
+recommended for your production needs.</p>
+
+<h2>Holy crap, that&rsquo;s a lot to take in&hellip;</h2>
+
+<p>Yeah, tell me about it. And, believe it or not, I&rsquo;m STILL not done with
+everything that I want to talk about regarding R10k &ndash; there&rsquo;s still more
+info on:</p>
+
+<ul>
+<li>Using R10k with a monolithic modules repo</li>
+<li>Incorporating Hiera data</li>
+<li>Triggering R10k with MCollective</li>
+<li>Tying R10k to CI workflow</li>
+</ul>
+
+
+<p>Those will come in a later post once I have time to decide how to tackle them.
+Until then, this should give you more than enough information to get started
+with R10k in your own environment.</p>
+
+<p>If you have any questions/comments/corrections, PLEASE enter them in the
+comments below and I&rsquo;ll be happy to respond when I&rsquo;m not flying from gig to
+gig! :)  Cheers!</p>
+
+<p><strong>EDIT</strong>: 2/19/2014 &ndash; correct librarian-puppet assumption thanks to Reid Vandewiele</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 2: Roles and Profiles]]></title>
+    <link href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2/"/>
+    <updated>2014-02-17T14:01:37-08:00</updated>
+    <id>http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2</id>
+    <content type="html"><![CDATA[<p>In my <a href="http://www.garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/">first post</a>, I talked about writing functional component
+modules. Well, I didn&rsquo;t really do much detailing other than pointing out
+key bits of information that tend to cause problems. In this post, I&rsquo;ll
+describe the next layer to the functional Puppet module workflow.</p>
+
+<p>People usually stop once they have a library of component modules (whether
+hand-written, taken from Github, or pulled from <a href="http://forge.puppetlabs.com">The Forge</a>). The idea
+is that you can classify all of your nodes in <code>site.pp</code>, the Puppet
+Enterprise Console, The Foreman, or with some other ENC, so why not just
+declare all your classes for every node when you need them?</p>
+
+<p>Because that&rsquo;s a lot of extra work and opportunities for fuckups.</p>
+
+<p>People recognized this, so in the EARLY days of Puppet they would create node
+blocks in <code>site.pp</code> and use inheritance to inherit from those blocks. This was
+the right IDEA, but probably not the best PLACE for it. Eventually, &lsquo;Profiles&rsquo;
+were born.</p>
+
+<p>The idea of &lsquo;Roles and Profiles&rsquo; originally came from a piece that
+<a href="http://www.craigdunn.org/2012/05/239/">Craig Dunn wrote</a> while he worked for the BBC, and then
+<a href="http://sysadvent.blogspot.com/2012/12/day-13-configuration-management-as-legos.html">Adrien Thebo also wrote a piece</a> that documents the same sort of pattern.
+So why am I writing about it a THIRD time? Well, because I feel it&rsquo;s only a PIECE
+of an overall puzzle. The introduction of Hiera and other awesome tools (like R10k,
+which we will get to on the next post) still make Roles and Profiles VIABLE, but
+they also extend upon them.</p>
+
+<p>One final note before we move on &ndash; the terms &lsquo;Roles&rsquo; and &lsquo;Profiles&rsquo; are ENTIRELY
+ARBITRARY. They&rsquo;re not magic reserve words in Puppet, and you can call them
+whatever the hell you want. It&rsquo;s also been pointed out that Craig MIGHT have
+misnamed them (a ROLE should be a model for an individual piece of tech, and a
+PROFILE should probably be a group of roles), but, like all good Puppet Labs
+employees &ndash; we suck at naming things.</p>
+
+<h2>Profiles: technology-specific wrapper classes</h2>
+
+<p>A profile is simply a wrapper class that groups Hiera lookups and class
+declarations into one functional unit. For example, if you wanted Wordpress
+installed on a machine, you&rsquo;d probably need to declare the apache class to
+get Apache setup, declare an <code>apache::vhost</code> for the Wordpress directory,
+setup a MySQL database with the appropriate classes, and so on. There are
+a lot of components that go together when you setup a piece of technology,
+it&rsquo;s not just a single class.</p>
+
+<p>Because of this, a profile exists to give you a single class you can include
+that will setup all the necessary bits for that piece of technology (be it
+Wordpress, or Tomcat, or whatever).</p>
+
+<p>Let&rsquo;s look at a simple profile for Wordpress:</p>
+
+<p>{% codeblock lang:puppet profiles/manifests/wordpress.pp %}
+class profiles::wordpress {</p>
+
+<p>  ## Hiera lookups
+  $site_name               = hiera(&lsquo;profiles::wordpress::site_name&rsquo;)
+  $wordpress_user_password = hiera(&lsquo;profiles::wordpress::wordpress_user_password&rsquo;)
+  $mysql_root_password     = hiera(&lsquo;profiles::wordpress::mysql_root_password&rsquo;)
+  $wordpress_db_host       = hiera(&lsquo;profiles::wordpress::wordpress_db_host&rsquo;)
+  $wordpress_db_name       = hiera(&lsquo;profiles::wordpress::wordpress_db_name&rsquo;)
+  $wordpress_db_password   = hiera(&lsquo;profiles::wordpress::wordpress_db_password&rsquo;)
+  $wordpress_user          = hiera(&lsquo;profiles::wordpress::wordpress_user&rsquo;)
+  $wordpress_group         = hiera(&lsquo;profiles::wordpress::wordpress_group&rsquo;)
+  $wordpress_docroot       = hiera(&lsquo;profiles::wordpress::wordpress_docroot&rsquo;)
+  $wordpress_port          = hiera(&lsquo;profiles::wordpress::wordpress_port&rsquo;)</p>
+
+<p>  ## Create user
+  group { &lsquo;wordpress&rsquo;:</p>
+
+<pre><code>ensure =&gt; present,
+name   =&gt; $wordpress_group,
+</code></pre>
+
+<p>  }
+  user { &lsquo;wordpress&rsquo;:</p>
+
+<pre><code>ensure   =&gt; present,
+gid      =&gt; $wordpress_group,
+password =&gt; $wordpress_user_password,
+name     =&gt; $wordpress_group,
+home     =&gt; $wordpress_docroot,
+</code></pre>
+
+<p>  }</p>
+
+<p>  ## Configure mysql
+  class { &lsquo;mysql::server&rsquo;:</p>
+
+<pre><code>root_password =&gt; $wordpress_root_password,
+</code></pre>
+
+<p>  }</p>
+
+<p>  class { &lsquo;mysql::bindings&rsquo;:</p>
+
+<pre><code>php_enable =&gt; true,
+</code></pre>
+
+<p>  }</p>
+
+<p>  ## Configure apache
+  include apache
+  include apache::mod::php
+  apache::vhost { $::fqdn:</p>
+
+<pre><code>port    =&gt; $wordpress_port,
+docroot =&gt; $wordpress_docroot,
+</code></pre>
+
+<p>  }</p>
+
+<p>  ## Configure wordpress
+  class { &lsquo;::wordpress&rsquo;:</p>
+
+<pre><code>install_dir =&gt; $wordpress_docroot,
+db_name     =&gt; $wordpress_db_name,
+db_host     =&gt; $wordpress_db_host,
+db_password =&gt; $wordpress_db_password,
+</code></pre>
+
+<p>  }
+}
+{% endcodeblock %}</p>
+
+<h3>Name your profiles according to the technology they setup</h3>
+
+<p>Profiles are technology-specific, so you&rsquo;ll have one to setup wordpress, and
+tomcat, and jenkins, and&hellip;well, you get the picture. You can also namespace
+your profiles so that you have <code>profiles::ssh::server</code> and
+<code>profiles::ssh::client</code> if you want. You can even have
+<code>profiles::jenkins::tomcat</code> and <code>profiles::jenkins::jboss</code> or however you need
+to namespace according to the TECHNOLOGIES you use. You don&rsquo;t need to include
+your environment in the profile name (a la <code>profiles::dev::tomcat</code>) as the bits
+of data that make the dev environment different from production should come
+from <strong>HIERA</strong>, and thus aren&rsquo;t going to be different on a per-profile basis.
+You CAN setup profiles according to your business unit if multiple units use
+Puppet and have different setups (a la <code>security::profiles::tomcat</code> versus
+<code>ops::profiles::tomcat</code>), but the GOAL of Puppet is to have one main set of
+modules that every group uses (and the Hiera data being different for every
+group). That&rsquo;s the GOAL, but I&rsquo;m pragmatic enough to understand that not
+everywhere is a shiny, happy &lsquo;DevOps Garden.&rsquo;</p>
+
+<h3>Do all Hiera lookups in the profile</h3>
+
+<p>You&rsquo;ll see that I declared variables and set their values with Hiera lookups.
+The profile is the place for these lookups because the profile collects all
+external data and declares all the classes you&rsquo;ll need. In reality, you&rsquo;ll
+<strong>USUALLY</strong> only see profiles looking up parameters and declaring classes
+(i.e. declaring users and groups like I did above will USUALLY be left to
+component classes).</p>
+
+<p>I do the Hiera lookups first to make it easy to debug from where those values
+came. I don&rsquo;t rely on <a href="http://docs.puppetlabs.com/hiera/1/puppet.html#automatic-parameter-lookup">&lsquo;Automatic Parameter Lookup&rsquo;</a> in Puppet
+3.x.x because it can be &lsquo;magic&rsquo; for people who aren&rsquo;t aware of it (for people
+new to Puppet, it&rsquo;s much easier to see a function call and trace back what it
+does rather than experience Puppet doing something unseen and wondering what
+the hell happened).</p>
+
+<p>Finally, you&rsquo;ll notice that my Hiera lookups have <strong>NO DEFAULT VALUES</strong> &ndash; this
+is <strong>BY DESIGN!</strong>  For most people, their Hiera data is <strong>PROBABLY</strong> located in
+a separate repository as their Puppet module data. Imagine making a change to
+your profile to have it lookup a bit of data from Hiera, and then imagine you
+FORGOT to put that data into Hiera. What happens if you provide a default value
+to Hiera? The catalog compiles, that default value gets passed down to the
+component module, and gets enforced on disk. If you have good tests, you MIGHT
+see that the component you configured has a bit of data that&rsquo;s not correct, but
+what if you don&rsquo;t have a great post-Puppet testing workflow? Puppet will
+correctly set this default value, according to Puppet everything is green and
+worked just fine, but now your component is setup incorrectly. That&rsquo;s one of
+the WORST failures &ndash; the ones that you don&rsquo;t catch.  Now, imagine you DON&rsquo;T
+provide a default value. In THIS case, Puppet will raise a compilation error
+because a Hiera lookup didn&rsquo;t return a value. You&rsquo;ll catch your error before
+anything gets pushed to Production and you can catch the screwup. This is
+a MUCH better solution.</p>
+
+<h3>Use parameterized class declarations and explicitly pass values you care about</h3>
+
+<p>The parameterized class declaration syntax can be dangerous. The difference
+between the <code>include</code> function and the parameterized class syntax is that
+the <code>include</code> function is idempotent. You can do the following in a Puppet
+manifest, and Puppet doesn&rsquo;t raise an error:</p>
+
+<p><code>
+include apache
+include apache
+include apache
+</code></p>
+
+<p>This is because the <code>include</code> function checks to see if the class is in the
+catalog. If it ISN&rsquo;T, then it adds it. If it IS, then it exits cleanly. The
+<code>include</code> function is your pal.</p>
+
+<p>Consider THIS manifest:</p>
+
+<p><code>
+class { 'apache': }
+include apache
+include apache
+</code></p>
+
+<p>Does this work?  Yep.  The parameterized class syntax adds the class to the
+catalog, the include function detects this and exits cleanly twice.  What
+about THIS manifest:</p>
+
+<p><code>
+include apache
+class { 'apache': }
+include apache
+</code></p>
+
+<p>Does THIS work?  Nope!  Puppet raises a compilation error because a class was
+declared more than once in a catalog.  Why?  Well, consider that Puppet is
+&lsquo;declarative&rsquo;&hellip;all the way up until it isn&rsquo;t.  Puppet&rsquo;s PARSER reads from the
+top of the file to the bottom of the file, and we have a single-pass parser
+when it comes to things like setting variables and declaring classes. When
+the parser hits the first include function, it adds the class to the catalog.
+The parameterized class syntax, however, is a honey badger: it doesn&rsquo;t give
+a shit. It adds a class to the catalog regardless of whether it already exists
+or not. So why would we EVER use the parameterized class declaration syntax?
+We need to use it because the include function doesn&rsquo;t allow you to pass
+parameters when you declare a class.</p>
+
+<p>So wait &ndash; why did I spend all this time explaining why the parameterized class
+syntax is more dangerous than the include function <strong>ONLY</strong> to recommend its
+use in profiles?  For two reasons:</p>
+
+<ul>
+<li>We need to use it to pass parameters to classes</li>
+<li>We&rsquo;re wrapping its use in a class that we can <strong>IN TURN</strong> declare with the <code>include</code> function</li>
+</ul>
+
+
+<p>Yes, we can get the best of BOTH worlds, the ability to pass parameters and
+the use of our pal the <code>include</code> function, with this wrapper class. We&rsquo;ll see
+the latter usage when we come to roles, but for now let&rsquo;s focus on passing
+parameter values.</p>
+
+<p>In the first section, we set variables with Hiera lookups, now we can pass
+those variables to classes we&rsquo;re declaring with the parameterized class syntax.
+This allows the declaration of the class to be static, but the parameters we
+pass to that class to change according to the Hiera hierarchy. We&rsquo;ve explicitly
+called the <code>hiera</code> function, so it makes it easier to debug, and we&rsquo;re explicitly
+passing parameter values so we know definitively which parameters are being
+passed (and thus are overriding default values) to the component module. Finally,
+since our component modules do NOT use Hiera at all, we can be sure that if we&rsquo;re
+not passing a parameter that it&rsquo;s getting its value from the default set in the
+module&rsquo;s <code>::params</code> class.</p>
+
+<p>Everything we do here is meant to make things easier to debug when it&rsquo;s 3am and
+things aren&rsquo;t working. Any asshole can do crazy shit in Puppet, but a seasoned
+sysadmin writes their code for ease of debugging during 3am pages.</p>
+
+<h3>An annoying Puppet bug &ndash; top-level class declarations and profiles</h3>
+
+<p><a href="http://projects.puppetlabs.com/issues/2053">Oh, ticket 2053</a>, how terrible are you? This is one of those bug numbers
+that I can remember by heart (like <a href="http://projects.puppetlabs.com/issues/8040">8040</a> and <a href="http://projects.puppetlabs.com/issues/86">86</a>). Puppet has
+the ability to do &lsquo;relative namespacing&rsquo;, which allows you to declare a variable
+called <code>$port</code> in a class called <code>$apache</code> and refer to it as <code>$port</code> instead
+of fully-namespacing the variable, and thus having to call it <code>$apache::port</code>
+inside the <code>apache</code> class. It&rsquo;s a shortcut &ndash; you can STILL refer to the variable
+as <code>$apache::port</code> in the class &ndash; but it comes in handy. The PROBLEM occurs when
+you create a profile, as we did above, called <code>profiles::wordpress</code> and you try
+to declare a class called <code>wordpress</code>.  If you do the following inside the
+<code>profiles::wordpress</code> class, what class is being declared:</p>
+
+<p><code>
+include wordpress
+</code></p>
+
+<p>If you think you&rsquo;re declaring a wordpress class from within a wordpress module
+in your Puppet modulepath, you would be wrong.  Puppet ACTUALLY thinks you&rsquo;re
+trying to declare <code>profiles::wordpress</code> because you&rsquo;re INSIDE the <code>profiles::wordpress</code>
+class and it&rsquo;s doing relative namespacing (i.e. in the same way you refer to <code>$port</code>
+and ACTUALLY mean <code>$apache::port</code> it thinks you&rsquo;re referring to <code>wordpress</code> and
+ACTUALLY mean <code>profiles::wordpress</code>.</p>
+
+<p>Needless to say, this causes LOTS of confusion.</p>
+
+<p>The solution here is to declare a class called <code>::wordpress</code> which tells Puppet
+to go to the top-level namespace and look for a module called <code>wordpress</code> which
+has a top-level class called <code>wordpress</code>. It&rsquo;s the same reason that we refer to
+Facter Fact values as <code>$::osfamily</code> instead of <code>$osfamily</code> in class definitions
+(because you can declare a local variable called <code>$osfamily</code> in your class).
+This is why in the profile above you see this:</p>
+
+<p><code>
+class { '::wordpress':
+  install_dir =&gt; $wordpress_docroot,
+  db_name     =&gt; $wordpress_db_name,
+  db_host     =&gt; $wordpress_db_host,
+  db_password =&gt; $wordpress_db_password,
+}
+</code></p>
+
+<p>When you use profiles and roles, you&rsquo;ll need to do this namespacing trick when
+declaring classes because you&rsquo;re frequently going to have a <code>profile::&lt;sometech&gt;</code>
+that will declare the <code>&lt;sometech&gt;</code> top-level class.</p>
+
+<h2>Roles: business-specific wrapper classes</h2>
+
+<p>How do you refer to your machines? When I ask you about that cluster over
+there, do you say &ldquo;Oh, you mean the machines with java 1.6, apache, mysql,
+etc&hellip;&rdquo;?  I didn&rsquo;t think so. You usually have names for them, like the
+&ldquo;internal compute cluster&rdquo; or &ldquo;app builder nodes&rdquo; or &ldquo;DMZ repo machines&rdquo; or
+whatever. These names are your Roles. Roles are just the mapping of your
+machine&rsquo;s names to the technology that should be ON them. In the past we had
+descriptive hostnames that afforded us a code for what the machine &lsquo;did&rsquo; &ndash;
+roles are just that mapping for Puppet.</p>
+
+<p>Roles are namespaced just like profiles, but now it&rsquo;s up to your organization
+to fill in the blanks. Some people immediately want to put environments into
+the roles (a la <code>roles::uat::compute_cluster</code>), but that&rsquo;s usually not necessary
+(as MOST LIKELY the compute cluster nodes have the SAME technology on them
+when they&rsquo;re in dev versus when they&rsquo;re in prod, it&rsquo;s just the DATA &ndash; like
+database names, VIP locations, usernames/passwords, etc &ndash; that&rsquo;s different.
+Again, these data differences will come from Hiera, so there should be no reason
+to put the environment name in your role). You still CAN put the environment
+name in the role if it makes you feel better, but it&rsquo;ll probably be useless.</p>
+
+<h3>Roles ONLY include profiles</h3>
+
+<p>So what exactly is in the role wrapper class? That depends on what technology
+is on the node that defines that role. What I can tell you for CERTAIN is that
+roles should ONLY use the <code>include</code> function and should ONLY include profiles.
+What does this give us? This gives us our pal the <code>include</code> function back! You
+can include the same profile 100 times if you want, and Puppet only puts it in
+the catalog once.</p>
+
+<h3>Every node is classified with one role. Period.</h3>
+
+<p>The beautiful thing about roles and profiles is that the GOAL is that you
+should be able to classify a node with a SINGLE role and THAT&rsquo;S IT. This makes
+classification simple and static &ndash; the node gets its role, the role includes
+profiles, profiles call out to Hiera for data, that data is passed to component
+modules, and away we go. Also, since classification is static, you can use
+version control to see what changes were introduced to the role (i.e. what
+profiles were added or removed).  In my opinion, if you need to apply more
+than one role to a node, you&rsquo;ve introduced a new role (see below).</p>
+
+<h3>Roles CAN use inheritance&hellip;if you like</h3>
+
+<p>I&rsquo;ve seen people implement roles a couple of different ways, and one of them
+is to use inheritance to build a catalog.  For example, you can define a base
+<code>roles</code> class that includes something like a base security profile (i.e.
+something that EVERY node in your infrastructure should have). Moving down the
+line, you COULD namespace according to function like <code>roles::app</code> for your
+application server machines. The <code>roles::app</code> class could inherit from the <code>roles</code>
+class (which gets the base security profile), and could then include the profiles
+necessary to setup an application server. Next, you could subclass down to
+<code>roles::app::site_foo</code> for an application server that supports some site in
+your organization.  That class inherits from the <code>roles::app</code> class, and then
+adds profiles that are specific to that site (maybe they use Jboss instead of
+Tomcat, and thus that&rsquo;s where the differentiation occurs). This is great
+because you don&rsquo;t have a lot of repeated use of the <code>include</code> function, but
+it also makes it hard to definitively look at a specific role to see exactly
+what&rsquo;s being declared (i.e. all the profiles). You have to weigh what you
+value more: less typing or greater visibility. I will err on the side of
+greater visibility (just due to that whole 3am outage thing), but it&rsquo;s up
+to you to decide what to optimize for.</p>
+
+<h3>A role similar, yet different, from another role is: a new role</h3>
+
+<p>EVERYBODY says to me &ldquo;Gary, I have this machine that&rsquo;s an AWFUL LOT like
+this role over here, but&hellip;it&rsquo;s different.&rdquo; My answer to them is: &ldquo;Great,
+that&rsquo;s another role.&rdquo;  If the thing that&rsquo;s different is data (i.e. which
+database to connect to, or what IP address to route traffic through),
+then that difference should be put in HIERA and the classification should
+remain the same. If that difference is technology-specific (i.e. this server
+uses JBoss instead of Tomcat) then first look and see if you can isolate
+how you know this machine is different (maybe it&rsquo;s on a different subnet,
+maybe it&rsquo;s at a different location, something like that). If you can figure
+that out and write a Fact for it (or use similar conditional logic to determine
+this logically), then you can just drop that conditional logic in your role
+and let it do the heavy lifting. If, in the end, this bit of data is totally
+arbitrary, then you&rsquo;ll need to create another role (perhaps a subclass using
+the above namespacing) and assign it to your node.</p>
+
+<p>The hardest thing about this setup is naming your roles. Why? Every site is
+different.  It&rsquo;s hard for me to account for differences in your setup because
+your workplace is dysfunctional (seriously).</p>
+
+<h2>Review: what does this get you?</h2>
+
+<p>Let&rsquo;s walk through every level of this setup from the top to the bottom and see
+what it gets you. Every node is classified to a single role, and, for the most
+part, that classification isn&rsquo;t going to change. Now you can take all the extra
+work off your classifier tool and put it back into the manifests (that are
+subject to version control, so you can <code>git blame</code> to your heart&rsquo;s content and
+see who last changed the role/profile). Each role is going to include one or
+more profile, which gives us the added idempotent protection of the include
+function (of course, if profiles have collisions with classes you&rsquo;ll have to
+resolve those. Say one or more profiles tries to include an apache class &ndash;
+simply break that component out into a separate profile, extract the parameters
+from Hiera, and include that profile at a higher level). Each profile is going
+to do Hiera lookups which should give you the ability to provide different data
+for different host types (i.e. different data on a per-environment level, or
+however you lay out your Hiera hierarchy), and that data will be passed
+directly to class that is declared. Finally, each component module will
+accept parameters as variables internal to that module, default
+parameters/variables to sane values in the <code>::params</code> class, and use those
+variables when declaring each resource throughtout its classes.</p>
+
+<ul>
+<li>Roles abstract profiles</li>
+<li>Profiles abstract component modules</li>
+<li>Hiera abstracts configuration data</li>
+<li>Component modules abstract resources</li>
+<li>Resources abstract the underlying OS implementation</li>
+</ul>
+
+
+<h2>Choose your level of comfortability</h2>
+
+<p>The roles and profiles pattern also buys you something else &ndash; the ability for
+less-skilled and more-skilled Puppet users to work with the same codebase.
+Let&rsquo;s say you use some GUI classifier (like the Puppet Enterprise Console),
+someone who&rsquo;s less skilled at Puppet looks and sees that a node is classified
+with a certain role, so they open the role file and see something like this:</p>
+
+<p><code>
+include profiles::wordpress
+include profiles::tomcat
+include profiles::git::repo_server
+</code></p>
+
+<p>That&rsquo;s pretty legible, right? Someone who doesn&rsquo;t regularly use Puppet can
+probably make a good guess as to what&rsquo;s on the machine. Need more information?
+Open one of the profiles and look specifically at the classes that are being
+declared. Need to know the data being passed? Jump into Hiera. Need to know
+more information? Dig into each component module and see what&rsquo;s going on there.</p>
+
+<p>When you have everything abstracted correctly, you can have developers
+providing data (like build versions) to Hiera, junior admins grouping nodes for
+classification, more senior folk updating profiles, and your best Puppet people
+creating/updating component modules and building plugins like custom
+facts/functions/whatever.</p>
+
+<h2>Great! Now go and refactor&hellip;</h2>
+
+<p>If you&rsquo;ve used Puppet for more than a month, you&rsquo;re probably familiar with the
+&ldquo;Oh shit, I should have done it THAT way&hellip;let me refactor this&rdquo; game. I know,
+it sucks, and we at Puppet Labs haven&rsquo;t been shy of incorporating something that
+we feel will help people out (but will also require some refactoring). This
+pattern, though, has been in use by the Professional Services team at Puppet Labs
+for over a year without modification. I&rsquo;ve used this on sites GREAT and small,
+and every site with which I&rsquo;ve consulted and implemented this pattern has been
+able to both understand its power and derive real value within a week. If you&rsquo;re
+contemplating a refactor, you can&rsquo;t go wrong with Roles and Profiles (or
+whatever names you decide to use).</p>
+]]></content>
+  </entry>
+  
+</feed>
