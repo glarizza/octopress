@@ -4,7 +4,7 @@
   <title><![CDATA[Category: vm | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/vm/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2014-10-22T15:23:05+02:00</updated>
+  <updated>2014-10-22T15:24:32+02:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -94,9 +94,9 @@ the App Store to <code>/Applications</code>, but we&rsquo;ll want to extract the
 installation disk image somewhere where we can work with it. I&rsquo;m going to make
 a copy on the Desktop so we don&rsquo;t screw up the main installer:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>cp /Applications/Install<span class="se">\ </span>OS<span class="se">\ </span>X<span class="se">\ </span>Mountain<span class="se">\ </span>Lion.app/Contents/SharedSupport/InstallESD.dmg ~/Desktop
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cp /Applications/Install\ OS\ X\ Mountain\ Lion.app/Contents/SharedSupport/InstallESD.dmg ~/Desktop
+{% endcodeblock %}</p>
 
 <p>Beautiful. This should take a minute as it&rsquo;s a sizeable file, but in the end
 you&rsquo;ll have the installation disk image on your Desktop. For now this is fine,
@@ -107,25 +107,16 @@ but we&rsquo;ll be revisiting it later&hellip;</p>
 <p>As if the writing of this blog post, the code you need is ONLY in Tim&rsquo;s fork,
 so let&rsquo;s pull that down to somewhere where we can work with it:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h2&gt;I prefer to work with code out of a &amp;lsquo;src&amp;rsquo; directory in my home directory&lt;/h2&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;<span class="nv">$ </span>mkdir ~/src
-</span><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;<span class="nv">$ </span>git clone &lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;http://github.com/timsutton/veewee&quot;</span>&gt;http://github.com/timsutton/veewee&lt;/a&gt;
-</span><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}</p>
+
+<h2>I prefer to work with code out of a &lsquo;src&rsquo; directory in my home directory</h2>
+
+<p>$ mkdir ~/src
+$ cd ~/src</p>
+
+<p>$ git clone <a href="http://github.com/timsutton/veewee">http://github.com/timsutton/veewee</a>
+$ cd ~/src/veewee
+{% endcodeblock %}</p>
 
 <h4>Install Gems for veewee</h4>
 
@@ -134,20 +125,18 @@ Rubygems necessary to make Veewee work have been installed. We&rsquo;re going to
 this with <a href="http://gembundler.com/">Bundler</a>. Let&rsquo;s switch to Ruby 1.9.3 and get Bundler
 installed:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span><span class='line'><span class="nv">$ </span>rbenv <span class="nb">local </span>1.9.3
-</span><span class='line'><span class="nv">$ </span>gem install bundler
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cd ~/src/veewee
+$ rbenv local 1.9.3
+$ gem install bundler
+{% endcodeblock %}</p>
 
 <p>Next, let&rsquo;s use <a href="http://gembundler.com/">bundler</a> to install the rest of the gems we need to
 use Veewee:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>bundle install
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ bundle install
+{% endcodeblock %}</p>
 
 <p>Once that command completes, Bundler will have installed all the necessary gems
 for Veewee and we can move on.</p>
@@ -159,11 +148,10 @@ a &lsquo;vanilla&rsquo; VM. Tim&rsquo;s code provides a template called &lsquo;O
 the necessary scaffolding for building a vanilla 10.8.2 VM. Let&rsquo;s create a new
 VM project based on this template called &lsquo;osx-vm&rsquo; with the following:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span><span class='line'><span class="nv">$ </span>bundle <span class="nb">exec </span>veewee fusion define &amp;lsquo;osx-vm&amp;rsquo; &amp;lsquo;OSX-10.8.2&amp;rsquo;
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cd ~/src/veewee
+$ bundle exec veewee fusion define &lsquo;osx-vm&rsquo; &lsquo;OSX-10.8.2&rsquo;
+{% endcodeblock %}</p>
 
 <p>This will create <code>definitions/osx-vm</code> inside the Veewee directory with the
 template code from <code>templates/OSX-10.8.2</code>. We&rsquo;re almost ready to let Veewee
@@ -178,13 +166,11 @@ through the detail, or <a href="https://github.com/timsutton/veewee/blob/feature
 information. Let&rsquo;s use that script and prepare an installation &lsquo;ISO&rsquo; for our
 new VM:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span><span class='line'><span class="nv">$ </span>mkdir iso
-</span><span class='line'><span class="nv">$ </span>sudo templates/OSX-10.8.2/prepare_veewee_iso/prepare_veewee_iso.sh ~/Desktop/InstallESD.dmg iso/
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cd ~/src/veewee
+$ mkdir iso
+$ sudo templates/OSX-10.8.2/prepare_veewee_iso/prepare_veewee_iso.sh ~/Desktop/InstallESD.dmg iso/
+{% endcodeblock %}</p>
 
 <p>You&rsquo;ll need to be root to do this, but the script should handle everything
 necessary to prepare the ISO and drop it into the <code>iso</code> directory we created.</p>
@@ -198,103 +184,56 @@ install Puppet via Rubygems. Because this is all outlined in the <code>postinsta
 script, you&rsquo;re free to modify this code or add your own steps. Here&rsquo;s the
 current <code>postinstall.sh</code> script as of this posting:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>date &gt; /etc/vagrant_box_build_time
-</span><span class='line'><span class="nv">OSX_VERS</span><span class="o">=</span><span class="k">$(</span>sw_vers -productVersion | awk -F &amp;ldquo;.&amp;rdquo; &amp;lsquo;<span class="o">{</span>print <span class="nv">$2</span><span class="o">}</span>&amp;rsquo;<span class="k">)</span>&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;Install VMware tools <span class="k">if </span>we were built with VMware&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;if <span class="o">[</span> -e .vmfusion_version <span class="o">]</span>; <span class="k">then</span>
-</span><span class='line'><span class="k">  </span><span class="nv">TMPMOUNT</span><span class="o">=</span>&lt;code&gt;/usr/bin/mktemp -d /tmp/vmware-tools.XXXX&lt;/code&gt;
-</span><span class='line'>  hdiutil attach darwin.iso -mountpoint &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>  installer -pkg &amp;ldquo;<span class="nv">$TMPMOUNT</span>/Install VMware Tools.app/Contents/Resources/VMware Tools.pkg&amp;rdquo; -target /
-</span><span class='line'>  <span class="c"># This usually fails</span>
-</span><span class='line'>  hdiutil detach &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>  rm -rf &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'><span class="k">fi</span>&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;Installing vagrant keys&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;mkdir /Users/vagrant/.ssh
-</span><span class='line'>chmod 700 /Users/vagrant/.ssh
-</span><span class='line'>curl -k &amp;lsquo;&lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub&quot;</span>&gt;https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub&lt;/a&gt;&amp;rsquo; &gt; /Users/vagrant/.ssh/authorized_keys
-</span><span class='line'>chmod 600 /Users/vagrant/.ssh/authorized_keys
-</span><span class='line'>chown -R vagrant /Users/vagrant/.ssh&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;Get Xcode CLI tools <span class="k">for </span>Lion <span class="o">(</span>at least to build Chef<span class="o">)</span>&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;&lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex&quot;</span>&gt;https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex&lt;/a&gt;&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;TOOLS<span class="o">=</span>clitools.dmg
-</span><span class='line'><span class="k">if</span> <span class="o">[</span> &amp;ldquo;<span class="nv">$OSX_VERS</span>&amp;rdquo; -eq 7 <span class="o">]</span>; <span class="k">then</span>
-</span><span class='line'><span class="k">  </span><span class="nv">DMGURL</span><span class="o">=</span>&lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg&quot;</span>&gt;http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg&lt;/a&gt;
-</span><span class='line'><span class="k">elif</span> <span class="o">[</span> &amp;ldquo;<span class="nv">$OSX_VERS</span>&amp;rdquo; -eq 8 <span class="o">]</span>; <span class="k">then</span>
-</span><span class='line'><span class="k">  </span><span class="nv">DMGURL</span><span class="o">=</span>&lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg&quot;</span>&gt;http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg&lt;/a&gt;
-</span><span class='line'><span class="k">fi</span>
-</span><span class='line'>curl &amp;ldquo;<span class="nv">$DMGURL</span>&amp;rdquo; -o &amp;ldquo;<span class="nv">$TOOLS</span>&amp;rdquo;
-</span><span class='line'><span class="nv">TMPMOUNT</span><span class="o">=</span>&lt;code&gt;/usr/bin/mktemp -d /tmp/clitools.XXXX&lt;/code&gt;
-</span><span class='line'>hdiutil attach &amp;ldquo;<span class="nv">$TOOLS</span>&amp;rdquo; -mountpoint &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>installer -pkg &amp;ldquo;<span class="k">$(</span>find <span class="nv">$TMPMOUNT</span> -name &amp;lsquo;*.mpkg&amp;rsquo;<span class="k">)</span>&amp;rdquo; -target /
-</span><span class='line'>hdiutil detach &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>rm -rf &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>rm &amp;ldquo;<span class="nv">$TOOLS</span>&amp;rdquo;&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;Get gems &amp;ndash; we should really be installing rvm instead, since we can&amp;rsquo;t even compile Chef or have a Ruby dev environment..&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;gem update &amp;mdash;system
-</span><span class='line'>gem install puppet &amp;mdash;no-ri &amp;mdash;no-rdoc&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;gem install chef &amp;mdash;no-ri &amp;mdash;no-rdoc&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;exit
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+date > /etc/vagrant_box_build_time
+OSX_VERS=$(sw_vers -productVersion | awk -F &ldquo;.&rdquo; &lsquo;{print $2}&rsquo;)</p>
+
+<h1>Install VMware tools if we were built with VMware</h1>
+
+<p>if [ -e .vmfusion_version ]; then
+  TMPMOUNT=<code>/usr/bin/mktemp -d /tmp/vmware-tools.XXXX</code>
+  hdiutil attach darwin.iso -mountpoint &ldquo;$TMPMOUNT&rdquo;
+  installer -pkg &ldquo;$TMPMOUNT/Install VMware Tools.app/Contents/Resources/VMware Tools.pkg&rdquo; -target /
+  # This usually fails
+  hdiutil detach &ldquo;$TMPMOUNT&rdquo;
+  rm -rf &ldquo;$TMPMOUNT&rdquo;
+fi</p>
+
+<h1>Installing vagrant keys</h1>
+
+<p>mkdir /Users/vagrant/.ssh
+chmod 700 /Users/vagrant/.ssh
+curl -k &lsquo;<a href="https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub">https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub</a>&rsquo; > /Users/vagrant/.ssh/authorized_keys
+chmod 600 /Users/vagrant/.ssh/authorized_keys
+chown -R vagrant /Users/vagrant/.ssh</p>
+
+<h1>Get Xcode CLI tools for Lion (at least to build Chef)</h1>
+
+<h1><a href="https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex">https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex</a></h1>
+
+<p>TOOLS=clitools.dmg
+if [ &ldquo;$OSX_VERS&rdquo; -eq 7 ]; then
+  DMGURL=<a href="http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg">http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg</a>
+elif [ &ldquo;$OSX_VERS&rdquo; -eq 8 ]; then
+  DMGURL=<a href="http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg">http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg</a>
+fi
+curl &ldquo;$DMGURL&rdquo; -o &ldquo;$TOOLS&rdquo;
+TMPMOUNT=<code>/usr/bin/mktemp -d /tmp/clitools.XXXX</code>
+hdiutil attach &ldquo;$TOOLS&rdquo; -mountpoint &ldquo;$TMPMOUNT&rdquo;
+installer -pkg &ldquo;$(find $TMPMOUNT -name &lsquo;*.mpkg&rsquo;)&rdquo; -target /
+hdiutil detach &ldquo;$TMPMOUNT&rdquo;
+rm -rf &ldquo;$TMPMOUNT&rdquo;
+rm &ldquo;$TOOLS&rdquo;</p>
+
+<h1>Get gems &ndash; we should really be installing rvm instead, since we can&rsquo;t even compile Chef or have a Ruby dev environment..</h1>
+
+<p>gem update &mdash;system
+gem install puppet &mdash;no-ri &mdash;no-rdoc</p>
+
+<h1>gem install chef &mdash;no-ri &mdash;no-rdoc</h1>
+
+<p>exit
+{% endcodeblock %}</p>
 
 <h4>Build the VM</h4>
 
@@ -302,11 +241,10 @@ current <code>postinstall.sh</code> script as of this posting:</p>
 defined, and all necessary Gems installed, we can finally BUILD the vm with the
 following command:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span><span class='line'><span class="nv">$ </span>bundle <span class="nb">exec </span>veewee fusion build osx-vm
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cd ~/src/veewee
+$ bundle exec veewee fusion build osx-vm
+{% endcodeblock %}</p>
 
 <p>This process takes the longest &ndash; you should see VMware Fusion fire up, a new VM
 get created, and follow the process of OS X being installed into the VM. When
