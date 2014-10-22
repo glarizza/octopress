@@ -156,16 +156,7 @@ property_list_key { 'hashtest':
 }
 {% endcodeblock %}
 
-Doesn't that look awesome? What if you have a [gist][gist]? You can embed those too
-(and they're also linkable):
-
-{% gist 3218523 %}
-
-Want to know how much code it took to do that?  About this much:
-
-```
-{% gist 3218523 %}
-```
+Doesn't that look awesome?
 
 For a blog with a ton of code, something like this is pretty damn important.
 

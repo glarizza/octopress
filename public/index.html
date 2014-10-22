@@ -9,8 +9,8 @@
   <meta name="author" content="Gary larizza">
 
   
-  <meta name="description" content="If you&rsquo;ve read anything I&rsquo;ve posted in the past year, you know my feelings about
-the word &lsquo;environments&rsquo; and about how well &hellip;">
+  <meta name="description" content="This blog post was born out of a number of conversations that I&rsquo;ve had about
+Puppet, its dependency model, and why &lsquo;ordering&rsquo; is &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -85,6 +85,303 @@ the word &lsquo;environments&rsquo; and about how well &hellip;">
       
   <header>
     
+      <h1 class="entry-title"><a href="/blog/2014/10/19/on-dependencies-and-order/">On Dependencies and Order</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-10-19T15:09:53+02:00" pubdate data-updated="true">Oct 19<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>This blog post was born out of a number of conversations that I&rsquo;ve had about
+Puppet, its dependency model, and why &lsquo;ordering&rsquo; is not necessarily the way to
+think about dependencies when writing Puppet manifests. Like most everything on
+this site, I&rsquo;m getting it down in a file so I don&rsquo;t have to repeat this all over
+again the next time someone asks. Instead, I can point them to this page (and,
+when they don&rsquo;t actually <strong>READ</strong> this page, I can end up explaining everything
+I&rsquo;ve written here anyways&hellip;).</p>
+
+<p>Before we go any further, let me define a couple of terms:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>dependencies     - In a nutshell, what happens when you use the metaparameters of
+</span><span class='line'>                   'before', 'require', 'subscribe' or 'notify' on resources in a
+</span><span class='line'>                   Puppet manifest: it's a chain of resources that are to be
+</span><span class='line'>                   evaluted in a specific order every time Puppet runs. Any failure
+</span><span class='line'>                   of a resource in this chain stops Puppet from evaluating the
+</span><span class='line'>                   remaining resources in the chain.
+</span><span class='line'>
+</span><span class='line'>evaluate         - When Puppet determines the 'is' value (or current state) of a
+</span><span class='line'>                   resource (i.e. for package resources, "is the package installed?")
+</span><span class='line'>
+</span><span class='line'>remediate        - When Puppet determines that the 'is' value (or current state of
+</span><span class='line'>                   the resource) is different from the 'should' value (or the value
+</span><span class='line'>                   entered into the Puppet manifest...the way the resource SHOULD
+</span><span class='line'>                   end up looking on the system) and Puppet needs to make a change.
+</span><span class='line'>
+</span><span class='line'>declarative(ish) - When I use the word 'declarative(ish)', I mean that the order
+</span><span class='line'>                   by which Puppet evaluates resources that do not contain dependencies
+</span><span class='line'>                   does not have a set procedure/order. The way Puppet EVALUATES
+</span><span class='line'>                   resources does not have a set procedure/order, but the order
+</span><span class='line'>                   that Puppet reads/parses manifest files IS from top-to-bottom
+</span><span class='line'>                   (which is why variables in Puppet manifests need to be declared
+</span><span class='line'>                   before they can be used).</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Why Puppet doesn&rsquo;t care about execution order (until it does)</h2>
+
+<p>The biggest shock to the system when getting started with a declarative (ish)
+configuration management tool like Puppet is understanding that Puppet describes
+the end-state of the machine, and NOT the order that it&rsquo;s (Puppet) going to
+take you to that state. To Puppet, the order that it chooses to affect change
+in any resource (be it a file to be corrected, a package to be installed, or
+any other resource type) is entirely arbitrary because resources that have no
+relationship to another resource shouldn&rsquo;t CARE about the order in which they&rsquo;re
+evaluated and remediated.</p>
+
+<p>For example, imagine Puppet is going to create both <code>/etc/sudoers</code> and update
+the system&rsquo;s authorized keys file to enter all the sysadmins&#8217; SSH keys. Which
+one should it do first? In an imperative system like shell scripts or
+a runbook-style system, you are forced to choose an order. So I ask again,
+which one goes first? If you try to update the <code>sudoers</code> file in your script
+first, and there&rsquo;s a problem with that update, then the script fails and the
+SSH keys aren&rsquo;t installed. If you switch the order and there&rsquo;s a problem with
+the SSH keys, then you can&rsquo;t <code>sudo</code> up because the <code>sudoers</code> file hasn&rsquo;t been
+touched.</p>
+
+<p>Because of this, Puppet has always taken the stance that if there are failures,
+we want to get as much of the system into a working state as possible (i.e. any
+resources that don&rsquo;t depend upon the failing resource are going to still be
+evaluated, or &lsquo;inspected&rsquo;, and remediated, or &lsquo;changed if need be&rsquo;). There are
+definitely philosophical differences here: the argument can be made that if there&rsquo;s
+a failure somewhere, the system is bad and you should cast it off until you&rsquo;ve
+fixed whatever the problem is (or the part of the code causing the problem). In
+virtualized or &lsquo;cloud&rsquo; environments where everything is automated, this is just
+fine, but in environments without complete and full automation, sometimes you
+have to fix and deal with what you have. Puppet &ldquo;believes in your system&rdquo;, which
+is borderline marketing-doubletalk for &ldquo;alert you of errors and give you time
+to fix the damn thing and do another Puppet run without having to spin up a whole
+new system.&rdquo;</p>
+
+<p>Once you know WHY Puppet takes the stance it does, you realize that Puppet does
+not give two shits about the order of resources without dependencies. If you
+write perfect Puppet code, you&rsquo;re fine. But the majority of the
+known-good-world does not do that. In fact, most of us write shit code. Which
+was the problem&hellip;</p>
+
+<h2>The history of Puppet&rsquo;s ordering choices</h2>
+
+<h3>&lsquo;Random&rsquo; random order</h3>
+
+<p>In the early days, the only resources that were guaranteed to have a consistent
+order were those resources with dependencies (i.e. as I stated above, resources
+that used the &lsquo;before&rsquo;, &lsquo;require&rsquo;, &lsquo;subscribe&rsquo;, or &lsquo;notify&rsquo; metaparameters to
+establish an evaluation order). Every other resource was evaluted at random
+every time that Puppet ran&hellip;which meant that you could run Puppet ten times
+and, theoretically, resources without dependencies could be evaluated in
+a different order between every Puppet run (we call this non-deterministic
+ordering). This made things REALLY hard to debug.  Take the case where you had
+a catalog of thousands of resources but you forgot a SINGLE dependency between
+a couple of file resources. If you roll that change out to 1000 nodes, you
+might have 10 or less of them fail (because Puppet chose an evaluation order
+that ordered these two resources incorrectly). Imagine trying to figure out
+what happened and replicate the problem. You could waste lots of time just
+trying to REPLICATE the issue, even if it was a small fix like this.</p>
+
+<p><strong>PROS</strong>:</p>
+
+<ul>
+<li>IS there a pro here?</li>
+</ul>
+
+
+<p><strong>CONS</strong>:</p>
+
+<ul>
+<li>Ordering could change between runs, and thus it was very hard to debug missing dependencies</li>
+</ul>
+
+
+<p>Philosophically, we were correct: resources that are to be evaluated in a certain
+order require dependencies. Practically, we were creating more work for ourselves.</p>
+
+<p>Incidentally, I&rsquo;d heard that Adam Jacob, who created Chef, had cited this reason
+as one of the main motivators for creating Chef. I&rsquo;d heard that as a Puppet
+consultant, he would run into these buried dependency errors and want to flip
+tables. Even if it&rsquo;s not a true STORY, it was absolutely true for tables where
+I used to work&hellip;</p>
+
+<h3>Title-hash, &lsquo;Predictable&rsquo; random order</h3>
+
+<p>Cut to Puppet version 2.7 where we introduced deterministic ordering with
+&lsquo;title-hash&rsquo; ordering. In a nutshell, resources that didn&rsquo;t have dependencies
+would still be executed in a random order, but the order Puppet chose could be
+replicated (it created a SHA1 hash based on the titles of the resources without
+dependencies, and ordered the hashes alphabetically). This meant that if you
+tested out a catalog on a node, and then ran that same catalog on 1000 other
+nodes, Puppet would choose the same order for all 1000 of the nodes. This
+gave you the ability to actually TEST whether your changes would successfully
+run in production. If you omitted a dependency, but Puppet managed to pick the
+correct evaluation order, you STILL had a missing dependency, but you didn&rsquo;t
+care about it because the code worked. The next change you made to the catalog
+(by adding or removing resources), the order might change, but you would
+discover and fix the dependency at that time.</p>
+
+<p><strong>PROS</strong>:</p>
+
+<ul>
+<li>&lsquo;Predictable&rsquo; and repeatable order made testing possible</li>
+</ul>
+
+
+<p><strong>CONS</strong>:</p>
+
+<ul>
+<li>Easy to miss dependency omissions if Puppet chose the right order (but do you really care?)</li>
+</ul>
+
+
+<h3>Manifest ordering, the &lsquo;bath salts&rsquo; of ordering</h3>
+
+<p>Title-hash ordering seemed like the best of both worlds &ndash; being opinionated about
+resource dependencies but also giving sysadmins a reliable, and repeatable, way
+to test evaluation order before it&rsquo;s pushed out to production.</p>
+
+<p>Buuuuuuuuuut, y&#8217;all JUST weren&rsquo;t happy enough, were you?</p>
+
+<p>When you move from an imperative solution like scripts to a declarative(ish)
+solution like Puppet, it is absolutely a new way to think about modeling your
+system. Frequently we heard that people were having issues with Puppet because
+the order that resources shows up in a Puppet master WASN&rsquo;T the order that Puppet
+would evaluate the resources. I just dropped a LOT of words explaining why this
+isn&rsquo;t the case, but who really has the time to read up on all of this? People
+were dismissing Puppet too quickly because their expectations of how the tool
+worked didn&rsquo;t align with reality. The assumption, then, was to align these
+expectations in the hopes that people wouldn&rsquo;t dismiss Puppet so quickly.</p>
+
+<p><a href="http://puppetlabs.com/blog/introducing-manifest-ordered-resources">Eric Sorenson wrote a blog post on our thesis and experimentation</a>
+around manifest ordering that is worth a read (and, incidentally, is shorter
+than this damn post), but the short version is that we tested this theory out
+and determined that Manifest Ordering would help new users to Puppet. Because
+of this work, we created a feature called &lsquo;Manifest Ordering&rsquo; that stated that
+resources that DID NOT HAVE DEPENDENCIES would be evaluated by Puppet in the
+order that they showed up in the Puppet manifest (when read top to bottom). If
+a resource truly does not have any dependencies, then you honestly should not
+care one bit what order it&rsquo;s evaluated (because it doesn&rsquo;t matter).  Manifest
+Ordering made ordering of resources without dependencies VERY predictable.</p>
+
+<p>But&hellip;.</p>
+
+<p>This doesn&rsquo;t mean I think it&rsquo;s the best thing in the world. In fact, I&rsquo;m really
+wary of how I feel people will come to use Manifest Ordering. There&rsquo;s a reason
+I called it the &ldquo;bath salts of ordering&rdquo; &ndash; because a little bit of it, when
+used correctly, can be a lovely thing, but too much of it, used in unintended
+circumstances, leads to hypothermia, paranoia, and the desire to gnaw someone
+else&rsquo;s face off. We were/are giving you a way to bypass our dependency model by
+using the mental-model you had with scripts, but ALSO telling you NOT to rely
+on that mental-model (and instead set dependencies explicitly using metaparameters).</p>
+
+<p>Seriously, what could go wrong?</p>
+
+<p>Manifest Ordering is not a substitution for setting dependencies &ndash; that IS NOT
+what it was created for. <strong>Puppet Labs still maintains that you should use
+dependencies to order resources and NOT simply rely on Manifest Ordering as
+a form of setting dependencies!</strong> Again, the problem is that you need to KNOW
+this&hellip;and if Manifest Ordering allows you to keep the same imperative
+&ldquo;mindset&rdquo; inside a declarative(ish) language, then eventually you&rsquo;re going to
+experience pain (if not today, but possibly later when you actually try to
+refactor code, or share code, or use this code on a system that ISN&rsquo;T using
+Manifest Ordering). A declarative(ish) language like Puppet requires seeing
+your systems according to the way their end-state will look and worrying about
+WHAT the system will look like, and not necessarily HOW it will get there. Any
+shortcut to understanding this process means you&rsquo;re going to miss key bits of
+what makes Puppet a good tool for modeling this state.</p>
+
+<p><strong>PROS:</strong></p>
+
+<ul>
+<li>Evaluation order of resources without dependencies is absolutely predictable</li>
+</ul>
+
+
+<p><strong>CONS:</strong></p>
+
+<ul>
+<li>If used as a substitution for setting dependencies, then refactoring code (moving around the order in which resources show up in a manifest) means changing the evaluation order</li>
+</ul>
+
+
+<h2>What should I actually take from this?</h2>
+
+<p>Okay, here&rsquo;s a list of things you SHOULD be doing if you don&rsquo;t want to create
+a problem for future-you or future-organization:</p>
+
+<ul>
+<li>Use dependency metaparameters like &lsquo;before&rsquo;, &lsquo;require&rsquo;, &lsquo;notify&rsquo;, and &lsquo;subscribe&rsquo; if resources in a catalog NEED to be evaluated in a particular order</li>
+<li>Do not use Manifest Ordering as a substitute for explicitly setting dependencies (disable it if this is too tempting)</li>
+<li>Use Roles and Profiles for a logical module layout (see: <a href="http://bit.ly/puppetworkflows2">http://bit.ly/puppetworkflows2</a> for information on Roles and Profiles)</li>
+<li>Order individual components inside the Profile</li>
+<li>Order Profiles (if necessary) inside the Role</li>
+</ul>
+
+
+<p>And, seriously, trust us with the explicit dependencies. It seems like a giant
+pain in the ass initially, but you&rsquo;re ultimately documenting your infrastructure,
+and a dependency (or, saying &lsquo;this thing MUST come before that thing&rsquo;) is a pretty
+important decision. There&rsquo;s a REASON behind it &ndash; treat it with some more weight
+other than having one line come before another line, ya know? The extra time
+right now is absolutely going to buy you the time you spend at home with your
+kids (and by &lsquo;kids&rsquo;, I mean &lsquo;XBox&rsquo;).</p>
+
+<p>And don&rsquo;t use bath salts, folks.</p>
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
       <h1 class="entry-title"><a href="/blog/2014/08/31/r10k-plus-directory-environments/">R10k + Directory Environments</a></h1>
     
     
@@ -101,7 +398,7 @@ the word &lsquo;environments&rsquo; and about how well &hellip;">
   
 
 
-<time datetime="2014-08-31T12:00:00-07:00" pubdate data-updated="true">Aug 31<span>st</span>, 2014</time>
+<time datetime="2014-08-31T21:00:00+02:00" pubdate data-updated="true">Aug 31<span>st</span>, 2014</time>
         
       </p>
     
@@ -855,7 +1152,7 @@ that comes as unexpected or stops you from using your existing workflow. Cheers!
   
 
 
-<time datetime="2014-03-26T01:00:00-07:00" pubdate data-updated="true">Mar 26<span>th</span>, 2014</time>
+<time datetime="2014-03-26T09:00:00+01:00" pubdate data-updated="true">Mar 26<span>th</span>, 2014</time>
         
       </p>
     
@@ -1035,7 +1332,7 @@ free to comment below &ndash; I look forward to making the process better for al
   
 
 
-<time datetime="2014-03-07T08:00:00-08:00" pubdate data-updated="true">Mar 7<span>th</span>, 2014</time>
+<time datetime="2014-03-07T17:00:00+01:00" pubdate data-updated="true">Mar 7<span>th</span>, 2014</time>
         
       </p>
     
@@ -1894,7 +2191,7 @@ note, and I hope I&rsquo;m providing some good info you can actually use! Cheers
   
 
 
-<time datetime="2014-02-18T09:48:18-08:00" pubdate data-updated="true">Feb 18<span>th</span>, 2014</time>
+<time datetime="2014-02-18T18:48:18+01:00" pubdate data-updated="true">Feb 18<span>th</span>, 2014</time>
         
       </p>
     
@@ -3594,7 +3891,7 @@ gig! :)  Cheers!</p>
   
 
 
-<time datetime="2014-02-17T14:01:37-08:00" pubdate data-updated="true">Feb 17<span>th</span>, 2014</time>
+<time datetime="2014-02-17T23:01:37+01:00" pubdate data-updated="true">Feb 17<span>th</span>, 2014</time>
         
       </p>
     
@@ -4124,7 +4421,7 @@ whatever names you decide to use).</p>
   
 
 
-<time datetime="2014-02-17T14:01:37-08:00" pubdate data-updated="true">Feb 17<span>th</span>, 2014</time>
+<time datetime="2014-02-17T23:01:37+01:00" pubdate data-updated="true">Feb 17<span>th</span>, 2014</time>
         
       </p>
     
@@ -4372,7 +4669,7 @@ that I could be entirely full of shit.</p>
   
 
 
-<time datetime="2013-12-15T08:44:17-08:00" pubdate data-updated="true">Dec 15<span>th</span>, 2013</time>
+<time datetime="2013-12-15T17:44:17+01:00" pubdate data-updated="true">Dec 15<span>th</span>, 2013</time>
         
       </p>
     
@@ -5902,7 +6199,7 @@ providers do their dirty work&hellip;</p>
       
   <header>
     
-      <h1 class="entry-title"><a href="/blog/2013/12/08/when-to-hiera/">When to Hiera (Aka: How Do I Module?)</a></h1>
+      <h1 class="entry-title"><a href="/blog/2013/12/09/when-to-hiera/">When to Hiera (Aka: How Do I Module?)</a></h1>
     
     
       <p class="meta">
@@ -5918,7 +6215,7 @@ providers do their dirty work&hellip;</p>
   
 
 
-<time datetime="2013-12-08T15:31:54-08:00" pubdate data-updated="true">Dec 8<span>th</span>, 2013</time>
+<time datetime="2013-12-09T00:31:54+01:00" pubdate data-updated="true">Dec 9<span>th</span>, 2013</time>
         
       </p>
     
@@ -6700,7 +6997,7 @@ in files that AREN&rsquo;T the Puppet DSL (i.e. not inside the code).</p>
   
 
 
-<time datetime="2013-11-26T16:01:00-08:00" pubdate data-updated="true">Nov 26<span>th</span>, 2013</time>
+<time datetime="2013-11-26T16:01:00+01:00" pubdate data-updated="true">Nov 26<span>th</span>, 2013</time>
         
       </p>
     
@@ -7373,479 +7670,6 @@ get a response. Maybe.)  Cheers!</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2013/11/25/fun-with-providers/">Fun With Puppet Providers - Part 1 of Whatever</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2013-11-25T20:47:00-08:00" pubdate data-updated="true">Nov 25<span>th</span>, 2013</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>I don&rsquo;t know why I write blog posts &ndash; everybody in open-source software knows
-that the code <em>IS</em> the documentation. If you&rsquo;ve ever tried to write a Puppet
-type/provider, you know this fact better than ANYONE. To this day, when someone
-asks me for the definitive source on this activity I usually refer them first
-to <a href="http://www.amazon.com/Puppet-Types-Providers-Dan-Bode/dp/1449339328">Nan Liu and Dan Bode&rsquo;s awesome Types and Providers
-book</a>
-(which REALLY is a fair bit of quality information), and THEN to the source
-code for Puppet. Everything else falls in-between those sources (sadly).</p>
-
-<p>As someone who truly came from knowing absolute fuckall about Ruby and only
-marginally more than that about Puppet, I&rsquo;ve walked through the valley of the
-shadow of self.instances and have survived to tell the tale. That&rsquo;s what this
-post is about &ndash; hopefully some GOOD information if you want to start writing
-your own Puppet type and provider. I also wrote this because this knowledge
-has been passed down from Puppet employee to Puppet employee, and I wanted
-to break the priesthood being held on type and provider magic. If you don&rsquo;t
-hear from me after tomorrow, well, then you know what happened&hellip;</p>
-
-<h2>Because 20 execs in a defined type&hellip;</h2>
-
-<p>What would drive someone to write a custom type and provider for Puppet anyhow?
-Afterall, you can do ANYTHING IMAGINABLE in the Puppet DSL*! After drawing
-back my sarcasm a bit, let me explain where the Puppet DSL tends to fall over
-and the idea of a custom type and provider starts becoming more than just an
-incredibly vivid dream:</p>
-
-<ul>
-<li>You have more than a couple of exec statements in a single class/defined type that have multiple conditional
-properties like &lsquo;onlyif&rsquo; and/or &lsquo;unless&rsquo;.</li>
-<li>You need to use pure Ruby to manipulate data and parse it through a system binary</li>
-<li>Your defined type has more conditional logic than your pre-nuptual agreement</li>
-<li>Any combination of similar arguments related to the above</li>
-</ul>
-
-
-<p>If the above sounds familiar to you, then you&rsquo;re probably ready to build your own custom Puppet type and provider.
-Do note that custom types and providers are written in Ruby and not the Puppet DSL. This can initially feel
-very scary, but get over it (there are much scarier things coming).</p>
-
-<p><em>* Just because you can doesn&rsquo;t mean you don&rsquo;t, in fact, suck.</em></p>
-
-<h2>I&rsquo;m not your Type</h2>
-
-<p>This blog post is going to focus on types and type-interaction, while later
-posts will focus on providers and ultimately dirty provider tricks to win
-friends and influence others.  Type and provider interaction can be totally
-daunting for newcomers, let ALONE just naming files correctly due to Puppet&rsquo;s
-predictable (note: anytime I write the word &ldquo;predictable&rdquo;, just substitute the
-phrase &ldquo;annoying pain in the ass&rdquo;) naming pattern.  Let&rsquo;s break it down a bit
-for you &ndash; somebody que Dre&hellip;</p>
-
-<p>(NOTE: I&rsquo;m going to ASSUME you understand the fundamentals of a Puppet run already. If you&rsquo;re pretty hazy
-on that concept, checkout <a href="http://docs.puppetlabs.com">docs.puppetlabs.com</a> for more information)</p>
-
-<h2>Types are concerned about your looks</h2>
-
-<p>The type file defines all the <em>properties</em> and <em>parameters</em> that can be used by your new custom resource.
-Think of the type file like the opening stanza to a new Puppet class &ndash; we&rsquo;re describing all the tweakable
-knobs and buttons to the new thing we&rsquo;re creating. The type file also gives you some added validation
-abilities, which is very handy.</p>
-
-<p>It&rsquo;s important to understand that there is a BIG difference between a &lsquo;property&rsquo; and a &lsquo;parameter&rsquo; with regard
-to a type (even though they&rsquo;re both assigned values identically in a resource declaration).  Think of it this
-way: a property is something that can be inspected and changed by Puppet, while a parameter is just helper data
-that Puppet uses to do its job.  A property would be something like a file&rsquo;s mode.  You can inspect a file and
-determine its mode, and you can even CHANGE a file&rsquo;s mode on disk. The file resource type also has a parameter
-called &lsquo;backup&rsquo;.  Its sole job is to tell Puppet whether to backup the file to the filebucket before making
-changes. This data is useful for Puppet during a run, but you can&rsquo;t inspect a file on disk and know definitively
-whether Puppet is going to back it up or not (and it goes without saying that if you can&rsquo;t determine this aspect
-about a file on disk just by inspecting it, than you also can&rsquo;t CHANGE this aspect about a file on disk either).
-You&rsquo;ll see later where the property/parameter distinction becomes very important.</p>
-
-<p>Recently I built a type modeling the setting of proxy data for network interfaces on OS X, so we&rsquo;ll use that as
-a demonstration of a type.  It looks like the following:</p>
-
-<figure class='code'><figcaption><span>lib/puppet/type/mac_web_proxy.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Type</span><span class="o">.</span><span class="n">newtype</span><span class="p">(</span><span class="ss">:mac_web_proxy</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">desc</span> <span class="s2">&quot;Puppet type that models a network interface on OS X&quot;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">ensurable</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:name</span><span class="p">,</span> <span class="ss">:namevar</span> <span class="o">=&gt;</span> <span class="kp">true</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Interface name - currently must be &#39;friendly&#39; name (e.g. Ethernet)&quot;</span>
-</span><span class='line'>    <span class="n">munge</span> <span class="k">do</span> <span class="o">|</span><span class="n">value</span><span class="o">|</span>
-</span><span class='line'>      <span class="n">value</span><span class="o">.</span><span class="n">downcase</span>
-</span><span class='line'>    <span class="k">end</span>
-</span><span class='line'>    <span class="k">def</span> <span class="nf">insync?</span><span class="p">(</span><span class="n">is</span><span class="p">)</span>
-</span><span class='line'>      <span class="n">is</span><span class="o">.</span><span class="n">downcase</span> <span class="o">==</span> <span class="n">should</span><span class="o">.</span><span class="n">downcase</span>
-</span><span class='line'>    <span class="k">end</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_server</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:authenticated_username</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Username for proxy authentication&quot;</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:authenticated_password</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Password for proxy authentication&quot;</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_authenticated</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'>    <span class="n">newvalues</span><span class="p">(</span><span class="ss">:true</span><span class="p">,</span> <span class="ss">:false</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_port</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'>    <span class="n">newvalues</span><span class="p">(</span><span class="sr">/^\d+$/</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>First note the type file&rsquo;s path in the grey titlebar of the graphic: <code>lib/puppet/type/mac_web_proxy.rb</code>
-This path is relative to the module that you&rsquo;re building, and it&rsquo;s VERY important that it be named
-EXACTLY this way to appease Puppet&rsquo;s predictable naming pattern.  The name of the file directly correllates
-to the name of the type listed in the <code>Puppet::Type.newtype()</code> method.</p>
-
-<p>Next, let&rsquo;s look at a sample parameter declaration &ndash; for starters, let&rsquo;s look at the &lsquo;authenticated_password&rsquo;
-parameter declaration on line 24 of the above type.  The <code>newparam()</code> method is called and the lone argument
-passed is the symbolized name of our parameter (i.e. it&rsquo;s prepended with a colon).  This parameter
-provides the password to use when setting up an authenticated web proxy on OS X.
-It&rsquo;s a parameter because as far as I know, there&rsquo;s no way for me to query the system for this password
-(it&rsquo;s obfuscated in the GUI and I&rsquo;m not entirely certain where it&rsquo;s stored on-disk).
-If there were a way for us to query this value from the system, then we could turn it
-into a property (since we could both &lsquo;GET&rsquo; as well as &lsquo;SET&rsquo; the value). As of right
-now, it exists as helper data for when I need to setup an authenticated proxy.</p>
-
-<p>Having seen a parameter, let&rsquo;s look at the &lsquo;proxy_server&rsquo; property that&rsquo;s declared on
-line 16 of the type file above. We&rsquo;re able to both query the system for this value,
-as well as change/set the value by using the <code>networksetup</code> binary, so it&rsquo;s able to
-be &lsquo;synchronized&rsquo; (according to Puppet). Because of this, it must be a property.</p>
-
-<h2>Just enough validation</h2>
-
-<p>The second major function of the type file is to provide methods to validate property
-and parameter data that is being passed. There are two methods to validate this data,
-and one method that allows you to massage the data into an acceptable format (which
-is called &lsquo;munging&rsquo;).</p>
-
-<h3>validate()</h3>
-
-<p>The first method, named &lsquo;validate&rsquo;, is widely believed to be the only successfully-named
-method in the entire Puppet codebase. Validate accepts a block and allows you to perform
-free-form validation in any way you prefer.  For example:</p>
-
-<figure class='code'><figcaption><span>lib/puppet/type/user.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">validate</span> <span class="k">do</span> <span class="o">|</span><span class="n">value</span><span class="o">|</span>
-</span><span class='line'>  <span class="k">raise</span> <span class="no">ArgumentError</span><span class="p">,</span> <span class="s2">&quot;Passwords cannot include &#39;:&#39;&quot;</span> <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">is_a?</span><span class="p">(</span><span class="nb">String</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span><span class="o">.</span><span class="n">include?</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">)</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This example, pulled straight from the Puppet codebase, will raise an error if a
-password contains a colon. In this case, we&rsquo;re looking for a specific exception
-and are raising errors accordingly.</p>
-
-<h3>newvalues()</h3>
-
-<p>The second method, named &lsquo;newvalues&rsquo;, accepts a regex that property/parameter values
-need to match (if you&rsquo;re one of the 8 people in the world that speak regex fluently),
-or a list of acceptable values. From the example above:</p>
-
-<figure class='code'><figcaption><span>lib/puppet/type/mac_web_proxy.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_authenticated</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'>    <span class="n">newvalues</span><span class="p">(</span><span class="ss">:true</span><span class="p">,</span> <span class="ss">:false</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_port</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">desc</span> <span class="s2">&quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'>    <span class="n">newvalues</span><span class="p">(</span><span class="sr">/^\d+$/</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>munge()</h3>
-
-<p>The final method, named &lsquo;munge&rsquo; accepts a block like <code>newvalues</code> but allows you to
-convert an unacceptable value into an acceptable value. Again, this is from the example above:</p>
-
-<figure class='code'><figcaption><span>lib/puppet/type/mac_web_proxy.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">munge</span> <span class="k">do</span> <span class="o">|</span><span class="n">value</span><span class="o">|</span>
-</span><span class='line'>  <span class="n">value</span><span class="o">.</span><span class="n">downcase</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In this case, we want to ensure that the parameter value is lower case. It&rsquo;s not
-necessary to throw an error, but rather it&rsquo;s acceptable to &lsquo;munge&rsquo; the value to
-something that is more acceptable without alerting the user.</p>
-
-<h2>Important type considerations</h2>
-
-<p>You could write half a book just on how types work (and, again, check out the book
-referenced above which DOES just that), but there are a couple of final considerations
-that will prove helpful when developing your type.</p>
-
-<h3>Defaulting values</h3>
-
-<p>The <code>defaultto</code> method provides a default value should the user not provide one for
-your property/parameter. It&rsquo;s a pretty simple construct, but it&rsquo;s important to
-remember when you write spec tests for your type (which you ARE doing, right?) that
-there will ALWAYS be values for properties/parameters that utilize <code>defaultto</code>. Here&rsquo;s a quick example:</p>
-
-<figure class='code'><figcaption><span>Defaultto example </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newparam</span><span class="p">(</span><span class="ss">:enable_lacp</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">defaultto</span> <span class="ss">:true</span>
-</span><span class='line'>  <span class="n">newvalues</span><span class="p">(</span><span class="ss">:true</span><span class="p">,</span> <span class="ss">:false</span><span class="p">)</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>Ensurable types</h3>
-
-<p>A resource is considered &lsquo;ensurable&rsquo; when its presence can be verified (i.e. it
-exists on the system), it can be created when it doesn&rsquo;t exist and it SHOULD, and
-it can be destroyed when it exists and it SHOULDN&rsquo;T. The simplest way to tell
-Puppet that a resource type is ensurable is to call the <code>ensurable</code> method within
-the body of the type (i.e. outside of any property/parameter declarations). Doing
-this will automatically create an &lsquo;ensure&rsquo; property that accepts values of &lsquo;absent&rsquo;
-and &lsquo;present&rsquo; that are automatically wired to the &lsquo;exists?&rsquo;, &lsquo;create&rsquo; and &lsquo;destroy&rsquo;
-methods of the provider (something I&rsquo;ll write about in the next post). Optionally,
-you can choose to pass a block to the <code>ensurable</code> method and define acceptable
-property values as well as the methods of the provider that are to be called. That
-would look something like this:</p>
-
-<figure class='code'><figcaption><span>lib/puppet/type/package.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">ensurable</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:present</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">provider</span><span class="o">.</span><span class="n">install</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:absent</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">provider</span><span class="o">.</span><span class="n">uninstall</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:purged</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">provider</span><span class="o">.</span><span class="n">purge</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:held</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>    <span class="n">provider</span><span class="o">.</span><span class="n">hold</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This means that instead of calling the <code>create</code> method to create a new resource that
-SHOULD exist (but doesn&rsquo;t), Puppet is going to call the <code>install</code> method. Conversely,
-it will call the <code>uninstall</code> method to destroy a resource based on this type. The
-ensure property will also accept values of &lsquo;purged&rsquo; and &lsquo;held&rsquo; which will be wired up
-to the <code>purge</code> and <code>hold</code> methods respectively.</p>
-
-<h3>Namevars are unique little snowflakes</h3>
-
-<p>Puppet has a <a href="http://docs.puppetlabs.com/puppet/2.7/reference/lang_resources.html#namenamevar">concept known as the &lsquo;namevar&rsquo; for a resource.</a>
-If you&rsquo;re hazy about the concept check out the documentation, but basically it&rsquo;s the parameter
-that describes the form of uniqueness for a resource type on the system. For the package resource
-type, the &lsquo;name&rsquo; parameter is the namevar because the way you tell one package from another is
-its name. For the file resource, it&rsquo;s the &lsquo;path&rsquo; parameter, because you can differentiate unique
-files from each other according to their path (and not necessarily their filename, since filenames
-don&rsquo;t have to be unique on systems).</p>
-
-<p>When designing a type, it&rsquo;s important to consider WHICH parameter will be the namevar (i.e. how
-can you tell unique resources from one another). To make a parameter the namevar, you simply
-set the <code>:namevar</code> attribute to <code>:true</code> like below:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newparam</span><span class="p">(</span><span class="ss">:name</span><span class="p">,</span> <span class="ss">:namevar</span> <span class="o">=&gt;</span> <span class="ss">:true</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="c1"># Type declaration attributes here...</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>Handling array values</h3>
-
-<p>Nearly every property/parameter value that is declared for a resource is &lsquo;stringified&rsquo;, or
-cast to a string. Sometimes, however, it&rsquo;s necessary to accept an array of elements as the
-value for a property/parameter. To do this, you have to explicitly tell Puppet that you&rsquo;ll
-be passing an array by setting the <code>:array_matching</code> attribute to <code>:all</code> (if you don&rsquo;t set
-this attribute, it defaults to <code>:first</code>, which means that if you pass an array as a value
-for a property/parameter, Puppet will only accept the FIRST element in that array).</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="c1"># Type declaration attributes here... </span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If you set <code>:array_matching</code> to <code>:all</code>, EVERY value passed for that parameter/property will
-be cast to an array (which means if you pass a value of &lsquo;foo&rsquo;, you&rsquo;ll get an array with a
-single element &ndash; the string of &lsquo;foo&rsquo;).</p>
-
-<h3>Documenting your property/parameter</h3>
-
-<p>It&rsquo;s a best-practice to document the purpose of your property or parameter declaration, and
-this can be done by passing a string to the <code>desc</code> method within the body of the property/parameter
-declaration.</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">desc</span> <span class="s2">&quot;Domains which should bypass the proxy&quot;</span>
-</span><span class='line'><span class="c1"># Type declaration attributes here...</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>Synchronization tricks</h3>
-
-<p>Puppet uses a method called <code>insync?</code> to determine whether a property value is synchronized (i.e.
-if Puppet needs to change its value, or it&rsquo;s set appropriately). You usually have no need to change
-the behavior of this method since most of the properties you create for a type will have string
-values (and the <code>==</code> operator does a good job of checking string equality). For structured data
-types like arrays and hashes, however, that can be a bit trickier. Arrays, for example, are
-ordered construct &ndash; they have a definitive idea of what the first element and the last element
-of the array are. Sometimes you WANT to ensure that values are in a very specific order, and
-sometimes you don&rsquo;t necessarily care about the ORDER that values for a property are set &ndash; you
-just want to make sure that all of them are set.</p>
-
-<p>If the latter cases sounds like what you need, then you&rsquo;ll need to override the behavior of the
-<code>insync?</code> method. Take a look at the below example:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">desc</span> <span class="s2">&quot;Domains which should bypass the proxy&quot;</span>
-</span><span class='line'>  <span class="k">def</span> <span class="nf">insync?</span><span class="p">(</span><span class="n">is</span><span class="p">)</span>
-</span><span class='line'>    <span class="n">is</span><span class="o">.</span><span class="n">sort</span> <span class="o">==</span> <span class="n">should</span><span class="o">.</span><span class="n">sort</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In this case, I&rsquo;ve overridden the <code>insync?</code> method to first sort the &lsquo;is&rsquo; value (or, the value that
-was discovered by Puppet on the target node) and compare it with the sorted &lsquo;should&rsquo; value (or,
-the value that was specified in the Puppet manifest when the catalog was compiled by the Puppet
-master). You can do WHATEVER you want in here as long as <code>insync?</code> returns either a true or a
-false value.  If <code>insync?</code> returns true, then Puppet determines that everything is in sync and
-no changes are necessary, whereas if it returns false then Puppet will trigger a change.</p>
-
-<h2>And this was the EASY part!</h2>
-
-<p>Wow this went longer than I expected&hellip; and types are usually the &lsquo;easier&rsquo; bit
-since you&rsquo;re only describing the format to be used by the Puppet admin in
-manifests. There are some hacky type tricks that I&rsquo;ve not yet covered (i.e.
-features, &lsquo;inheritance&rsquo;, and other meta-bullshit), but those will be saved for
-a final &lsquo;dirty tips and tricks&rsquo; post.  In the next section, I&rsquo;ll touch on
-providers (which is where all interaction with the system takes place), so
-stay tuned for more brain-dumping-goodness&hellip;</p>
-</div>
-  
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -7861,6 +7685,10 @@ stay tuned for more brain-dumping-goodness&hellip;</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2014/10/19/on-dependencies-and-order/">On Dependencies and Order</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2014/08/31/r10k-plus-directory-environments/">R10k + Directory Environments</a>
       </li>
     
@@ -7869,15 +7697,11 @@ stay tuned for more brain-dumping-goodness&hellip;</p>
       </li>
     
       <li class="post">
-        <a href="/blog/2014/03/11/when-yellow-ruled-the-world/">When Yellow Ruled the World</a>
+        <a href="/blog/2014/03/12/when-yellow-ruled-the-world/">When Yellow Ruled the World</a>
       </li>
     
       <li class="post">
         <a href="/blog/2014/03/07/puppet-workflow-part-3b/">Building a Functional Puppet Workflow Part 3b: More R10k Madness</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2014/02/18/puppet-workflow-part-3/">Building a Functional Puppet Workflow Part 3: Dynamic Environments With R10k</a>
       </li>
     
   </ul>

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: blog | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/blog/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2014-08-31T14:19:23-07:00</updated>
+  <updated>2014-10-22T15:23:05+02:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -16,7 +16,7 @@
   <entry>
     <title type="html"><![CDATA[Managing a blog is insane; Octopress FTW!]]></title>
     <link href="http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/"/>
-    <updated>2013-01-17T00:00:00-08:00</updated>
+    <updated>2013-01-17T00:00:00+01:00</updated>
     <id>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane</id>
     <content type="html"><![CDATA[<p>Masochists are everywhere. Managing a system by hand appeals to a certain subset
 of the population, but I joined <a href="http://www.puppetlabs.com">Puppet Labs</a> because
@@ -58,7 +58,7 @@ action for my taste.</p>
 <a href="http://pages.github.com/">Github Pages</a> has always been available to host web content or <a href="https://github.com/mojombo/jekyll">Jekyll
 sites</a> &ndash; I&rsquo;m just late to the damn party.</p>
 
-<p><a href="http://glarizza.github.com/images/blog_blog/left.png">{% img left /images/blog_blog/left.png 300 300 %}</a></p>
+<p><a href="http://glarizza.github.com/images/blog_blog/left.png"><img class="left" src="/images/blog_blog/left.png" width="300" height="300"></a></p>
 
 <p>Hosting static web content was out; like I said before, I don&rsquo;t really want to
 &lsquo;manage&rsquo; this thing. Jekyll, however, intrigued me. Jekyll is essentially
@@ -145,41 +145,54 @@ write_plist_file(plist, resource[:path])
 
 <p>How about some Puppet code?</p>
 
-<p>{% codeblock Plist Management lang:puppet %}
-property_list_key { &lsquo;simple&rsquo;:
-  ensure => present,
-  path => &lsquo;/tmp/com.puppetlabs.puppet&rsquo;,
-  key    => &lsquo;simple&rsquo;,
-  value  => &lsquo;value&rsquo;,
-}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Plist Management </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nc">property_list_key</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">simple</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">:</span>
+</span><span class='line'>  <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">path</span> <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="sr">/tmp/</span><span class="ss">com</span><span class="m">.</span><span class="ss">puppetlabs</span><span class="m">.</span><span class="ss">puppet</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;,</span>
+</span><span class='line'>  <span class="ss">key</span>    <span class="err">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">simple</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;,</span>
+</span><span class='line'>  <span class="ss">value</span>  <span class="err">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">value</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;,</span>
+</span><span class='line'><span class="p">}</span><span class="err">&lt;/</span><span class="ss">p</span><span class="err">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;</span><span class="ss">p</span><span class="err">&gt;</span><span class="ss">property_list_key</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">boolean</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;:</span>
+</span><span class='line'>  <span class="ss">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">path</span>       <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="sr">/tmp/</span><span class="ss">com</span><span class="m">.</span><span class="ss">puppetlabs</span><span class="m">.</span><span class="ss">puppet</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">key</span>        <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">boolean</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">value</span>      <span class="p">=&gt;</span> <span class="ss">false</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">value_type</span> <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">boolean</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'><span class="p">}</span><span class="err">&lt;/</span><span class="ss">p</span><span class="err">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;</span><span class="ss">p</span><span class="err">&gt;</span><span class="ss">property_list_key</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">hashtest</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;:</span>
+</span><span class='line'>  <span class="ss">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">path</span>       <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="sr">/tmp/</span><span class="ss">com</span><span class="m">.</span><span class="ss">puppetlabs</span><span class="m">.</span><span class="ss">puppet</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">key</span>        <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">hashtest</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">value</span>      <span class="p">=&gt;</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">key</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span> <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">value</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span> <span class="p">},</span>
+</span><span class='line'>  <span class="ss">value_type</span> <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">hash</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
-<p>property_list_key { &lsquo;boolean&rsquo;:
-  ensure     => present,
-  path       => &lsquo;/tmp/com.puppetlabs.puppet&rsquo;,
-  key        => &lsquo;boolean&rsquo;,
-  value      => false,
-  value_type => &lsquo;boolean&rsquo;,
-}</p>
-
-<p>property_list_key { &lsquo;hashtest&rsquo;:
-  ensure     => present,
-  path       => &lsquo;/tmp/com.puppetlabs.puppet&rsquo;,
-  key        => &lsquo;hashtest&rsquo;,
-  value      => { &lsquo;key&rsquo; => &lsquo;value&rsquo; },
-  value_type => &lsquo;hash&rsquo;
-}
-{% endcodeblock %}</p>
-
-<p>Doesn&rsquo;t that look awesome? What if you have a <a href="http://gist.github.com">gist</a>? You can embed those too
-(and they&rsquo;re also linkable):</p>
-
-<p>{% gist 3218523 %}</p>
-
-<p>Want to know how much code it took to do that?  About this much:</p>
-
-<p><code>
-{% gist 3218523 %}
-</code></p>
+<p>Doesn&rsquo;t that look awesome?</p>
 
 <p>For a blog with a ton of code, something like this is pretty damn important.</p>
 

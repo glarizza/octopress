@@ -4,7 +4,7 @@
   <title><![CDATA[Shit Gary Says]]></title>
   <link href="http://garylarizza.com/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2014-08-31T14:19:09-07:00</updated>
+  <updated>2014-10-22T15:23:05+02:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -14,9 +14,279 @@
 
   
   <entry>
+    <title type="html"><![CDATA[On Dependencies and Order]]></title>
+    <link href="http://garylarizza.com/blog/2014/10/19/on-dependencies-and-order/"/>
+    <updated>2014-10-19T15:09:53+02:00</updated>
+    <id>http://garylarizza.com/blog/2014/10/19/on-dependencies-and-order</id>
+    <content type="html"><![CDATA[<p>This blog post was born out of a number of conversations that I&rsquo;ve had about
+Puppet, its dependency model, and why &lsquo;ordering&rsquo; is not necessarily the way to
+think about dependencies when writing Puppet manifests. Like most everything on
+this site, I&rsquo;m getting it down in a file so I don&rsquo;t have to repeat this all over
+again the next time someone asks. Instead, I can point them to this page (and,
+when they don&rsquo;t actually <strong>READ</strong> this page, I can end up explaining everything
+I&rsquo;ve written here anyways&hellip;).</p>
+
+<p>Before we go any further, let me define a couple of terms:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>dependencies     - In a nutshell, what happens when you use the metaparameters of
+</span><span class='line'>                   'before', 'require', 'subscribe' or 'notify' on resources in a
+</span><span class='line'>                   Puppet manifest: it's a chain of resources that are to be
+</span><span class='line'>                   evaluted in a specific order every time Puppet runs. Any failure
+</span><span class='line'>                   of a resource in this chain stops Puppet from evaluating the
+</span><span class='line'>                   remaining resources in the chain.
+</span><span class='line'>
+</span><span class='line'>evaluate         - When Puppet determines the 'is' value (or current state) of a
+</span><span class='line'>                   resource (i.e. for package resources, "is the package installed?")
+</span><span class='line'>
+</span><span class='line'>remediate        - When Puppet determines that the 'is' value (or current state of
+</span><span class='line'>                   the resource) is different from the 'should' value (or the value
+</span><span class='line'>                   entered into the Puppet manifest...the way the resource SHOULD
+</span><span class='line'>                   end up looking on the system) and Puppet needs to make a change.
+</span><span class='line'>
+</span><span class='line'>declarative(ish) - When I use the word 'declarative(ish)', I mean that the order
+</span><span class='line'>                   by which Puppet evaluates resources that do not contain dependencies
+</span><span class='line'>                   does not have a set procedure/order. The way Puppet EVALUATES
+</span><span class='line'>                   resources does not have a set procedure/order, but the order
+</span><span class='line'>                   that Puppet reads/parses manifest files IS from top-to-bottom
+</span><span class='line'>                   (which is why variables in Puppet manifests need to be declared
+</span><span class='line'>                   before they can be used).</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Why Puppet doesn&rsquo;t care about execution order (until it does)</h2>
+
+<p>The biggest shock to the system when getting started with a declarative (ish)
+configuration management tool like Puppet is understanding that Puppet describes
+the end-state of the machine, and NOT the order that it&rsquo;s (Puppet) going to
+take you to that state. To Puppet, the order that it chooses to affect change
+in any resource (be it a file to be corrected, a package to be installed, or
+any other resource type) is entirely arbitrary because resources that have no
+relationship to another resource shouldn&rsquo;t CARE about the order in which they&rsquo;re
+evaluated and remediated.</p>
+
+<p>For example, imagine Puppet is going to create both <code>/etc/sudoers</code> and update
+the system&rsquo;s authorized keys file to enter all the sysadmins&#8217; SSH keys. Which
+one should it do first? In an imperative system like shell scripts or
+a runbook-style system, you are forced to choose an order. So I ask again,
+which one goes first? If you try to update the <code>sudoers</code> file in your script
+first, and there&rsquo;s a problem with that update, then the script fails and the
+SSH keys aren&rsquo;t installed. If you switch the order and there&rsquo;s a problem with
+the SSH keys, then you can&rsquo;t <code>sudo</code> up because the <code>sudoers</code> file hasn&rsquo;t been
+touched.</p>
+
+<p>Because of this, Puppet has always taken the stance that if there are failures,
+we want to get as much of the system into a working state as possible (i.e. any
+resources that don&rsquo;t depend upon the failing resource are going to still be
+evaluated, or &lsquo;inspected&rsquo;, and remediated, or &lsquo;changed if need be&rsquo;). There are
+definitely philosophical differences here: the argument can be made that if there&rsquo;s
+a failure somewhere, the system is bad and you should cast it off until you&rsquo;ve
+fixed whatever the problem is (or the part of the code causing the problem). In
+virtualized or &lsquo;cloud&rsquo; environments where everything is automated, this is just
+fine, but in environments without complete and full automation, sometimes you
+have to fix and deal with what you have. Puppet &ldquo;believes in your system&rdquo;, which
+is borderline marketing-doubletalk for &ldquo;alert you of errors and give you time
+to fix the damn thing and do another Puppet run without having to spin up a whole
+new system.&rdquo;</p>
+
+<p>Once you know WHY Puppet takes the stance it does, you realize that Puppet does
+not give two shits about the order of resources without dependencies. If you
+write perfect Puppet code, you&rsquo;re fine. But the majority of the
+known-good-world does not do that. In fact, most of us write shit code. Which
+was the problem&hellip;</p>
+
+<h2>The history of Puppet&rsquo;s ordering choices</h2>
+
+<h3>&lsquo;Random&rsquo; random order</h3>
+
+<p>In the early days, the only resources that were guaranteed to have a consistent
+order were those resources with dependencies (i.e. as I stated above, resources
+that used the &lsquo;before&rsquo;, &lsquo;require&rsquo;, &lsquo;subscribe&rsquo;, or &lsquo;notify&rsquo; metaparameters to
+establish an evaluation order). Every other resource was evaluted at random
+every time that Puppet ran&hellip;which meant that you could run Puppet ten times
+and, theoretically, resources without dependencies could be evaluated in
+a different order between every Puppet run (we call this non-deterministic
+ordering). This made things REALLY hard to debug.  Take the case where you had
+a catalog of thousands of resources but you forgot a SINGLE dependency between
+a couple of file resources. If you roll that change out to 1000 nodes, you
+might have 10 or less of them fail (because Puppet chose an evaluation order
+that ordered these two resources incorrectly). Imagine trying to figure out
+what happened and replicate the problem. You could waste lots of time just
+trying to REPLICATE the issue, even if it was a small fix like this.</p>
+
+<p><strong>PROS</strong>:</p>
+
+<ul>
+<li>IS there a pro here?</li>
+</ul>
+
+
+<p><strong>CONS</strong>:</p>
+
+<ul>
+<li>Ordering could change between runs, and thus it was very hard to debug missing dependencies</li>
+</ul>
+
+
+<p>Philosophically, we were correct: resources that are to be evaluated in a certain
+order require dependencies. Practically, we were creating more work for ourselves.</p>
+
+<p>Incidentally, I&rsquo;d heard that Adam Jacob, who created Chef, had cited this reason
+as one of the main motivators for creating Chef. I&rsquo;d heard that as a Puppet
+consultant, he would run into these buried dependency errors and want to flip
+tables. Even if it&rsquo;s not a true STORY, it was absolutely true for tables where
+I used to work&hellip;</p>
+
+<h3>Title-hash, &lsquo;Predictable&rsquo; random order</h3>
+
+<p>Cut to Puppet version 2.7 where we introduced deterministic ordering with
+&lsquo;title-hash&rsquo; ordering. In a nutshell, resources that didn&rsquo;t have dependencies
+would still be executed in a random order, but the order Puppet chose could be
+replicated (it created a SHA1 hash based on the titles of the resources without
+dependencies, and ordered the hashes alphabetically). This meant that if you
+tested out a catalog on a node, and then ran that same catalog on 1000 other
+nodes, Puppet would choose the same order for all 1000 of the nodes. This
+gave you the ability to actually TEST whether your changes would successfully
+run in production. If you omitted a dependency, but Puppet managed to pick the
+correct evaluation order, you STILL had a missing dependency, but you didn&rsquo;t
+care about it because the code worked. The next change you made to the catalog
+(by adding or removing resources), the order might change, but you would
+discover and fix the dependency at that time.</p>
+
+<p><strong>PROS</strong>:</p>
+
+<ul>
+<li>&lsquo;Predictable&rsquo; and repeatable order made testing possible</li>
+</ul>
+
+
+<p><strong>CONS</strong>:</p>
+
+<ul>
+<li>Easy to miss dependency omissions if Puppet chose the right order (but do you really care?)</li>
+</ul>
+
+
+<h3>Manifest ordering, the &lsquo;bath salts&rsquo; of ordering</h3>
+
+<p>Title-hash ordering seemed like the best of both worlds &ndash; being opinionated about
+resource dependencies but also giving sysadmins a reliable, and repeatable, way
+to test evaluation order before it&rsquo;s pushed out to production.</p>
+
+<p>Buuuuuuuuuut, y&#8217;all JUST weren&rsquo;t happy enough, were you?</p>
+
+<p>When you move from an imperative solution like scripts to a declarative(ish)
+solution like Puppet, it is absolutely a new way to think about modeling your
+system. Frequently we heard that people were having issues with Puppet because
+the order that resources shows up in a Puppet master WASN&rsquo;T the order that Puppet
+would evaluate the resources. I just dropped a LOT of words explaining why this
+isn&rsquo;t the case, but who really has the time to read up on all of this? People
+were dismissing Puppet too quickly because their expectations of how the tool
+worked didn&rsquo;t align with reality. The assumption, then, was to align these
+expectations in the hopes that people wouldn&rsquo;t dismiss Puppet so quickly.</p>
+
+<p><a href="http://puppetlabs.com/blog/introducing-manifest-ordered-resources">Eric Sorenson wrote a blog post on our thesis and experimentation</a>
+around manifest ordering that is worth a read (and, incidentally, is shorter
+than this damn post), but the short version is that we tested this theory out
+and determined that Manifest Ordering would help new users to Puppet. Because
+of this work, we created a feature called &lsquo;Manifest Ordering&rsquo; that stated that
+resources that DID NOT HAVE DEPENDENCIES would be evaluated by Puppet in the
+order that they showed up in the Puppet manifest (when read top to bottom). If
+a resource truly does not have any dependencies, then you honestly should not
+care one bit what order it&rsquo;s evaluated (because it doesn&rsquo;t matter).  Manifest
+Ordering made ordering of resources without dependencies VERY predictable.</p>
+
+<p>But&hellip;.</p>
+
+<p>This doesn&rsquo;t mean I think it&rsquo;s the best thing in the world. In fact, I&rsquo;m really
+wary of how I feel people will come to use Manifest Ordering. There&rsquo;s a reason
+I called it the &ldquo;bath salts of ordering&rdquo; &ndash; because a little bit of it, when
+used correctly, can be a lovely thing, but too much of it, used in unintended
+circumstances, leads to hypothermia, paranoia, and the desire to gnaw someone
+else&rsquo;s face off. We were/are giving you a way to bypass our dependency model by
+using the mental-model you had with scripts, but ALSO telling you NOT to rely
+on that mental-model (and instead set dependencies explicitly using metaparameters).</p>
+
+<p>Seriously, what could go wrong?</p>
+
+<p>Manifest Ordering is not a substitution for setting dependencies &ndash; that IS NOT
+what it was created for. <strong>Puppet Labs still maintains that you should use
+dependencies to order resources and NOT simply rely on Manifest Ordering as
+a form of setting dependencies!</strong> Again, the problem is that you need to KNOW
+this&hellip;and if Manifest Ordering allows you to keep the same imperative
+&ldquo;mindset&rdquo; inside a declarative(ish) language, then eventually you&rsquo;re going to
+experience pain (if not today, but possibly later when you actually try to
+refactor code, or share code, or use this code on a system that ISN&rsquo;T using
+Manifest Ordering). A declarative(ish) language like Puppet requires seeing
+your systems according to the way their end-state will look and worrying about
+WHAT the system will look like, and not necessarily HOW it will get there. Any
+shortcut to understanding this process means you&rsquo;re going to miss key bits of
+what makes Puppet a good tool for modeling this state.</p>
+
+<p><strong>PROS:</strong></p>
+
+<ul>
+<li>Evaluation order of resources without dependencies is absolutely predictable</li>
+</ul>
+
+
+<p><strong>CONS:</strong></p>
+
+<ul>
+<li>If used as a substitution for setting dependencies, then refactoring code (moving around the order in which resources show up in a manifest) means changing the evaluation order</li>
+</ul>
+
+
+<h2>What should I actually take from this?</h2>
+
+<p>Okay, here&rsquo;s a list of things you SHOULD be doing if you don&rsquo;t want to create
+a problem for future-you or future-organization:</p>
+
+<ul>
+<li>Use dependency metaparameters like &lsquo;before&rsquo;, &lsquo;require&rsquo;, &lsquo;notify&rsquo;, and &lsquo;subscribe&rsquo; if resources in a catalog NEED to be evaluated in a particular order</li>
+<li>Do not use Manifest Ordering as a substitute for explicitly setting dependencies (disable it if this is too tempting)</li>
+<li>Use Roles and Profiles for a logical module layout (see: <a href="http://bit.ly/puppetworkflows2">http://bit.ly/puppetworkflows2</a> for information on Roles and Profiles)</li>
+<li>Order individual components inside the Profile</li>
+<li>Order Profiles (if necessary) inside the Role</li>
+</ul>
+
+
+<p>And, seriously, trust us with the explicit dependencies. It seems like a giant
+pain in the ass initially, but you&rsquo;re ultimately documenting your infrastructure,
+and a dependency (or, saying &lsquo;this thing MUST come before that thing&rsquo;) is a pretty
+important decision. There&rsquo;s a REASON behind it &ndash; treat it with some more weight
+other than having one line come before another line, ya know? The extra time
+right now is absolutely going to buy you the time you spend at home with your
+kids (and by &lsquo;kids&rsquo;, I mean &lsquo;XBox&rsquo;).</p>
+
+<p>And don&rsquo;t use bath salts, folks.</p>
+]]></content>
+  </entry>
+  
+  <entry>
     <title type="html"><![CDATA[R10k + Directory Environments]]></title>
     <link href="http://garylarizza.com/blog/2014/08/31/r10k-plus-directory-environments/"/>
-    <updated>2014-08-31T12:00:00-07:00</updated>
+    <updated>2014-08-31T21:00:00+02:00</updated>
     <id>http://garylarizza.com/blog/2014/08/31/r10k-plus-directory-environments</id>
     <content type="html"><![CDATA[<p>If you&rsquo;ve read anything I&rsquo;ve posted in the past year, you know my feelings about
 the word &lsquo;environments&rsquo; and about how well we tend to name things here at
@@ -743,7 +1013,7 @@ that comes as unexpected or stops you from using your existing workflow. Cheers!
   <entry>
     <title type="html"><![CDATA[On R10k and 'Environments']]></title>
     <link href="http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas/"/>
-    <updated>2014-03-26T01:00:00-07:00</updated>
+    <updated>2014-03-26T09:00:00+01:00</updated>
     <id>http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas</id>
     <content type="html"><![CDATA[<p>There have been more than a couple of moments where I&rsquo;m on-site with a customer
 who asks a seemingly simple question and I&rsquo;ve gone &ldquo;Oh shit; that&rsquo;s a great
@@ -895,9 +1165,9 @@ free to comment below &ndash; I look forward to making the process better for al
   
   <entry>
     <title type="html"><![CDATA[When Yellow Ruled the World]]></title>
-    <link href="http://garylarizza.com/blog/2014/03/11/when-yellow-ruled-the-world/"/>
-    <updated>2014-03-11T18:04:55-07:00</updated>
-    <id>http://garylarizza.com/blog/2014/03/11/when-yellow-ruled-the-world</id>
+    <link href="http://garylarizza.com/blog/2014/03/12/when-yellow-ruled-the-world/"/>
+    <updated>2014-03-12T02:04:55+01:00</updated>
+    <id>http://garylarizza.com/blog/2014/03/12/when-yellow-ruled-the-world</id>
     <content type="html"><![CDATA[<p><em>&ldquo;The universe (including ourselves) is made up of energy &ndash; it&rsquo;s important to
 keep it positive! Be as wonderful as the world you want to live in!&rdquo;</em></p>
 
@@ -1753,7 +2023,7 @@ Tanny operated on Tanny Time (I mentioned before that &ldquo;Tanny Time&rdquo; w
   <entry>
     <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 3b: More R10k Madness]]></title>
     <link href="http://garylarizza.com/blog/2014/03/07/puppet-workflow-part-3b/"/>
-    <updated>2014-03-07T08:00:00-08:00</updated>
+    <updated>2014-03-07T17:00:00+01:00</updated>
     <id>http://garylarizza.com/blog/2014/03/07/puppet-workflow-part-3b</id>
     <content type="html"><![CDATA[<p><a href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/">In the last workflows post,</a> I talked about dynamic Puppet
 environments and introduced R10k, which is an awesome tool for mapping modules
@@ -2585,7 +2855,7 @@ note, and I hope I&rsquo;m providing some good info you can actually use! Cheers
   <entry>
     <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 3: Dynamic Environments With R10k]]></title>
     <link href="http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/"/>
-    <updated>2014-02-18T09:48:18-08:00</updated>
+    <updated>2014-02-18T18:48:18+01:00</updated>
     <id>http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3</id>
     <content type="html"><![CDATA[<p>Workflows are like kickball games: everyone knows the general idea of what&rsquo;s
 going on, there&rsquo;s an orderly progression towards an end-goal, nobody wants to
@@ -4258,7 +4528,7 @@ gig! :)  Cheers!</p>
   <entry>
     <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 2: Roles and Profiles]]></title>
     <link href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2/"/>
-    <updated>2014-02-17T14:01:37-08:00</updated>
+    <updated>2014-02-17T23:01:37+01:00</updated>
     <id>http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2</id>
     <content type="html"><![CDATA[<p>In my <a href="http://www.garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/">first post</a>, I talked about writing functional component
 modules. Well, I didn&rsquo;t really do much detailing other than pointing out
@@ -4761,7 +5031,7 @@ whatever names you decide to use).</p>
   <entry>
     <title type="html"><![CDATA[Building a Functional Puppet Workflow Part 1: Module Structure]]></title>
     <link href="http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/"/>
-    <updated>2014-02-17T14:01:37-08:00</updated>
+    <updated>2014-02-17T23:01:37+01:00</updated>
     <id>http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1</id>
     <content type="html"><![CDATA[<p>Working as a professional services engineer for <a href="http://www.puppetlabs.com">Puppet Labs</a>,
 my life consists almost entirely of either correcting some of the worst code
@@ -4982,7 +5252,7 @@ that I could be entirely full of shit.</p>
   <entry>
     <title type="html"><![CDATA[Seriously, What Is This Provider Doing?]]></title>
     <link href="http://garylarizza.com/blog/2013/12/15/seriously-what-is-this-provider-doing/"/>
-    <updated>2013-12-15T08:44:17-08:00</updated>
+    <updated>2013-12-15T17:44:17+01:00</updated>
     <id>http://garylarizza.com/blog/2013/12/15/seriously-what-is-this-provider-doing</id>
     <content type="html"><![CDATA[<p>Clarke&rsquo;s third law states: &ldquo;Any sufficiently advanced technology is
 indistinguishable from magic.&rdquo; In the case of Ruby and Puppet provider
@@ -6500,9 +6770,9 @@ providers do their dirty work&hellip;</p>
   
   <entry>
     <title type="html"><![CDATA[When to Hiera (Aka: How Do I Module?)]]></title>
-    <link href="http://garylarizza.com/blog/2013/12/08/when-to-hiera/"/>
-    <updated>2013-12-08T15:31:54-08:00</updated>
-    <id>http://garylarizza.com/blog/2013/12/08/when-to-hiera</id>
+    <link href="http://garylarizza.com/blog/2013/12/09/when-to-hiera/"/>
+    <updated>2013-12-09T00:31:54+01:00</updated>
+    <id>http://garylarizza.com/blog/2013/12/09/when-to-hiera</id>
     <content type="html"><![CDATA[<p>I&rsquo;m convinced that writing Puppet modules is the ultimate exercise in bikeshedding:
 if it works, someone&rsquo;s probably going to tell you that you could have done it better,
 if you&rsquo;re using the methods suggested today, they&rsquo;re probably going to be out-of-date
@@ -7256,7 +7526,7 @@ in files that AREN&rsquo;T the Puppet DSL (i.e. not inside the code).</p>
   <entry>
     <title type="html"><![CDATA[Who Abstracted My Ruby?]]></title>
     <link href="http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2/"/>
-    <updated>2013-11-26T16:01:00-08:00</updated>
+    <updated>2013-11-26T16:01:00+01:00</updated>
     <id>http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2</id>
     <content type="html"><![CDATA[<p>Previously, on Lost, I said a lot of words about Puppet Types;
 <a href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/">you should totally check it out.</a>
@@ -7923,7 +8193,7 @@ get a response. Maybe.)  Cheers!</p>
   <entry>
     <title type="html"><![CDATA[Fun With Puppet Providers - Part 1 of Whatever]]></title>
     <link href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/"/>
-    <updated>2013-11-25T20:47:00-08:00</updated>
+    <updated>2013-11-25T20:47:00+01:00</updated>
     <id>http://garylarizza.com/blog/2013/11/25/fun-with-providers</id>
     <content type="html"><![CDATA[<p>I don&rsquo;t know why I write blog posts &ndash; everybody in open-source software knows
 that the code <em>IS</em> the documentation. If you&rsquo;ve ever tried to write a Puppet
@@ -8369,7 +8639,7 @@ stay tuned for more brain-dumping-goodness&hellip;</p>
   <entry>
     <title type="html"><![CDATA[From the Archive: Using Crankd]]></title>
     <link href="http://garylarizza.com/blog/2013/07/10/from-the-archive-using-crankd/"/>
-    <updated>2013-07-10T09:51:00-07:00</updated>
+    <updated>2013-07-10T09:51:00+02:00</updated>
     <id>http://garylarizza.com/blog/2013/07/10/from-the-archive-using-crankd</id>
     <content type="html"><![CDATA[<p>Supporting laptops in a managed environment is tricky (and doubly so if you allow them to be taken off your corporate network).  While you can be reasonably assured that your desktops will remain on and connected during the workday, it&rsquo;s not uncommon for laptops to go to sleep, change wireless access points, and even change between an Ethernet or AirPort connection several times during the day.  It&rsquo;s important to have a tool that can &ldquo;tweak&rdquo; certain settings in response to these changes.</p>
 
@@ -8466,7 +8736,7 @@ stay tuned for more brain-dumping-goodness&hellip;</p>
   <entry>
     <title type="html"><![CDATA[Puppet + Github = Laptop <3]]></title>
     <link href="http://garylarizza.com/blog/2013/02/15/puppet-plus-github-equals-laptop-love/"/>
-    <updated>2013-02-15T00:00:00-08:00</updated>
+    <updated>2013-02-15T00:00:00+01:00</updated>
     <id>http://garylarizza.com/blog/2013/02/15/puppet-plus-github-equals-laptop-love</id>
     <content type="html"><![CDATA[<p>Everybody wants to be special (I blame our moms). The price of special, when
 it comes to IT, is time. Consider how long you&rsquo;ve spent on just your damn
@@ -9532,7 +9802,7 @@ for more information!</p>
   <entry>
     <title type="html"><![CDATA[Repeatable Puppet Development With Vagrant]]></title>
     <link href="http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant/"/>
-    <updated>2013-02-01T00:00:00-08:00</updated>
+    <updated>2013-02-01T00:00:00+01:00</updated>
     <id>http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant</id>
     <content type="html"><![CDATA[<p>I miss testing code in production. In smaller organizations, &lsquo;testing&rsquo; and
 &lsquo;development&rsquo; can sometimes consist of making changes directly on a server,
@@ -10275,7 +10545,7 @@ everyone at <a href="http://www.puppetlabs.com">Puppet Labs</a>!</p>
   <entry>
     <title type="html"><![CDATA[Using Veewee to Build OS X VMs]]></title>
     <link href="http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms/"/>
-    <updated>2013-01-20T19:36:00-08:00</updated>
+    <updated>2013-01-20T19:36:00+01:00</updated>
     <id>http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms</id>
     <content type="html"><![CDATA[<p>I hate <a href="http://github.com/timsutton">Tim Sutton</a> in the same way I hate <a href="http://ihatestevensinger.com/">Steven Singer</a>. I hate Tim
 because he actually IMPLEMENTS some of the things on my list of &lsquo;shit to tinker
@@ -10586,7 +10856,7 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
   <entry>
     <title type="html"><![CDATA[Managing a Blog Is Insane; Octopress FTW!]]></title>
     <link href="http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/"/>
-    <updated>2013-01-17T00:00:00-08:00</updated>
+    <updated>2013-01-17T00:00:00+01:00</updated>
     <id>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane</id>
     <content type="html"><![CDATA[<p>Masochists are everywhere. Managing a system by hand appeals to a certain subset
 of the population, but I joined <a href="http://www.puppetlabs.com">Puppet Labs</a> because
@@ -10792,19 +11062,7 @@ theme was pretty sexy. Let&rsquo;s look at some Ruby:</p>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>Doesn&rsquo;t that look awesome? What if you have a <a href="http://gist.github.com">gist</a>? You can embed those too
-(and they&rsquo;re also linkable):</p>
-
-<div><script src='https://gist.github.com/3218523.js'></script>
-<noscript><pre><code></code></pre></noscript></div>
-
-
-<p>Want to know how much code it took to do that?  About this much:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="p">{</span><span class="o">%</span> <span class="n">gist</span> <span class="mi">3218523</span> <span class="o">%</span><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
+<p>Doesn&rsquo;t that look awesome?</p>
 
 <p>For a blog with a ton of code, something like this is pretty damn important.</p>
 
@@ -10921,7 +11179,7 @@ if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
   <entry>
     <title type="html"><![CDATA[JAMF NetSUS Appliance]]></title>
     <link href="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/"/>
-    <updated>2012-02-06T11:22:00-08:00</updated>
+    <updated>2012-02-06T11:22:00+01:00</updated>
     <id>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance</id>
     <content type="html"><![CDATA[<h2>JAMF&rsquo;s NetSUS Appliance &ndash; Netboot in a Box</h2>
 
@@ -11088,7 +11346,7 @@ if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
   <entry>
     <title type="html"><![CDATA[Using Git for Mac Sysadmins]]></title>
     <link href="http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins/"/>
-    <updated>2012-01-24T15:25:00-08:00</updated>
+    <updated>2012-01-24T15:25:00+01:00</updated>
     <id>http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins</id>
     <content type="html"><![CDATA[<p>As a former Mac Sysadmin, I frequently felt like I had one toe in the world in which Linux Sysadmins frequently found themselves, but was surrounded by a culture of GUI-Clickery that either feared, scorned, or flat-out avoided tools that were command-line based (or, as many will point out, used the GUI (Graphic User Interface) tools because &lsquo;they worked&rsquo; and that was all they needed).  This sucked because Linux Sysadmins have some tools that, as a current colleague would say, &lsquo;are kind-of awesome.&rsquo;</p>
 
@@ -11479,7 +11737,7 @@ if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
   <entry>
     <title type="html"><![CDATA[Using the Google Macops Crankd and Facter Code]]></title>
     <link href="http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/"/>
-    <updated>2011-12-31T00:00:00-08:00</updated>
+    <updated>2011-12-31T00:00:00+01:00</updated>
     <id>http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code</id>
     <content type="html"><![CDATA[<p>On December 21st, the MacOps team at Google released a Googlecode repository containing a couple of scripts that they use for managing Macs.  The scripts provided interface with <a href="http://code.google.com/p/pymacadmin/">crankd (available in the Pymacadmin code suite)</a> and <a href="http://puppetlabs.com/puppet/related-projects/facter/">Facter</a>, which are a couple of tools with which you MIGHT not be familiar.</p>
 
@@ -11661,132 +11919,6 @@ if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
 <h2>Profit!</h2>
 
 <p>Now that you know how the code works, you&rsquo;re free to modify, extend, and improve it as you see fit!  The one thing that&rsquo;s missing here is a LaunchDaemon that keeps crankd running in the background.  Since you&rsquo;re maintaining your environment, I&rsquo;ll leave that up to you (though I walk you through this step in <a href="http://glarizza.posterous.com/using-crankd-to-react-to-network-events">&lsquo;Step 5.  A LaunchDaemon to keep crankd running&rsquo; in my previous crankd writeup</a>).  Feel free to check out my other writeups on Facter, Puppet, and Crankd to see how I used to manage hundreds of Macs in an educational environment!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using Run Stages With Puppet]]></title>
-    <link href="http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet/"/>
-    <updated>2011-03-11T11:34:00-08:00</updated>
-    <id>http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet</id>
-    <content type="html"><![CDATA[<p>As of version 2.6, Puppet introduced a feature called &ldquo;Run Stages&rdquo; that will allow you to better control the order that Puppet configures your system.  The problem with Run Stages (as of right now) is that there&rsquo;s not that much good Documentation out there.  Hopefully this document helps someone else out there who wants to setup Run Stages in their own environment.</p>
-
-<h2>A NOTE ON SYNTAX!!!</h2>
-
-<p>One of THE MOST DIFFICULT concepts to understand for puppet newbies is that these two things are identical:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kn">include</span> <span class="nc">foo</span>
-</span><span class='line'><span class="nc">class</span> <span class="p">{</span> <span class="s1">&#39;foo&#39;</span><span class="p">:</span> <span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Both of these lines INVOKE the &lsquo;foo&rsquo; class for use on a particular node.  The problem is that the second method (the parameterized class method) looks nearly IDENTICAL to the method you would use to DECLARE the foo class in foo.pp.  The only difference is that the class name is now INSIDE the curly braces (versus being OUTSIDE the braces when you DECLARE the class in your foo.pp file).  It is VERY important that you distinguish the difference between DECLARING a class and using a parameterized class to INCLUDE the class in your site.pp file.  I will point this out later too&hellip;</p>
-
-<h2>A Linux Example &ndash; Repositories</h2>
-
-<p>I would bet that the resource with the most &ldquo;require&rdquo; and &ldquo;before&rdquo; dependencies in the Linux world (Well, in the RHEL world anyways) would be the yumrepo.  I&rsquo;m sure most of us have many declared yumrepo resources in our manifests that each have their own tangled web of dependencies.  My goal was to create a &ldquo;repo&rdquo; class that would have all of my repositories and use a Run Stage to ensure that my repo class was installed prior to any other package installs.  Let&rsquo;s look at some code:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">class</span> <span class="nc">general::repo</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nc">yumrepo</span> <span class="p">{</span> <span class="s1">&#39;huronrepo&#39;</span><span class="p">:</span>
-</span><span class='line'>    <span class="nt">descr</span>    <span class="p">=&gt;</span> <span class="s1">&#39;Huron Repository&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">enabled</span>  <span class="p">=&gt;</span>  <span class="s1">&#39;1&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">gpgcheck</span> <span class="p">=&gt;</span>  <span class="s1">&#39;0&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">baseurl</span>  <span class="p">=&gt;</span>  <span class="s1">&#39;http://10.13.0.6/huronrepo&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>}
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This is my repo subclass based on my general base class.  I have a single repository, but could easily have another 5 or 10 as need arises (I&rsquo;m keeping things simple for demo purposes).  Let&rsquo;s look at another class:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">class</span> <span class="nc">general::centos</span> <span class="p">{</span>
-</span><span class='line'>  <span class="kn">include</span> <span class="nc">general::repo</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nc">package</span> <span class="p">{</span> <span class="s1">&#39;mcollective&#39;</span><span class="p">:</span>
-</span><span class='line'>    <span class="nt">name</span>    <span class="p">=&gt;</span> <span class="s2">&quot;mcollective&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">ensure</span>  <span class="p">=&gt;</span> <span class="s1">&#39;present&#39;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">require</span> <span class="p">=&gt;</span> <span class="nc">Package</span><span class="p">[</span><span class="s1">&#39;stomp&#39;</span><span class="p">],</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>}
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Here&rsquo;s a centos subclass off of the general base class.  We&rsquo;re including our repo class and declaring a single package that requires our &ldquo;huronrepo&rdquo; yumrepo.  If we only needed to install a single package, we could use the &ldquo;require&rdquo; parameter; but if you assume that we will eventually need to install MULTIPLE packages, then this logic doesn&rsquo;t scale. Just to keep things consistent, here&rsquo;s my general base class:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">class</span> <span class="nc">general</span> <span class="p">{</span>
-</span><span class='line'>  <span class="kr">case</span> <span class="nv">$::operatingsystem</span> <span class="p">{</span>
-</span><span class='line'>    <span class="s1">&#39;CentOS&#39;</span><span class="p">:</span> <span class="p">{</span> <span class="kn">include</span> <span class="nc">general::centos</span> <span class="err">}</span>
-</span><span class='line'>    <span class="err">&#39;Darwin&#39;</span><span class="nc">:</span> <span class="p">{</span> <span class="ss">include</span> <span class="ss">general</span><span class="p">::</span><span class="ss">osx</span> <span class="p">}</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>}
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>You can see that we include the general::centos class as long as Puppet is running on a CentOS box.  There&rsquo;s one final piece to this puzzle &ndash; it&rsquo;s the actual declaration and assignment of the Run Stages.  I&rsquo;m doing this in my site.pp file.  Here&rsquo;s a snippit of what&rsquo;s in my site.pp file:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="c-Singleline"># /etc/puppet/manifests/site.pp</span>
-</span><span class='line'>
-</span><span class='line'><span class="nc">Exec</span> <span class="p">{</span> <span class="ss">path</span> <span class="err">=&amp;</span><span class="ss">gt</span><span class="err">;</span> <span class="s2">&quot;/usr/bin:/usr/sbin:/bin:/sbin&quot;</span> <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="c-Singleline"># Run Stages</span>
-</span><span class='line'><span class="ss">stage</span> <span class="p">{</span> <span class="s1">&#39;pre&#39;</span><span class="err">:</span>
-</span><span class='line'>  <span class="ss">before</span> <span class="p">=&gt;</span> <span class="nc">Stage</span><span class="p">[</span><span class="s2">&quot;main&quot;</span><span class="p">],</span>
-</span><span class='line'><span class="p">}</span><span class="c-Singleline"></span>
-</span><span class='line'>
-</span><span class='line'><span class="c-Singleline"># Node Declaration</span>
-</span><span class='line'><span class="ss">node</span> <span class="s1">&#39;server.whomever.com&#39;</span> <span class="p">{</span>
-</span><span class='line'>  <span class="ss">class</span> <span class="p">{</span> <span class="s1">&#39;general::repos&#39;</span><span class="err">:</span>
-</span><span class='line'>    <span class="ss">stage</span> <span class="p">=&gt;</span> <span class="s1">&#39;pre&#39;</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Here&rsquo;s where we&rsquo;ve declared a &ldquo;pre&rdquo; stage that needs to run before the &ldquo;main&rdquo; stage.  We don&rsquo;t have to declare the &ldquo;main&rdquo; stage because Puppet uses that stage by default.  Next, we&rsquo;re including the general::repos class inside our &lsquo;server.whomever.com&rsquo; node declaration and assigning it to the &ldquo;pre&rdquo; stage (which means that everything in that class will get configured prior to our &ldquo;main&rdquo; stage).  Remember that you can declare as many stages as you need and chain them all to setup the order that you want, but that can become very unmanageable very quickly.  I find it ideal to setup a &lsquo;pre&rsquo; stage for repo setup, and then setting up dependencies within class files.</p>
-
-<h2>The World is Your Stage</h2>
-
-<p>This might not be the &ldquo;best&rdquo; way to use Run Stages, but it works for me.  Hopefully this little writeup cements the concept for you too.</p>
 ]]></content>
   </entry>
   
