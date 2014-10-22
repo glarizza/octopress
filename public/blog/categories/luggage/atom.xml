@@ -4,7 +4,7 @@
   <title><![CDATA[Category: luggage | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/luggage/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2014-10-22T15:31:56+02:00</updated>
+  <updated>2014-10-22T15:32:59+02:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -154,20 +154,36 @@ $ vim Makefile
 
 <p>I use vi or vim to edit files from the Terminal.  Feel free to use any text editor you like (nano, emacs, Textmate, TextWrangler, etc&hellip;), but CREATE a file called &lsquo;Makefile&rsquo; (note the capital M) and put it in ~/src/luggage_examples/crankd_google.  Here&rsquo;s what I&rsquo;ll put into this file:</p>
 
-<p>{% codeblock Crankd Luggage Example lang:make %}</p>
-
-<pre><code># Title:       Crankd-Google Example
-# Author:      Gary Larizza
-# Description: Something so Marnin doesn't kill me w/ postinstalls :)
-
-include /Users/gary/src/luggage/luggage.make
-
-TITLE=Crankd-Google
-REVERSE_DOMAIN=com.googlecode
-PAYLOAD=pack-crankd
-</code></pre>
-
-<p>{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Crankd Luggage Example </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="err">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">&lt;pre&gt;&lt;code&gt;# Title</span><span class="o">:</span>       <span class="m">Crankd-Google Example</span>
+</span><span class='line'><span class="c"># Author:      Gary Larizza</span>
+</span><span class='line'><span class="c"># Description: Something so Marnin doesn&#39;t kill me w/ postinstalls :)</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">include /Users/gary/src/luggage/luggage.make</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>Crankd-Google
+</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.googlecode
+</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span>pack-crankd
+</span><span class='line'><span class="err">&lt;/code&gt;&lt;/pre&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;p&gt;</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Great, so we have our skeleton of a file!  The file is saved in our folder, but we haven&rsquo;t actually told git to track the file (and so git is AWARE that the file EXISTS, but it isn&rsquo;t tracking its changes&hellip;yet).  This is a good time to explain the three states in which files can exist in a git repository.</p>
 
@@ -552,23 +568,42 @@ PAYLOAD=unbz2-applications-Calculator.app
 
 <p>Now, let&rsquo;s look at our Makefile:</p>
 
-<p>{% codeblock Managed Printer Makefile lang:make %}</p>
-
-<pre><code>include /usr/local/share/luggage/luggage.make
-
-TITLE=HHS_Main_Office_9050_Managed_Installer
-REVERSE_DOMAIN=com.huronhs
-PAYLOAD=\
-    pack-hp-ppd \
-    pack-script-preflight
-
-pack-hp-ppd: l_etc_cups_ppd
-  @sudo ${CP} ./psm_HHS_Office_9050.ppd ${WORK_D}/etc/cups/ppd/psm_HHS_Office_9050.ppd
-  @sudo chmod 644 ${WORK_D}/etc/cups/ppd/psm_HHS_Office_9050.ppd
-  @sudo chown root:_lp ${WORK_D}/etc/cups/ppd/psm_HHS_Office_9050.ppd
-</code></pre>
-
-<p>{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Managed Printer Makefile </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="err">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;pre&gt;&lt;code&gt;include</span> <span class="err">/usr/local/share/luggage/luggage.make</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>HHS_Main_Office_9050_Managed_Installer
+</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.huronhs
+</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
+</span><span class='line'>    pack-hp-ppd <span class="se">\</span>
+</span><span class='line'>    pack-script-preflight
+</span><span class='line'>
+</span><span class='line'><span class="nf">pack-hp-ppd</span><span class="o">:</span> <span class="m">l_etc_cups_ppd</span>
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./psm_HHS_Office_9050.ppd <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/cups/ppd/psm_HHS_Office_9050.ppd
+</span><span class='line'>  @sudo chmod 644 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/cups/ppd/psm_HHS_Office_9050.ppd
+</span><span class='line'>  @sudo chown root:_lp <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/cups/ppd/psm_HHS_Office_9050.ppd
+</span><span class='line'><span class="err">&lt;/code&gt;&lt;/pre&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;p&gt;</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>The first thing you should notice is that our PAYLOAD variable starts with a \ and has three lines.  The \ signifies that the contents of our variable spans multiple lines.  In reality, the value of PAYLOAD is actually &ldquo;pack-hp-ppd pack-script-preflight&rdquo; but it&rsquo;s formatted so it&rsquo;s easier to read.  Next, notice that the pack-script-preflight rule contains the word &ldquo;preflight&rdquo; after pack-script-.  This means that our script must be named preflight (EXACTLY &ndash; case is sensitive here).  Finally, we&rsquo;ve also specified a pack-hp-ppd rule.  Since luggage.make DOES NOT define this rule, we&rsquo;ve defined it in our Makefile.</p>
 
@@ -591,52 +626,100 @@ pack-hp-ppd: l_etc_cups_ppd
 
 <p>So far our Makefiles have been pretty easy.  In fact, most of them have been a couple of lines.  Lets look at a package that installs files into multiple locations.  There&rsquo;s a cool open source tool called <a href="http://github.com/ripienaar/angelia">Angelia that was created by R.I Pienaar</a>.  I use it to send alerts to my iPhone and to also process Nagios Alerts.  The problem is that it&rsquo;s only packaged for Linux machines.  Since I manage Mac machines, I thought I&rsquo;d lend R.I. a hand and create a package installer for it.  <a href="https://github.com/huronschools/luggage/tree/master/examples/angelia">This package is also on my luggage repo</a> if you want to work ahead.  Let&rsquo;s look at the Makefile:</p>
 
-<p>{% codeblock Angelia Recipe lang:make %}</p>
-
-<pre><code>#  Angelia Package Creation:
-
-include /usr/local/share/luggage/luggage.make
-
-TITLE=Angelia_Installer
-REVERSE_DOMAIN=com.huronhs
-PAYLOAD=\
-    pack-angelia-etc \
-    pack-angelia-binaries \
-    pack-angelia-lib \
-    pack-angelia-spool \
-    pack-angelia-log \
-    pack-angelia-launchd
-
-
-pack-angelia-launchd: l_Library_LaunchDaemons
-  @sudo ${CP} net.devco.angelia.plist ${WORK_D}/Library/LaunchDaemons
-  @sudo chmod -R 644 ${WORK_D}/Library/LaunchDaemons
-
-pack-angelia-binaries: l_usr_sbin
-  @sudo ${CP} ./angelia-send.rb ${WORK_D}/usr/sbin/angelia-send
-  @sudo ${CP} ./angelia-spoold.rb ${WORK_D}/usr/sbin/angelia-spoold
-  @sudo ${CP} ./angelia-nagios-send.rb ${WORK_D}/usr/sbin/angelia-nagios-send
-  @sudo chmod -R 755 ${WORK_D}/usr/sbin
-
-pack-angelia-lib: l_Library_Ruby_Site_1_8
-  @sudo ${CP} -R ./angelia ${WORK_D}/Library/Ruby/Site/1.8
-  @sudo ${CP} ./angelia.rb ${WORK_D}/Library/Ruby/Site/1.8
-  @sudo chmod -R 755 ${WORK_D}/Library/Ruby/Site/1.8
-
-pack-angelia-etc: l_etc_angelia
-  @sudo ${CP} -R ./templates ${WORK_D}/etc/angelia
-  @sudo ${CP} ./angelia.cfg ${WORK_D}/etc/angelia
-  @sudo ${CP} ./COPYING ${WORK_D}/etc/angelia
-  @sudo ${CP} ./README.markdown ${WORK_D}/etc/angelia
-  @sudo chmod -R 755 ${WORK_D}/etc/angelia
-
-pack-angelia-log: l_var_log_angelia
-  @sudo touch .create
-pack-angelia-spool: l_var_spool_angelia
-  @sudo touch .create
-</code></pre>
-
-<p>{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Angelia Recipe </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="err">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">&lt;pre&gt;&lt;code&gt;#  Angelia Package Creation</span><span class="o">:</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">include /usr/local/share/luggage/luggage.make</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>Angelia_Installer
+</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.huronhs
+</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
+</span><span class='line'>    pack-angelia-etc <span class="se">\</span>
+</span><span class='line'>    pack-angelia-binaries <span class="se">\</span>
+</span><span class='line'>    pack-angelia-lib <span class="se">\</span>
+</span><span class='line'>    pack-angelia-spool <span class="se">\</span>
+</span><span class='line'>    pack-angelia-log <span class="se">\</span>
+</span><span class='line'>    pack-angelia-launchd
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="nf">pack-angelia-launchd</span><span class="o">:</span> <span class="m">l_Library_LaunchDaemons</span>
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> net.devco.angelia.plist <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/LaunchDaemons
+</span><span class='line'>  @sudo chmod -R 644 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/LaunchDaemons
+</span><span class='line'>
+</span><span class='line'><span class="nf">pack-angelia-binaries</span><span class="o">:</span> <span class="m">l_usr_sbin</span>
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia-send.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin/angelia-send
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia-spoold.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin/angelia-spoold
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia-nagios-send.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin/angelia-nagios-send
+</span><span class='line'>  @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin
+</span><span class='line'>
+</span><span class='line'><span class="nf">pack-angelia-lib</span><span class="o">:</span> <span class="m">l_Library_Ruby_Site_1_8</span>
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> -R ./angelia <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/Ruby/Site/1.8
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/Ruby/Site/1.8
+</span><span class='line'>  @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/Ruby/Site/1.8
+</span><span class='line'>
+</span><span class='line'><span class="nf">pack-angelia-etc</span><span class="o">:</span> <span class="m">l_etc_angelia</span>
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> -R ./templates <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia.cfg <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./COPYING <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./README.markdown <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
+</span><span class='line'>  @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
+</span><span class='line'>
+</span><span class='line'><span class="nf">pack-angelia-log</span><span class="o">:</span> <span class="m">l_var_log_angelia</span>
+</span><span class='line'>  @sudo touch .create
+</span><span class='line'><span class="nf">pack-angelia-spool</span><span class="o">:</span> <span class="m">l_var_spool_angelia</span>
+</span><span class='line'>  @sudo touch .create
+</span><span class='line'><span class="err">&lt;/code&gt;&lt;/pre&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;p&gt;</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>It&rsquo;s definitely longer, but I don&rsquo;t think it&rsquo;s any more complex than the examples we&rsquo;ve seen before.  The PAYLOAD variable spans multiple lines using the \ character and I&rsquo;ve defined all the custom rules.  All of the rules depend on <a href="https://github.com/huronschools/luggage/blob/master/luggage.make">folder rules in my luggage.make file</a> (which were created if they didn&rsquo;t exist before), and the recipes inside those rules are extremely simple to navigate (mainly copying files and changing permissions).  Creating a script that makes this package would be QUITE A BIT longer than this Makefile, and the Makefile itself took less than 3 minutes to create.  The only caveat is that we need to make sure all the files/directories we&rsquo;re copying into Luggage&rsquo;s WORK_D directory are in the folder that contains the Makefile.  Because of this, anytime Angelia is updated I will need to copy over new files.</p>
 
@@ -648,104 +731,204 @@ pack-angelia-spool: l_var_spool_angelia
 
 <p><a href="http://github.com/puppetlabs/marionette-collective">Marionette-Collective is awesome software</a> (also created by R.I Pienaar and now owned by Puppet Labs) that allows you to communicate with multiple nodes at once.  They DID have a script that created their packages, but I wanted to create a Makefile that would create a package of ANY version of their software.  Let&rsquo;s look at the Makefile first and I&rsquo;ll break it down:</p>
 
-<p>{% codeblock MCollective Recipe lang:make %}</p>
-
-<pre><code>#  Example:  A dynamic installer for Marionette-Collective
-#
-#  Author:  Gary Larizza
-#  Created: 12/17/2010
-#  Last Modified: 12/18/2010
-#
-#  Description:  This Makefile will download the version of MCollective specified
-#    in the PACKAGE_VERSION variable from the Puppet Labs website, untar it,
-#    and then install the source files into their Mac-specific locations.  
-#    The MAJOR and MINOR versions must be specified for the Info.plist file
-#    that Packagemaker requires, but I use awk on the PACKAGE_VERSION to 
-#    get these.  See inline comments.
-#
-include /usr/local/share/luggage/luggage.make
-
-
-# Luggage Variables:
-#    If the TYPE variable isn't specified via the CLI, we will install everything
-#    into the resultant package
-TITLE=MCollective_Installer_Full
-REVERSE_DOMAIN=com.puppetlabs
-PAYLOAD=\
-    unpack-mc-${MCFILE} \
-    pack-mc-libexec \
-    pack-mc-binaries \
-    pack-mc-lib \
-    pack-mc-config \
-    pack-mc-config-server \
-    pack-mc-config-client \
-    pack-mc-launchd \
-    pack-mc-mcollectived \
-    pack-mc-preflight-all
-
-# Variable Declarations:  
-#    Any variable can be set from the command line by doing this:
-#    "make pkg PACKAGE_VERSION=1.0.0"
-PACKAGE_VERSION=1.0.0
-PACKAGE_MAJOR_VERSION=`echo ${PACKAGE_VERSION} | awk -F '.' '{print $$1}'`
-PACKAGE_MINOR_VERSION=`echo ${PACKAGE_VERSION} | awk -F '.' '{print $$2$$3}'`
-MCFILE=mcollective-${PACKAGE_VERSION}
-MCURL=http://puppetlabs.com/downloads/mcollective/${MCFILE}.tgz
-
-# Package Creation Limiters:
-#    These if-statements will check for one of three values for the TYPE variable:
-#    "COMMON, CLIENT, or BASE"  If either of these values are present (CASE SENSITIVE)
-#    the PAYLOAD variable will be changed to limit what is installed into the package.
-
-# COMMON Package:
-#    This package includes the Ruby libraries and MCollective plugins with nothing else.
-ifeq (${TYPE},COMMON)
-  PAYLOAD=\
-      unpack-mc-${MCFILE} \
-      pack-mc-libexec \
-      pack-mc-lib \
-      pack-mc-preflight-common
-  TITLE=MCollective_Installer_Common
-endif
-
-# CLIENT Package:
-#    This package includes the MCollective Binaries and the configuration file for
-#    MCollective's client binaries.  
-ifeq (${TYPE},CLIENT)
-  PAYLOAD=\
-      unpack-mc-${MCFILE} \
-      pack-mc-config \
-      pack-mc-binaries \
-      pack-mc-config-client \
-      pack-mc-preflight-client
-  TITLE=MCollective_Installer_Client
-endif
-
-# BASE Package:
-#    This package includes the mcollectived daemon, Ruby Libraries, a launchd plist
-#    to call mcollectived, and the configuration files for the MCollective server.
-ifeq (${TYPE},BASE)
-  PAYLOAD=\
-      unpack-mc-${MCFILE} \
-      pack-mc-config \
-      pack-mc-config-server \
-      pack-mc-launchd \
-      pack-mc-mcollectived \
-      pack-mc-lib \
-      pack-mc-preflight-base
-  TITLE=MCollective_Installer_Base
-endif
-
-# This rule will curl the selected version of MCollective and untar it into the directory
-#    in which the Makefile resides.
-unpack-mc-${MCFILE}:
-  curl ${MCURL} -o ${MCFILE}.tgz
-  @sudo ${TAR} xzf ${MCFILE}.tgz
-
-# This rule will install MCollective's plugin files to /usr/libexec/mcollective
-</code></pre>
-
-<p>{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>MCollective Recipe </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+<span class='line-number'>82</span>
+<span class='line-number'>83</span>
+<span class='line-number'>84</span>
+<span class='line-number'>85</span>
+<span class='line-number'>86</span>
+<span class='line-number'>87</span>
+<span class='line-number'>88</span>
+<span class='line-number'>89</span>
+<span class='line-number'>90</span>
+<span class='line-number'>91</span>
+<span class='line-number'>92</span>
+<span class='line-number'>93</span>
+<span class='line-number'>94</span>
+<span class='line-number'>95</span>
+<span class='line-number'>96</span>
+<span class='line-number'>97</span>
+<span class='line-number'>98</span>
+</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="err">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">&lt;pre&gt;&lt;code&gt;#  Example</span><span class="o">:</span>  <span class="m">A dynamic installer for Marionette-Collective</span>
+</span><span class='line'><span class="c">#</span>
+</span><span class='line'><span class="c">#  Author:  Gary Larizza</span>
+</span><span class='line'><span class="c">#  Created: 12/17/2010</span>
+</span><span class='line'><span class="c">#  Last Modified: 12/18/2010</span>
+</span><span class='line'><span class="c">#</span>
+</span><span class='line'><span class="c">#  Description:  This Makefile will download the version of MCollective specified</span>
+</span><span class='line'><span class="c">#    in the PACKAGE_VERSION variable from the Puppet Labs website, untar it,</span>
+</span><span class='line'><span class="c">#    and then install the source files into their Mac-specific locations.  </span>
+</span><span class='line'><span class="c">#    The MAJOR and MINOR versions must be specified for the Info.plist file</span>
+</span><span class='line'><span class="c">#    that Packagemaker requires, but I use awk on the PACKAGE_VERSION to </span>
+</span><span class='line'><span class="c">#    get these.  See inline comments.</span>
+</span><span class='line'><span class="c">#</span>
+</span><span class='line'><span class="cp">include /usr/local/share/luggage/luggage.make</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="c"># Luggage Variables:</span>
+</span><span class='line'><span class="c">#    If the TYPE variable isn&#39;t specified via the CLI, we will install everything</span>
+</span><span class='line'><span class="c">#    into the resultant package</span>
+</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Full
+</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.puppetlabs
+</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
+</span><span class='line'>    unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
+</span><span class='line'>    pack-mc-libexec <span class="se">\</span>
+</span><span class='line'>    pack-mc-binaries <span class="se">\</span>
+</span><span class='line'>    pack-mc-lib <span class="se">\</span>
+</span><span class='line'>    pack-mc-config <span class="se">\</span>
+</span><span class='line'>    pack-mc-config-server <span class="se">\</span>
+</span><span class='line'>    pack-mc-config-client <span class="se">\</span>
+</span><span class='line'>    pack-mc-launchd <span class="se">\</span>
+</span><span class='line'>    pack-mc-mcollectived <span class="se">\</span>
+</span><span class='line'>    pack-mc-preflight-all
+</span><span class='line'>
+</span><span class='line'><span class="c"># Variable Declarations:  </span>
+</span><span class='line'><span class="c">#    Any variable can be set from the command line by doing this:</span>
+</span><span class='line'><span class="c">#    &quot;make pkg PACKAGE_VERSION=1.0.0&quot;</span>
+</span><span class='line'><span class="nv">PACKAGE_VERSION</span><span class="o">=</span>1.0.0
+</span><span class='line'><span class="nv">PACKAGE_MAJOR_VERSION</span><span class="o">=</span><span class="sb">`</span><span class="nb">echo</span> <span class="k">${</span><span class="nv">PACKAGE_VERSION</span><span class="k">}</span> | awk -F <span class="s1">&#39;.&#39;</span> <span class="s1">&#39;{print $$1}&#39;</span><span class="sb">`</span>
+</span><span class='line'><span class="nv">PACKAGE_MINOR_VERSION</span><span class="o">=</span><span class="sb">`</span><span class="nb">echo</span> <span class="k">${</span><span class="nv">PACKAGE_VERSION</span><span class="k">}</span> | awk -F <span class="s1">&#39;.&#39;</span> <span class="s1">&#39;{print $$2$$3}&#39;</span><span class="sb">`</span>
+</span><span class='line'><span class="nv">MCFILE</span><span class="o">=</span>mcollective-<span class="k">${</span><span class="nv">PACKAGE_VERSION</span><span class="k">}</span>
+</span><span class='line'><span class="nv">MCURL</span><span class="o">=</span>http://puppetlabs.com/downloads/mcollective/<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>.tgz
+</span><span class='line'>
+</span><span class='line'><span class="c"># Package Creation Limiters:</span>
+</span><span class='line'><span class="c">#    These if-statements will check for one of three values for the TYPE variable:</span>
+</span><span class='line'><span class="c">#    &quot;COMMON, CLIENT, or BASE&quot;  If either of these values are present (CASE SENSITIVE)</span>
+</span><span class='line'><span class="c">#    the PAYLOAD variable will be changed to limit what is installed into the package.</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># COMMON Package:</span>
+</span><span class='line'><span class="c">#    This package includes the Ruby libraries and MCollective plugins with nothing else.</span>
+</span><span class='line'><span class="cp">ifeq (${TYPE},COMMON)</span>
+</span><span class='line'>  <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
+</span><span class='line'>      unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
+</span><span class='line'>      pack-mc-libexec <span class="se">\</span>
+</span><span class='line'>      pack-mc-lib <span class="se">\</span>
+</span><span class='line'>      pack-mc-preflight-common
+</span><span class='line'>  <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Common
+</span><span class='line'><span class="cp">endif</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># CLIENT Package:</span>
+</span><span class='line'><span class="c">#    This package includes the MCollective Binaries and the configuration file for</span>
+</span><span class='line'><span class="c">#    MCollective&#39;s client binaries.  </span>
+</span><span class='line'><span class="cp">ifeq (${TYPE},CLIENT)</span>
+</span><span class='line'>  <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
+</span><span class='line'>      unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
+</span><span class='line'>      pack-mc-config <span class="se">\</span>
+</span><span class='line'>      pack-mc-binaries <span class="se">\</span>
+</span><span class='line'>      pack-mc-config-client <span class="se">\</span>
+</span><span class='line'>      pack-mc-preflight-client
+</span><span class='line'>  <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Client
+</span><span class='line'><span class="cp">endif</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># BASE Package:</span>
+</span><span class='line'><span class="c">#    This package includes the mcollectived daemon, Ruby Libraries, a launchd plist</span>
+</span><span class='line'><span class="c">#    to call mcollectived, and the configuration files for the MCollective server.</span>
+</span><span class='line'><span class="cp">ifeq (${TYPE},BASE)</span>
+</span><span class='line'>  <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
+</span><span class='line'>      unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
+</span><span class='line'>      pack-mc-config <span class="se">\</span>
+</span><span class='line'>      pack-mc-config-server <span class="se">\</span>
+</span><span class='line'>      pack-mc-launchd <span class="se">\</span>
+</span><span class='line'>      pack-mc-mcollectived <span class="se">\</span>
+</span><span class='line'>      pack-mc-lib <span class="se">\</span>
+</span><span class='line'>      pack-mc-preflight-base
+</span><span class='line'>  <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Base
+</span><span class='line'><span class="cp">endif</span>
+</span><span class='line'>
+</span><span class='line'><span class="c"># This rule will curl the selected version of MCollective and untar it into the directory</span>
+</span><span class='line'><span class="c">#    in which the Makefile resides.</span>
+</span><span class='line'><span class="nf">unpack-mc-${MCFILE}</span><span class="o">:</span>
+</span><span class='line'>  curl <span class="k">${</span><span class="nv">MCURL</span><span class="k">}</span> -o <span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>.tgz
+</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">TAR</span><span class="k">}</span> xzf <span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>.tgz
+</span><span class='line'>
+</span><span class='line'><span class="c"># This rule will install MCollective&#39;s plugin files to /usr/libexec/mcollective</span>
+</span><span class='line'><span class="err">&lt;/code&gt;&lt;/pre&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;p&gt;</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 ]]></content>
   </entry>
   
