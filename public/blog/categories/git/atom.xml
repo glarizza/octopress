@@ -4,7 +4,7 @@
   <title><![CDATA[Category: git | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/git/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2014-10-22T15:25:00+02:00</updated>
+  <updated>2014-10-22T15:26:06+02:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -58,7 +58,7 @@ action for my taste.</p>
 <a href="http://pages.github.com/">Github Pages</a> has always been available to host web content or <a href="https://github.com/mojombo/jekyll">Jekyll
 sites</a> &ndash; I&rsquo;m just late to the damn party.</p>
 
-<p><a href="http://glarizza.github.com/images/blog_blog/left.png">{% img left /images/blog_blog/left.png 300 300 %}</a></p>
+<p><a href="http://glarizza.github.com/images/blog_blog/left.png"><img class="left" src="/images/blog_blog/left.png" width="300" height="300"></a></p>
 
 <p>Hosting static web content was out; like I said before, I don&rsquo;t really want to
 &lsquo;manage&rsquo; this thing. Jekyll, however, intrigued me. Jekyll is essentially
@@ -145,30 +145,52 @@ write_plist_file(plist, resource[:path])
 
 <p>How about some Puppet code?</p>
 
-<p>{% codeblock Plist Management lang:puppet %}
-property_list_key { &lsquo;simple&rsquo;:
-  ensure => present,
-  path => &lsquo;/tmp/com.puppetlabs.puppet&rsquo;,
-  key    => &lsquo;simple&rsquo;,
-  value  => &lsquo;value&rsquo;,
-}</p>
-
-<p>property_list_key { &lsquo;boolean&rsquo;:
-  ensure     => present,
-  path       => &lsquo;/tmp/com.puppetlabs.puppet&rsquo;,
-  key        => &lsquo;boolean&rsquo;,
-  value      => false,
-  value_type => &lsquo;boolean&rsquo;,
-}</p>
-
-<p>property_list_key { &lsquo;hashtest&rsquo;:
-  ensure     => present,
-  path       => &lsquo;/tmp/com.puppetlabs.puppet&rsquo;,
-  key        => &lsquo;hashtest&rsquo;,
-  value      => { &lsquo;key&rsquo; => &lsquo;value&rsquo; },
-  value_type => &lsquo;hash&rsquo;
-}
-{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Plist Management </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nc">property_list_key</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">simple</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">:</span>
+</span><span class='line'>  <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">path</span> <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="sr">/tmp/</span><span class="ss">com</span><span class="m">.</span><span class="ss">puppetlabs</span><span class="m">.</span><span class="ss">puppet</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;,</span>
+</span><span class='line'>  <span class="ss">key</span>    <span class="err">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">simple</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;,</span>
+</span><span class='line'>  <span class="ss">value</span>  <span class="err">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">value</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;,</span>
+</span><span class='line'><span class="p">}</span><span class="err">&lt;/</span><span class="ss">p</span><span class="err">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;</span><span class="ss">p</span><span class="err">&gt;</span><span class="ss">property_list_key</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">boolean</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;:</span>
+</span><span class='line'>  <span class="ss">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">path</span>       <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="sr">/tmp/</span><span class="ss">com</span><span class="m">.</span><span class="ss">puppetlabs</span><span class="m">.</span><span class="ss">puppet</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">key</span>        <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">boolean</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">value</span>      <span class="p">=&gt;</span> <span class="ss">false</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">value_type</span> <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">boolean</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'><span class="p">}</span><span class="err">&lt;/</span><span class="ss">p</span><span class="err">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;</span><span class="ss">p</span><span class="err">&gt;</span><span class="ss">property_list_key</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">hashtest</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;:</span>
+</span><span class='line'>  <span class="ss">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">path</span>       <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="sr">/tmp/</span><span class="ss">com</span><span class="m">.</span><span class="ss">puppetlabs</span><span class="m">.</span><span class="ss">puppet</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">key</span>        <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">hashtest</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span>
+</span><span class='line'>  <span class="ss">value</span>      <span class="p">=&gt;</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">key</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span> <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">value</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span> <span class="p">},</span>
+</span><span class='line'>  <span class="ss">value_type</span> <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">hash</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Doesn&rsquo;t that look awesome?</p>
 
@@ -419,20 +441,36 @@ $ vim Makefile
 
 <p>I use vi or vim to edit files from the Terminal.  Feel free to use any text editor you like (nano, emacs, Textmate, TextWrangler, etc&hellip;), but CREATE a file called &lsquo;Makefile&rsquo; (note the capital M) and put it in ~/src/luggage_examples/crankd_google.  Here&rsquo;s what I&rsquo;ll put into this file:</p>
 
-<p>{% codeblock Crankd Luggage Example lang:make %}</p>
-
-<pre><code># Title:       Crankd-Google Example
-# Author:      Gary Larizza
-# Description: Something so Marnin doesn't kill me w/ postinstalls :)
-
-include /Users/gary/src/luggage/luggage.make
-
-TITLE=Crankd-Google
-REVERSE_DOMAIN=com.googlecode
-PAYLOAD=pack-crankd
-</code></pre>
-
-<p>{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Crankd Luggage Example </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="err">&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">&lt;pre&gt;&lt;code&gt;# Title</span><span class="o">:</span>       <span class="m">Crankd-Google Example</span>
+</span><span class='line'><span class="c"># Author:      Gary Larizza</span>
+</span><span class='line'><span class="c"># Description: Something so Marnin doesn&#39;t kill me w/ postinstalls :)</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">include /Users/gary/src/luggage/luggage.make</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>Crankd-Google
+</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.googlecode
+</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span>pack-crankd
+</span><span class='line'><span class="err">&lt;/code&gt;&lt;/pre&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;p&gt;</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Great, so we have our skeleton of a file!  The file is saved in our folder, but we haven&rsquo;t actually told git to track the file (and so git is AWARE that the file EXISTS, but it isn&rsquo;t tracking its changes&hellip;yet).  This is a good time to explain the three states in which files can exist in a git repository.</p>
 
