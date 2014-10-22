@@ -6,6 +6,7 @@ comments: true
 categories: ['puppet', 'order', 'dependencies', 'MOAR', "seriously-don't-use-manifest-ordering-as-a-replacement-for-dependencies"]
 ---
 
+
 This blog post was born out of a number of conversations that I've had about
 Puppet, its dependency model, and why 'ordering' is not necessarily the way to
 think about dependencies when writing Puppet manifests. Like most everything on
@@ -82,6 +83,7 @@ not give two shits about the order of resources without dependencies. If you
 write perfect Puppet code, you're fine. But the majority of the
 known-good-world does not do that. In fact, most of us write shit code. Which
 was the problem...
+
 
 ## The history of Puppet's ordering choices
 
