@@ -2,110 +2,110 @@
 <urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>
     <url>
         <loc>http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2011/03/11/using-run-stages-with-puppet/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://garylarizza.com/blog/2011/12/31/using-the-google-macops-crankd-and-facter-code/
         </loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2012/01/24/using-git-for-mac-sysadmins/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://garylarizza.com/blog/2013/02/01/repeatable-puppet-development-with-vagrant/
         </loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/02/15/puppet-plus-github-equals-laptop-love/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/07/10/from-the-archive-using-crankd/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/11/25/fun-with-providers/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/12/09/when-to-hiera/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2013/12/15/seriously-what-is-this-provider-doing/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-1/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/02/17/puppet-workflow-part-2/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/02/18/puppet-workflow-part-3/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/03/07/puppet-workflow-part-3b/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/03/12/when-yellow-ruled-the-world/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/08/31/r10k-plus-directory-environments/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/2014/10/19/on-dependencies-and-order/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/about/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/blog/archives/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/robots.txt</loc>
-        <lastmod>2014-10-22T15:26:00+02:00</lastmod>
+        <lastmod>2014-10-22T15:30:44+02:00</lastmod>
     </url>
 </urlset>
