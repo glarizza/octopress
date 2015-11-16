@@ -4,7 +4,7 @@
   <title><![CDATA[Category: os x | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/os-x/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2014-10-22T15:32:59+02:00</updated>
+  <updated>2015-11-16T13:13:46-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -16,7 +16,7 @@
   <entry>
     <title type="html"><![CDATA[Who abstracted my Ruby?]]></title>
     <link href="http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2/"/>
-    <updated>2013-11-26T16:01:00+01:00</updated>
+    <updated>2013-11-26T16:01:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/11/26/fun-with-providers-part-2</id>
     <content type="html"><![CDATA[<p>Previously, on Lost, I said a lot of words about Puppet Types;
 <a href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/">you should totally check it out.</a>
@@ -30,19 +30,17 @@ simplest and crudest explanation I could muster, types model how your
 declaration will look in the manifest. Providers are where the actual
 IMPLEMENTATION happens. If you&rsquo;ve ever wondered how this:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nc">package</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">httpd</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">:</span>
-</span><span class='line'>  <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">installed</span><span class="p">,</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:puppet %}
+package { &lsquo;httpd&rsquo;:
+  ensure => installed,
+}
+{% endcodeblock %}</p>
 
 <p>eventually gets turned into this:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>yum install -e 0 -d 0 -y httpd
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+yum install -e 0 -d 0 -y httpd
+{% endcodeblock %}</p>
 
 <p>your answer would be &ldquo;It&rsquo;s in the provider file&rdquo;.</p>
 
@@ -86,100 +84,66 @@ information we have:</p>
 
 <p>The list of network interfaces:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>└▷ networksetup -listallnetworkservices
-</span><span class='line'>An asterisk <span class="o">(</span>*<span class="o">)</span> denotes that a network service is disabled.
-</span><span class='line'>Bluetooth DUN
-</span><span class='line'>Display Ethernet
-</span><span class='line'>Ethernet
-</span><span class='line'>FireWire
-</span><span class='line'>Wi-Fi
-</span><span class='line'>iPhone USB
-</span><span class='line'>Bluetooth PAN
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+└▷ networksetup -listallnetworkservices
+An asterisk (*) denotes that a network service is disabled.
+Bluetooth DUN
+Display Ethernet
+Ethernet
+FireWire
+Wi-Fi
+iPhone USB
+Bluetooth PAN
+{% endcodeblock %}</p>
 
 <p>Getting the list of bypass domains for an interface:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>└▷ networksetup -getproxybypassdomains Ethernet
-</span><span class='line'>www.garylarizza.com
-</span><span class='line'>*.corp.net
-</span><span class='line'>10.13.1.3/24
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+└▷ networksetup -getproxybypassdomains Ethernet
+www.garylarizza.com
+*.corp.net
+10.13.1.3/24
+{% endcodeblock %}</p>
 
 <p>The message displayed when no domains are set for an interface:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>└▷ networksetup -getproxybypassdomains FireWire
-</span><span class='line'>There aren&amp;rsquo;t any bypass domains <span class="nb">set </span>on FireWire.
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+└▷ networksetup -getproxybypassdomains FireWire
+There aren&rsquo;t any bypass domains set on FireWire.
+{% endcodeblock %}</p>
 
 <p>Setting the list of bypass domains for an interface:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>└▷ networksetup -setproxybypassdomains Ethernet &amp;lsquo;*.corp.net&amp;rsquo; &amp;lsquo;10.13.1.3/24&amp;rsquo; &amp;lsquo;www.garylarizza.com&amp;rsquo;
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+└▷ networksetup -setproxybypassdomains Ethernet &lsquo;*.corp.net&rsquo; &lsquo;10.13.1.3/24&rsquo; &lsquo;www.garylarizza.com&rsquo;
+{% endcodeblock %}</p>
 
 <p>Perfect &ndash; all of that is done with a single binary, and it&rsquo;s pretty straightforward. Let&rsquo;s look at the type I ended up creating for this problem:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>lib/puppet/type/mac_proxy_bypassdomains.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Type</span><span class="o">.</span><span class="n">newtype</span><span class="p">(</span><span class="ss">:mac_proxy_bypassdomains</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">desc</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="no">Puppet</span> <span class="n">type</span> <span class="n">that</span> <span class="n">models</span> <span class="n">bypass</span> <span class="n">domains</span> <span class="k">for</span> <span class="n">a</span> <span class="n">network</span> <span class="n">interface</span> <span class="n">on</span> <span class="no">OS</span> <span class="n">X</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  ensurable&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:name</span><span class="p">,</span> <span class="ss">:namevar</span> <span class="o">=&gt;</span> <span class="kp">true</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Interface name - currently must be &#39;friendly&#39; name (e.g. Ethernet)&quot;</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Domains which should bypass the proxy&quot;</span>
-</span><span class='line'><span class="sr">def insync?(is)</span>
-</span><span class='line'><span class="sr">  is.sort == should.sort</span>
-</span><span class='line'><span class="sr">end</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end</span>
-</span><span class='line'><span class="sr">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lib/puppet/type/mac_proxy_bypassdomains.rb lang:ruby %}
+Puppet::Type.newtype(:mac_proxy_bypassdomains) do
+  desc &ldquo;Puppet type that models bypass domains for a network interface on OS X&rdquo;</p>
+
+<p>  ensurable</p>
+
+<p>  newparam(:name, :namevar => true) do</p>
+
+<pre><code>desc "Interface name - currently must be 'friendly' name (e.g. Ethernet)"
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:domains, :array_matching => :all) do</p>
+
+<pre><code>desc "Domains which should bypass the proxy"
+def insync?(is)
+  is.sort == should.sort
+end
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
 
 <p>The type uses a namevar parameter called &lsquo;name&rsquo;, which is the name of the network interface.
 This means that we can set one list of bypass domains for every network interface.
@@ -215,26 +179,17 @@ things.</p>
 <p>Here&rsquo;s a tree of my module to understand how the type and provider files are
 to be laid out:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Module tree </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>├── Modulefile
-</span><span class='line'>├── README.markdown
-</span><span class='line'>└── lib
-</span><span class='line'>    └── puppet
-</span><span class='line'>        ├── provider
-</span><span class='line'>        │   ├── mac_proxy_bypassdomains
-</span><span class='line'>        │   │   └── ruby.rb
-</span><span class='line'>        └── <span class="nb">type</span>
-</span><span class='line'>            └── mac_proxy_bypassdomains.rb
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock Module tree lang:bash %}
+├── Modulefile
+├── README.markdown
+└── lib
+    └── puppet
+        ├── provider
+        │   ├── mac_proxy_bypassdomains
+        │   │   └── ruby.rb
+        └── type
+            └── mac_proxy_bypassdomains.rb
+{% endcodeblock %}</p>
 
 <p>As you can see from above, the name of both the type and provider must <strong>EXACTLY</strong>
 match the filename of their corresponding files. Also, the provider file lives
@@ -259,14 +214,11 @@ etc&hellip;).</p>
 <p>Let&rsquo;s layout the shell of our provider, first, to ensure that we haven&rsquo;t typoed
 anything. Here&rsquo;s the provider declaration:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>lib/puppet/type/mac_proxy_bypassdomains/ruby.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Type</span><span class="o">.</span><span class="n">type</span><span class="p">(</span><span class="ss">:mac_proxy_bypassdomains</span><span class="p">)</span><span class="o">.</span><span class="n">provide</span><span class="p">(</span><span class="ss">:ruby</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="c1"># Provider work goes here</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lib/puppet/type/mac_proxy_bypassdomains/ruby.rb lang:ruby %}
+Puppet::Type.type(:mac_proxy_bypassdomains).provide(:ruby) do
+  # Provider work goes here
+end
+{% endcodeblock %}</p>
 
 <p>Note that the name of the type and the name of the provider are symbolized (i.e.
 they&rsquo;re prepended with a colon). Like I mentioned above, they must be spelled
@@ -308,9 +260,9 @@ your own method JUST for a system binary. The <code>commands</code> method abstr
 all the dirtyness of making a method for each system binary you want to call.
 The way you use the <code>commands</code> method is like so:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">commands</span> <span class="ss">:networksetup</span> <span class="o">=&gt;</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">networksetup</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+commands :networksetup => &lsquo;networksetup&rsquo;
+{% endcodeblock %}</p>
 
 <p>The <code>commands</code> method accepts a hash whose key must be a symbolized name. The
 CONVENTION is to use a symbolized name that matches the binary name, but it&rsquo;s
@@ -377,41 +329,25 @@ going to be a binary call that&rsquo;s going to return some data. Because of thi
 let&rsquo;s create a helper method that returns a list of domains for a specific
 interface:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">int</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">begin</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;output = networksetup([&#39;-getproxybypassdomains&#39;, int])</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  rescue Puppet::ExecutionFailure =&gt; e&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="no">Puppet</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;#get_proxy_bypass_domains had an error -&amp;gt; </span><span class="si">#{</span><span class="n">e</span><span class="o">.</span><span class="n">inspect</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span class='line'><span class="k">return</span> <span class="kp">nil</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span>
-</span><span class='line'>  <span class="n">domains</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;)</span><span class="o">.</span><span class="n">sort</span>
-</span><span class='line'>  <span class="k">return</span> <span class="kp">nil</span> <span class="k">if</span> <span class="n">domains</span><span class="o">.</span><span class="n">first</span> <span class="o">=~</span> <span class="sr">/There aren\&amp;rsquo;t any bypass domains set/</span>
-</span><span class='line'>  <span class="n">domains</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+def get_proxy_bypass_domains(int)
+  begin</p>
+
+<pre><code>output = networksetup(['-getproxybypassdomains', int])
+</code></pre>
+
+<p>  rescue Puppet::ExecutionFailure => e</p>
+
+<pre><code>Puppet.debug("#get_proxy_bypass_domains had an error -&gt; #{e.inspect}")
+return nil
+</code></pre>
+
+<p>  end
+  domains = output.split(&ldquo;\n&rdquo;).sort
+  return nil if domains.first =~ /There aren\&rsquo;t any bypass domains set/
+  domains
+end
+{% endcodeblock %}</p>
 
 <p>Ruby convention is to use underscores (i.e. versus camelCase or hyphens) in
 method names. You want to give your methods very descriptive names based on
@@ -430,13 +366,11 @@ return <code>nil</code> if domains aren&rsquo;t found or the <code>networksetup<
 
 <p>Using the helper method above, here&rsquo;s what the final <code>exists?</code> method looks like:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">exists?</span>
-</span><span class='line'>  <span class="n">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">)</span> <span class="o">!=</span> <span class="kp">nil</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+def exists?
+  get_proxy_bypass_domains(resource[:name]) != nil
+end
+{% endcodeblock %}</p>
 
 <p>All provider methods have the ability to access the &lsquo;should&rsquo; values for the resource
 (and by that I mean the values that are set in the Puppet maniest on the Puppet master
@@ -455,13 +389,11 @@ method explicitly in <code>create</code> &ndash; it&rsquo;s already been evaluat
 the <code>-setproxybypassdomains</code> argument to the <code>networksetup</code> binary will set a domain
 list, so the <code>create</code> method is going to be very short-and-sweet:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">create</span>
-</span><span class='line'>  <span class="n">networksetup</span><span class="p">(</span><span class="o">[&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="o">-</span><span class="n">setproxybypassdomains</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:domains</span><span class="o">]]</span><span class="p">)</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+def create
+  networksetup([&lsquo;-setproxybypassdomains&rsquo;, resource[:name], resource[:domains]])
+end
+{% endcodeblock %}</p>
 
 <p>In the end, the <code>create</code> method will call the <code>networksetup</code> binary with the <code>-setproxybypassdomains</code>
 argument, pass the interface name (from <code>resource[:name]</code>) and pass an array of domain values (which
@@ -471,13 +403,11 @@ comes from <code>resource[:domains]</code>). That&rsquo;s it; it&rsquo;s done!</
 
 <p>The <code>destroy</code> method is easier than the <code>create</code> method:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">destroy</span>
-</span><span class='line'>  <span class="n">networksetup</span><span class="p">(</span><span class="o">[&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="o">-</span><span class="n">setproxybypassdomains</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span> <span class="kp">nil</span><span class="o">]</span><span class="p">)</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+def destroy
+  networksetup([&lsquo;-setproxybypassdomains&rsquo;, nil])
+end
+{% endcodeblock %}</p>
 
 <p>Here, we&rsquo;re calling <code>networksetup</code> with the <code>-setproxybypassdomains</code> argument
 and passing nothing else. This will initialize the list and set it to be empty.</p>
@@ -498,13 +428,11 @@ method that returns a value (in this case, an array of domains to be bypassed by
 proxy). We&rsquo;ve already written a helper method that does this work for us, so the
 <code>domains</code> getter method is pretty easy:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">domains</span>
-</span><span class='line'>  <span class="n">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">)</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+def domains
+  get_proxy_bypass_domains(resource[:name])
+end
+{% endcodeblock %}</p>
 
 <p>Tada! Just call the helper method and pass the interface name. Boom &ndash; instant array
 of values. The getter method will return the &lsquo;is&rsquo; value, because that&rsquo;s what the value
@@ -520,13 +448,11 @@ in the catalog. It does this by calling the &lsquo;setter&rsquo; method for the 
 is the name of the property and the equals ( = ) sign. In this case, the setter
 method for the <code>domains</code> property must be called <code>domains=</code>.  It looks like this:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">domains</span><span class="o">=</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-</span><span class='line'>  <span class="n">networksetup</span><span class="p">(</span><span class="o">[&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="o">-</span><span class="n">setproxybypassdomains</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">,</span> <span class="n">value</span><span class="o">]</span><span class="p">)</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+def domains=(value)
+  networksetup([&lsquo;-setproxybypassdomains&rsquo;, resource[:name], value])
+end
+{% endcodeblock %}</p>
 
 <p>Setter methods are always passed a single argument &ndash; the &lsquo;should&rsquo; value of the property.
 In our example, we&rsquo;re calling the <code>networksetup</code> binary with the <code>-setproxybypassdomains</code>
@@ -537,114 +463,61 @@ the array of domains. It&rsquo;s easy, it&rsquo;s one line, and I love it when a
 
 <p>I&rsquo;ve broken down the provider line by line, but here&rsquo;s the entire file:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>lib/puppet/provider/mac_proxy_bypassdomains/ruby.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Type</span><span class="o">.</span><span class="n">type</span><span class="p">(</span><span class="ss">:mac_proxy_bypassdomains</span><span class="p">)</span><span class="o">.</span><span class="n">provide</span><span class="p">(</span><span class="ss">:ruby</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">commands</span> <span class="ss">:networksetup</span> <span class="o">=&gt;</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="n">networksetup</span><span class="o">&amp;</span><span class="n">rsquo</span><span class="p">;</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  def get_proxy_bypass_domains(int)&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="k">begin</span>
-</span><span class='line'>  <span class="n">output</span> <span class="o">=</span> <span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-getproxybypassdomains&#39;</span><span class="p">,</span> <span class="n">int</span><span class="o">]</span><span class="p">)</span>
-</span><span class='line'><span class="k">rescue</span> <span class="ss">Puppet</span><span class="p">:</span><span class="ss">:ExecutionFailure</span> <span class="o">=&amp;</span><span class="n">gt</span><span class="p">;</span> <span class="n">e</span>
-</span><span class='line'>  <span class="no">Puppet</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;#get_proxy_bypass_domains had an error -&amp;gt; </span><span class="si">#{</span><span class="n">e</span><span class="o">.</span><span class="n">inspect</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">return</span> <span class="kp">nil</span>
-</span><span class='line'><span class="k">end</span>
-</span><span class='line'><span class="n">domains</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">sort</span>
-</span><span class='line'><span class="k">return</span> <span class="kp">nil</span> <span class="k">if</span> <span class="n">domains</span><span class="o">.</span><span class="n">first</span> <span class="o">=~</span> <span class="sr">/There aren\&#39;t any bypass domains set/</span>
-</span><span class='line'><span class="n">domains</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  def exists?&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="n">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">)</span> <span class="o">!=</span> <span class="kp">nil</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  def destroy&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-setproxybypassdomains&#39;</span><span class="p">,</span> <span class="kp">nil</span><span class="o">]</span><span class="p">)</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  def create&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-setproxybypassdomains&#39;</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:domains</span><span class="o">]]</span><span class="p">)</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  def domains&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="n">get_proxy_bypass_domains</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">)</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  def domains=(value)&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="n">networksetup</span><span class="p">(</span><span class="o">[</span><span class="s1">&#39;-setproxybypassdomains&#39;</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:name</span><span class="o">]</span><span class="p">,</span> <span class="n">value</span><span class="o">]</span><span class="p">)</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lib/puppet/provider/mac_proxy_bypassdomains/ruby.rb lang:ruby %}
+Puppet::Type.type(:mac_proxy_bypassdomains).provide(:ruby) do
+  commands :networksetup => &lsquo;networksetup&rsquo;</p>
+
+<p>  def get_proxy_bypass_domains(int)</p>
+
+<pre><code>begin
+  output = networksetup(['-getproxybypassdomains', int])
+rescue Puppet::ExecutionFailure =&gt; e
+  Puppet.debug("#get_proxy_bypass_domains had an error -&gt; #{e.inspect}")
+  return nil
+end
+domains = output.split("\n").sort
+return nil if domains.first =~ /There aren\'t any bypass domains set/
+domains
+</code></pre>
+
+<p>  end</p>
+
+<p>  def exists?</p>
+
+<pre><code>get_proxy_bypass_domains(resource[:name]) != nil
+</code></pre>
+
+<p>  end</p>
+
+<p>  def destroy</p>
+
+<pre><code>networksetup(['-setproxybypassdomains', nil])
+</code></pre>
+
+<p>  end</p>
+
+<p>  def create</p>
+
+<pre><code>networksetup(['-setproxybypassdomains', resource[:name], resource[:domains]])
+</code></pre>
+
+<p>  end</p>
+
+<p>  def domains</p>
+
+<pre><code>get_proxy_bypass_domains(resource[:name])
+</code></pre>
+
+<p>  end</p>
+
+<p>  def domains=(value)</p>
+
+<pre><code>networksetup(['-setproxybypassdomains', resource[:name], value])
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
 
 <h2>Testing the type/provider</h2>
 
@@ -657,35 +530,29 @@ serve it out to all of your nodes without it being tested). Because this module
 is on my system at <code>/users/glarizza/src/puppet-mac_proxy</code>, here&rsquo;s how my
 <code>$RUBYLIB</code> is set:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">export </span><span class="nv">RUBYLIB</span><span class="o">=</span>/users/glarizza/src/puppet-mac_proxy/lib
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+export RUBYLIB=/users/glarizza/src/puppet-mac_proxy/lib
+{% endcodeblock %}</p>
 
 <p>Next, we need to create a resource declaration to try and set a couple of
 bypass domains. I&rsquo;ll create a <code>tests</code> directory and simple test file in
 <code>tests/mac_proxy_bypassdomains.pp</code>:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>tests/mac_proxy_bypassdomains.pp </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nc">mac_proxy_bypassdomains</span> <span class="p">{</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">Ethernet</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">:</span>
-</span><span class='line'>  <span class="nt">ensure</span>  <span class="p">=&gt;</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">present</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;,</span>
-</span><span class='line'>  <span class="ss">domains</span> <span class="err">=&gt;</span> <span class="p">[</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">www</span><span class="m">.</span><span class="ss">garylarizza</span><span class="m">.</span><span class="ss">com</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;*</span><span class="m">.</span><span class="ss">puppetlabs</span><span class="m">.</span><span class="ss">com</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="m">10.13.1.3</span><span class="err">/</span><span class="m">24</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">]</span><span class="err">,</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock tests/mac_proxy_bypassdomains.pp lang:puppet %}
+mac_proxy_bypassdomains { &lsquo;Ethernet&rsquo;:
+  ensure  => &lsquo;present&rsquo;,
+  domains => [&lsquo;www.garylarizza.com&rsquo;,&lsquo;*.puppetlabs.com&rsquo;,&lsquo;10.13.1.3/24&rsquo;],
+}
+{% endcodeblock %}</p>
 
 <p>Finally, let&rsquo;s run Puppet and test it out:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>└▷ puppet apply ~/src/puppet-mac_proxy/tests/mac_proxy_bypassdomains.pp
-</span><span class='line'>Notice: Compiled catalog for satori.local in environment production in 0.06 seconds
-</span><span class='line'>Notice: /Stage[main]//Mac_proxy_bypassdomains[Ethernet]/domains: domains changed [] to &lsquo;www.garylarizza.com *.puppetlabs.com 10.13.1.3/24&rsquo;
-</span><span class='line'>Notice: Finished catalog run in 3.47 seconds</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock %}
+└▷ puppet apply ~/src/puppet-mac_proxy/tests/mac_proxy_bypassdomains.pp
+Notice: Compiled catalog for satori.local in environment production in 0.06 seconds
+Notice: /Stage[main]//Mac_proxy_bypassdomains[Ethernet]/domains: domains changed [] to &lsquo;www.garylarizza.com *.puppetlabs.com 10.13.1.3/24&rsquo;
+Notice: Finished catalog run in 3.47 seconds
+{% endcodeblock %}</p>
 
 <p><strong>NOTE:</strong> If you run this as a local user, you will be prompted by OS X to
 enter an administrative password for a change.  Since Puppet will ultimately be
@@ -723,7 +590,7 @@ get a response. Maybe.)  Cheers!</p>
   <entry>
     <title type="html"><![CDATA[Fun with Puppet Providers - Part 1 of Whatever]]></title>
     <link href="http://garylarizza.com/blog/2013/11/25/fun-with-providers/"/>
-    <updated>2013-11-25T20:47:00+01:00</updated>
+    <updated>2013-11-25T20:47:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/11/25/fun-with-providers</id>
     <content type="html"><![CDATA[<p>I don&rsquo;t know why I write blog posts &ndash; everybody in open-source software knows
 that the code <em>IS</em> the documentation. If you&rsquo;ve ever tried to write a Puppet
@@ -800,118 +667,63 @@ You&rsquo;ll see later where the property/parameter distinction becomes very imp
 <p>Recently I built a type modeling the setting of proxy data for network interfaces on OS X, so we&rsquo;ll use that as
 a demonstration of a type.  It looks like the following:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>lib/puppet/type/mac_web_proxy.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Type</span><span class="o">.</span><span class="n">newtype</span><span class="p">(</span><span class="ss">:mac_web_proxy</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">desc</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="no">Puppet</span> <span class="n">type</span> <span class="n">that</span> <span class="n">models</span> <span class="n">a</span> <span class="n">network</span> <span class="n">interface</span> <span class="n">on</span> <span class="no">OS</span> <span class="n">X</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  ensurable&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:name</span><span class="p">,</span> <span class="ss">:namevar</span> <span class="o">=&gt;</span> <span class="kp">true</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Interface name - currently must be &#39;friendly&#39; name (e.g. Ethernet)&quot;</span>
-</span><span class='line'><span class="sr">munge do |value|</span>
-</span><span class='line'><span class="sr">  value.downcase</span>
-</span><span class='line'><span class="sr">end</span>
-</span><span class='line'><span class="sr">def insync?(is)</span>
-</span><span class='line'><span class="sr">  is.downcase == should.downcase</span>
-</span><span class='line'><span class="sr">end</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_server</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:authenticated_username</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Username for proxy authentication&quot;</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newparam</span><span class="p">(</span><span class="ss">:authenticated_password</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Password for proxy authentication&quot;</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_authenticated</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'><span class="sr">newvalues(:true, :false)</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_port</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'><span class="sr">newvalues(/</span><span class="o">^</span><span class="p">\</span><span class="n">d</span><span class="o">+</span><span class="vg">$/</span><span class="p">)</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lib/puppet/type/mac_web_proxy.rb lang:ruby %}
+Puppet::Type.newtype(:mac_web_proxy) do
+  desc &ldquo;Puppet type that models a network interface on OS X&rdquo;</p>
+
+<p>  ensurable</p>
+
+<p>  newparam(:name, :namevar => true) do</p>
+
+<pre><code>desc "Interface name - currently must be 'friendly' name (e.g. Ethernet)"
+munge do |value|
+  value.downcase
+end
+def insync?(is)
+  is.downcase == should.downcase
+end
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:proxy_server) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+</code></pre>
+
+<p>  end</p>
+
+<p>  newparam(:authenticated_username) do</p>
+
+<pre><code>desc "Username for proxy authentication"
+</code></pre>
+
+<p>  end</p>
+
+<p>  newparam(:authenticated_password) do</p>
+
+<pre><code>desc "Password for proxy authentication"
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:proxy_authenticated) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+newvalues(:true, :false)
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:proxy_port) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+newvalues(/^\d+$/)
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
 
 <p>First note the type file&rsquo;s path in the grey titlebar of the graphic: <code>lib/puppet/type/mac_web_proxy.rb</code>
 This path is relative to the module that you&rsquo;re building, and it&rsquo;s VERY important that it be named
@@ -946,14 +758,11 @@ is called &lsquo;munging&rsquo;).</p>
 method in the entire Puppet codebase. Validate accepts a block and allows you to perform
 free-form validation in any way you prefer.  For example:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>lib/puppet/type/user.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">validate</span> <span class="k">do</span> <span class="o">|</span><span class="n">value</span><span class="o">|</span>
-</span><span class='line'>  <span class="k">raise</span> <span class="no">ArgumentError</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="no">Passwords</span> <span class="n">cannot</span> <span class="kp">include</span> <span class="o">&amp;</span><span class="n">lsquo</span><span class="p">;</span><span class="ss">:&amp;</span><span class="n">rsquo</span><span class="p">;</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span> <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">is_a?</span><span class="p">(</span><span class="nb">String</span><span class="p">)</span> <span class="ow">and</span> <span class="n">value</span><span class="o">.</span><span class="n">include?</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="ss">:&amp;</span><span class="n">rdquo</span><span class="p">;)</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lib/puppet/type/user.rb lang:ruby %}
+validate do |value|
+  raise ArgumentError, &ldquo;Passwords cannot include &lsquo;:&rsquo;&rdquo; if value.is_a?(String) and value.include?(&ldquo;:&rdquo;)
+end
+{% endcodeblock %}</p>
 
 <p>This example, pulled straight from the Puppet codebase, will raise an error if a
 password contains a colon. In this case, we&rsquo;re looking for a specific exception
@@ -965,52 +774,34 @@ and are raising errors accordingly.</p>
 need to match (if you&rsquo;re one of the 8 people in the world that speak regex fluently),
 or a list of acceptable values. From the example above:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>lib/puppet/type/mac_web_proxy.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_authenticated</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'><span class="sr">newvalues(:true, :false)</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newproperty</span><span class="p">(</span><span class="ss">:proxy_port</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;desc &quot;Proxy Server setting for the interface&quot;</span>
-</span><span class='line'><span class="sr">newvalues(/</span><span class="o">^</span><span class="p">\</span><span class="n">d</span><span class="o">+</span><span class="vg">$/</span><span class="p">)</span>
-</span><span class='line'><span class="o">&lt;</span><span class="sr">/code&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lib/puppet/type/mac_web_proxy.rb lang:ruby %}
+  newproperty(:proxy_authenticated) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+newvalues(:true, :false)
+</code></pre>
+
+<p>  end</p>
+
+<p>  newproperty(:proxy_port) do</p>
+
+<pre><code>desc "Proxy Server setting for the interface"
+newvalues(/^\d+$/)
+</code></pre>
+
+<p>  end
+{% endcodeblock %}</p>
 
 <h3>munge()</h3>
 
 <p>The final method, named &lsquo;munge&rsquo; accepts a block like <code>newvalues</code> but allows you to
 convert an unacceptable value into an acceptable value. Again, this is from the example above:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>lib/puppet/type/mac_web_proxy.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">munge</span> <span class="k">do</span> <span class="o">|</span><span class="n">value</span><span class="o">|</span>
-</span><span class='line'>  <span class="n">value</span><span class="o">.</span><span class="n">downcase</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lib/puppet/type/mac_web_proxy.rb lang:ruby %}
+munge do |value|
+  value.downcase
+end
+{% endcodeblock %}</p>
 
 <p>In this case, we want to ensure that the parameter value is lower case. It&rsquo;s not
 necessary to throw an error, but rather it&rsquo;s acceptable to &lsquo;munge&rsquo; the value to
@@ -1029,16 +820,12 @@ your property/parameter. It&rsquo;s a pretty simple construct, but it&rsquo;s im
 remember when you write spec tests for your type (which you ARE doing, right?) that
 there will ALWAYS be values for properties/parameters that utilize <code>defaultto</code>. Here&rsquo;s a quick example:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Defaultto example </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newparam</span><span class="p">(</span><span class="ss">:enable_lacp</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">defaultto</span> <span class="ss">:true</span>
-</span><span class='line'>  <span class="n">newvalues</span><span class="p">(</span><span class="ss">:true</span><span class="p">,</span> <span class="ss">:false</span><span class="p">)</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock Defaultto example lang:ruby %}
+newparam(:enable_lacp) do
+  defaultto :true
+  newvalues(:true, :false)
+end
+{% endcodeblock %}</p>
 
 <h3>Ensurable types</h3>
 
@@ -1054,66 +841,37 @@ you can choose to pass a block to the <code>ensurable</code> method and define a
 property values as well as the methods of the provider that are to be called. That
 would look something like this:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>lib/puppet/type/package.rb </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">ensurable</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:present</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;provider.install</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:absent</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;provider.uninstall</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:purged</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;provider.purge</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end&lt;/</span><span class="nb">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span>  <span class="n">newvalue</span><span class="p">(</span><span class="ss">:held</span><span class="p">)</span> <span class="k">do</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;provider.hold</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end</span>
-</span><span class='line'><span class="sr">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lib/puppet/type/package.rb lang:ruby %}
+ensurable do
+  newvalue(:present) do</p>
+
+<pre><code>provider.install
+</code></pre>
+
+<p>  end</p>
+
+<p>  newvalue(:absent) do</p>
+
+<pre><code>provider.uninstall
+</code></pre>
+
+<p>  end</p>
+
+<p>  newvalue(:purged) do</p>
+
+<pre><code>provider.purge
+</code></pre>
+
+<p>  end</p>
+
+<p>  newvalue(:held) do</p>
+
+<pre><code>provider.hold
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
 
 <p>This means that instead of calling the <code>create</code> method to create a new resource that
 SHOULD exist (but doesn&rsquo;t), Puppet is going to call the <code>install</code> method. Conversely,
@@ -1135,13 +893,11 @@ don&rsquo;t have to be unique on systems).</p>
 can you tell unique resources from one another). To make a parameter the namevar, you simply
 set the <code>:namevar</code> attribute to <code>:true</code> like below:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newparam</span><span class="p">(</span><span class="ss">:name</span><span class="p">,</span> <span class="ss">:namevar</span> <span class="o">=&gt;</span> <span class="ss">:true</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="c1"># Type declaration attributes here&amp;hellip;</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+newparam(:name, :namevar => :true) do
+  # Type declaration attributes here&hellip;
+end
+{% endcodeblock %}</p>
 
 <h3>Handling array values</h3>
 
@@ -1152,13 +908,11 @@ be passing an array by setting the <code>:array_matching</code> attribute to <co
 this attribute, it defaults to <code>:first</code>, which means that if you pass an array as a value
 for a property/parameter, Puppet will only accept the FIRST element in that array).</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="c1"># Type declaration attributes here&amp;hellip;</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+newproperty(:domains, :array_matching => :all) do
+  # Type declaration attributes here&hellip;
+end
+{% endcodeblock %}</p>
 
 <p>If you set <code>:array_matching</code> to <code>:all</code>, EVERY value passed for that parameter/property will
 be cast to an array (which means if you pass a value of &lsquo;foo&rsquo;, you&rsquo;ll get an array with a
@@ -1170,19 +924,14 @@ single element &ndash; the string of &lsquo;foo&rsquo;).</p>
 this can be done by passing a string to the <code>desc</code> method within the body of the property/parameter
 declaration.</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">desc</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="no">Domains</span> <span class="n">which</span> <span class="n">should</span> <span class="n">bypass</span> <span class="n">the</span> <span class="n">proxy</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;h1&gt;Type declaration attributes here&amp;hellip;&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="nb">p</span><span class="o">&gt;</span><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+newproperty(:domains, :array_matching => :all) do
+  desc &ldquo;Domains which should bypass the proxy&rdquo;</p>
+
+<h1>Type declaration attributes here&hellip;</h1>
+
+<p>end
+{% endcodeblock %}</p>
 
 <h3>Synchronization tricks</h3>
 
@@ -1199,25 +948,17 @@ just want to make sure that all of them are set.</p>
 <p>If the latter cases sounds like what you need, then you&rsquo;ll need to override the behavior of the
 <code>insync?</code> method. Take a look at the below example:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">newproperty</span><span class="p">(</span><span class="ss">:domains</span><span class="p">,</span> <span class="ss">:array_matching</span> <span class="o">=&gt;</span> <span class="ss">:all</span><span class="p">)</span> <span class="k">do</span>
-</span><span class='line'>  <span class="n">desc</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="no">Domains</span> <span class="n">which</span> <span class="n">should</span> <span class="n">bypass</span> <span class="n">the</span> <span class="n">proxy</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
-</span><span class='line'>  <span class="k">def</span> <span class="nf">insync?</span><span class="p">(</span><span class="n">is</span><span class="p">)</span><span class="o">&lt;</span><span class="sr">/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;pre&gt;&lt;code&gt;is.sort == should.sort</span>
-</span><span class='line'><span class="sr">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;</span><span class="sr">/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="sr">&lt;p&gt;  end</span>
-</span><span class='line'><span class="sr">end</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:ruby %}
+newproperty(:domains, :array_matching => :all) do
+  desc &ldquo;Domains which should bypass the proxy&rdquo;
+  def insync?(is)</p>
+
+<pre><code>is.sort == should.sort
+</code></pre>
+
+<p>  end
+end
+{% endcodeblock %}</p>
 
 <p>In this case, I&rsquo;ve overridden the <code>insync?</code> method to first sort the &lsquo;is&rsquo; value (or, the value that
 was discovered by Puppet on the target node) and compare it with the sorted &lsquo;should&rsquo; value (or,
@@ -1241,7 +982,7 @@ stay tuned for more brain-dumping-goodness&hellip;</p>
   <entry>
     <title type="html"><![CDATA[Using Veewee to build OS X VMs]]></title>
     <link href="http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms/"/>
-    <updated>2013-01-20T19:36:00+01:00</updated>
+    <updated>2013-01-20T19:36:00-08:00</updated>
     <id>http://garylarizza.com/blog/2013/01/20/using-veewee-to-build-os-x-vms</id>
     <content type="html"><![CDATA[<p>I hate <a href="http://github.com/timsutton">Tim Sutton</a> in the same way I hate <a href="http://ihatestevensinger.com/">Steven Singer</a>. I hate Tim
 because he actually IMPLEMENTS some of the things on my list of &lsquo;shit to tinker
@@ -1319,9 +1060,9 @@ the App Store to <code>/Applications</code>, but we&rsquo;ll want to extract the
 installation disk image somewhere where we can work with it. I&rsquo;m going to make
 a copy on the Desktop so we don&rsquo;t screw up the main installer:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>cp /Applications/Install<span class="se">\ </span>OS<span class="se">\ </span>X<span class="se">\ </span>Mountain<span class="se">\ </span>Lion.app/Contents/SharedSupport/InstallESD.dmg ~/Desktop
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cp /Applications/Install\ OS\ X\ Mountain\ Lion.app/Contents/SharedSupport/InstallESD.dmg ~/Desktop
+{% endcodeblock %}</p>
 
 <p>Beautiful. This should take a minute as it&rsquo;s a sizeable file, but in the end
 you&rsquo;ll have the installation disk image on your Desktop. For now this is fine,
@@ -1332,25 +1073,16 @@ but we&rsquo;ll be revisiting it later&hellip;</p>
 <p>As if the writing of this blog post, the code you need is ONLY in Tim&rsquo;s fork,
 so let&rsquo;s pull that down to somewhere where we can work with it:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h2&gt;I prefer to work with code out of a &amp;lsquo;src&amp;rsquo; directory in my home directory&lt;/h2&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;<span class="nv">$ </span>mkdir ~/src
-</span><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;<span class="nv">$ </span>git clone &lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;http://github.com/timsutton/veewee&quot;</span>&gt;http://github.com/timsutton/veewee&lt;/a&gt;
-</span><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}</p>
+
+<h2>I prefer to work with code out of a &lsquo;src&rsquo; directory in my home directory</h2>
+
+<p>$ mkdir ~/src
+$ cd ~/src</p>
+
+<p>$ git clone <a href="http://github.com/timsutton/veewee">http://github.com/timsutton/veewee</a>
+$ cd ~/src/veewee
+{% endcodeblock %}</p>
 
 <h4>Install Gems for veewee</h4>
 
@@ -1359,20 +1091,18 @@ Rubygems necessary to make Veewee work have been installed. We&rsquo;re going to
 this with <a href="http://gembundler.com/">Bundler</a>. Let&rsquo;s switch to Ruby 1.9.3 and get Bundler
 installed:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span><span class='line'><span class="nv">$ </span>rbenv <span class="nb">local </span>1.9.3
-</span><span class='line'><span class="nv">$ </span>gem install bundler
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cd ~/src/veewee
+$ rbenv local 1.9.3
+$ gem install bundler
+{% endcodeblock %}</p>
 
 <p>Next, let&rsquo;s use <a href="http://gembundler.com/">bundler</a> to install the rest of the gems we need to
 use Veewee:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>bundle install
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ bundle install
+{% endcodeblock %}</p>
 
 <p>Once that command completes, Bundler will have installed all the necessary gems
 for Veewee and we can move on.</p>
@@ -1384,11 +1114,10 @@ a &lsquo;vanilla&rsquo; VM. Tim&rsquo;s code provides a template called &lsquo;O
 the necessary scaffolding for building a vanilla 10.8.2 VM. Let&rsquo;s create a new
 VM project based on this template called &lsquo;osx-vm&rsquo; with the following:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span><span class='line'><span class="nv">$ </span>bundle <span class="nb">exec </span>veewee fusion define &amp;lsquo;osx-vm&amp;rsquo; &amp;lsquo;OSX-10.8.2&amp;rsquo;
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cd ~/src/veewee
+$ bundle exec veewee fusion define &lsquo;osx-vm&rsquo; &lsquo;OSX-10.8.2&rsquo;
+{% endcodeblock %}</p>
 
 <p>This will create <code>definitions/osx-vm</code> inside the Veewee directory with the
 template code from <code>templates/OSX-10.8.2</code>. We&rsquo;re almost ready to let Veewee
@@ -1403,13 +1132,11 @@ through the detail, or <a href="https://github.com/timsutton/veewee/blob/feature
 information. Let&rsquo;s use that script and prepare an installation &lsquo;ISO&rsquo; for our
 new VM:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span><span class='line'><span class="nv">$ </span>mkdir iso
-</span><span class='line'><span class="nv">$ </span>sudo templates/OSX-10.8.2/prepare_veewee_iso/prepare_veewee_iso.sh ~/Desktop/InstallESD.dmg iso/
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cd ~/src/veewee
+$ mkdir iso
+$ sudo templates/OSX-10.8.2/prepare_veewee_iso/prepare_veewee_iso.sh ~/Desktop/InstallESD.dmg iso/
+{% endcodeblock %}</p>
 
 <p>You&rsquo;ll need to be root to do this, but the script should handle everything
 necessary to prepare the ISO and drop it into the <code>iso</code> directory we created.</p>
@@ -1423,103 +1150,56 @@ install Puppet via Rubygems. Because this is all outlined in the <code>postinsta
 script, you&rsquo;re free to modify this code or add your own steps. Here&rsquo;s the
 current <code>postinstall.sh</code> script as of this posting:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>date &gt; /etc/vagrant_box_build_time
-</span><span class='line'><span class="nv">OSX_VERS</span><span class="o">=</span><span class="k">$(</span>sw_vers -productVersion | awk -F &amp;ldquo;.&amp;rdquo; &amp;lsquo;<span class="o">{</span>print <span class="nv">$2</span><span class="o">}</span>&amp;rsquo;<span class="k">)</span>&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;Install VMware tools <span class="k">if </span>we were built with VMware&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;if <span class="o">[</span> -e .vmfusion_version <span class="o">]</span>; <span class="k">then</span>
-</span><span class='line'><span class="k">  </span><span class="nv">TMPMOUNT</span><span class="o">=</span>&lt;code&gt;/usr/bin/mktemp -d /tmp/vmware-tools.XXXX&lt;/code&gt;
-</span><span class='line'>  hdiutil attach darwin.iso -mountpoint &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>  installer -pkg &amp;ldquo;<span class="nv">$TMPMOUNT</span>/Install VMware Tools.app/Contents/Resources/VMware Tools.pkg&amp;rdquo; -target /
-</span><span class='line'>  <span class="c"># This usually fails</span>
-</span><span class='line'>  hdiutil detach &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>  rm -rf &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'><span class="k">fi</span>&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;Installing vagrant keys&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;mkdir /Users/vagrant/.ssh
-</span><span class='line'>chmod 700 /Users/vagrant/.ssh
-</span><span class='line'>curl -k &amp;lsquo;&lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub&quot;</span>&gt;https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub&lt;/a&gt;&amp;rsquo; &gt; /Users/vagrant/.ssh/authorized_keys
-</span><span class='line'>chmod 600 /Users/vagrant/.ssh/authorized_keys
-</span><span class='line'>chown -R vagrant /Users/vagrant/.ssh&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;Get Xcode CLI tools <span class="k">for </span>Lion <span class="o">(</span>at least to build Chef<span class="o">)</span>&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;&lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex&quot;</span>&gt;https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex&lt;/a&gt;&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;TOOLS<span class="o">=</span>clitools.dmg
-</span><span class='line'><span class="k">if</span> <span class="o">[</span> &amp;ldquo;<span class="nv">$OSX_VERS</span>&amp;rdquo; -eq 7 <span class="o">]</span>; <span class="k">then</span>
-</span><span class='line'><span class="k">  </span><span class="nv">DMGURL</span><span class="o">=</span>&lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg&quot;</span>&gt;http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg&lt;/a&gt;
-</span><span class='line'><span class="k">elif</span> <span class="o">[</span> &amp;ldquo;<span class="nv">$OSX_VERS</span>&amp;rdquo; -eq 8 <span class="o">]</span>; <span class="k">then</span>
-</span><span class='line'><span class="k">  </span><span class="nv">DMGURL</span><span class="o">=</span>&lt;a <span class="nv">href</span><span class="o">=</span><span class="s2">&quot;http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg&quot;</span>&gt;http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg&lt;/a&gt;
-</span><span class='line'><span class="k">fi</span>
-</span><span class='line'>curl &amp;ldquo;<span class="nv">$DMGURL</span>&amp;rdquo; -o &amp;ldquo;<span class="nv">$TOOLS</span>&amp;rdquo;
-</span><span class='line'><span class="nv">TMPMOUNT</span><span class="o">=</span>&lt;code&gt;/usr/bin/mktemp -d /tmp/clitools.XXXX&lt;/code&gt;
-</span><span class='line'>hdiutil attach &amp;ldquo;<span class="nv">$TOOLS</span>&amp;rdquo; -mountpoint &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>installer -pkg &amp;ldquo;<span class="k">$(</span>find <span class="nv">$TMPMOUNT</span> -name &amp;lsquo;*.mpkg&amp;rsquo;<span class="k">)</span>&amp;rdquo; -target /
-</span><span class='line'>hdiutil detach &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>rm -rf &amp;ldquo;<span class="nv">$TMPMOUNT</span>&amp;rdquo;
-</span><span class='line'>rm &amp;ldquo;<span class="nv">$TOOLS</span>&amp;rdquo;&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;Get gems &amp;ndash; we should really be installing rvm instead, since we can&amp;rsquo;t even compile Chef or have a Ruby dev environment..&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;gem update &amp;mdash;system
-</span><span class='line'>gem install puppet &amp;mdash;no-ri &amp;mdash;no-rdoc&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h1&gt;gem install chef &amp;mdash;no-ri &amp;mdash;no-rdoc&lt;/h1&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;exit
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+date > /etc/vagrant_box_build_time
+OSX_VERS=$(sw_vers -productVersion | awk -F &ldquo;.&rdquo; &lsquo;{print $2}&rsquo;)</p>
+
+<h1>Install VMware tools if we were built with VMware</h1>
+
+<p>if [ -e .vmfusion_version ]; then
+  TMPMOUNT=<code>/usr/bin/mktemp -d /tmp/vmware-tools.XXXX</code>
+  hdiutil attach darwin.iso -mountpoint &ldquo;$TMPMOUNT&rdquo;
+  installer -pkg &ldquo;$TMPMOUNT/Install VMware Tools.app/Contents/Resources/VMware Tools.pkg&rdquo; -target /
+  # This usually fails
+  hdiutil detach &ldquo;$TMPMOUNT&rdquo;
+  rm -rf &ldquo;$TMPMOUNT&rdquo;
+fi</p>
+
+<h1>Installing vagrant keys</h1>
+
+<p>mkdir /Users/vagrant/.ssh
+chmod 700 /Users/vagrant/.ssh
+curl -k &lsquo;<a href="https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub">https://raw.github.com/mitchellh/vagrant/master/keys/vagrant.pub</a>&rsquo; > /Users/vagrant/.ssh/authorized_keys
+chmod 600 /Users/vagrant/.ssh/authorized_keys
+chown -R vagrant /Users/vagrant/.ssh</p>
+
+<h1>Get Xcode CLI tools for Lion (at least to build Chef)</h1>
+
+<h1><a href="https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex">https://devimages.apple.com.edgekey.net/downloads/xcode/simulators/index-3905972D-B609-49CE-8D06-51ADC78E07BC.dvtdownloadableindex</a></h1>
+
+<p>TOOLS=clitools.dmg
+if [ &ldquo;$OSX_VERS&rdquo; -eq 7 ]; then
+  DMGURL=<a href="http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg">http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_november_2012.dmg</a>
+elif [ &ldquo;$OSX_VERS&rdquo; -eq 8 ]; then
+  DMGURL=<a href="http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg">http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_mountain_lion_november_2012.dmg</a>
+fi
+curl &ldquo;$DMGURL&rdquo; -o &ldquo;$TOOLS&rdquo;
+TMPMOUNT=<code>/usr/bin/mktemp -d /tmp/clitools.XXXX</code>
+hdiutil attach &ldquo;$TOOLS&rdquo; -mountpoint &ldquo;$TMPMOUNT&rdquo;
+installer -pkg &ldquo;$(find $TMPMOUNT -name &lsquo;*.mpkg&rsquo;)&rdquo; -target /
+hdiutil detach &ldquo;$TMPMOUNT&rdquo;
+rm -rf &ldquo;$TMPMOUNT&rdquo;
+rm &ldquo;$TOOLS&rdquo;</p>
+
+<h1>Get gems &ndash; we should really be installing rvm instead, since we can&rsquo;t even compile Chef or have a Ruby dev environment..</h1>
+
+<p>gem update &mdash;system
+gem install puppet &mdash;no-ri &mdash;no-rdoc</p>
+
+<h1>gem install chef &mdash;no-ri &mdash;no-rdoc</h1>
+
+<p>exit
+{% endcodeblock %}</p>
 
 <h4>Build the VM</h4>
 
@@ -1527,11 +1207,10 @@ current <code>postinstall.sh</code> script as of this posting:</p>
 defined, and all necessary Gems installed, we can finally BUILD the vm with the
 following command:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span><span class="nb">cd</span> ~/src/veewee
-</span><span class='line'><span class="nv">$ </span>bundle <span class="nb">exec </span>veewee fusion build osx-vm
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock lang:bash %}
+$ cd ~/src/veewee
+$ bundle exec veewee fusion build osx-vm
+{% endcodeblock %}</p>
 
 <p>This process takes the longest &ndash; you should see VMware Fusion fire up, a new VM
 get created, and follow the process of OS X being installed into the VM. When
@@ -1566,7 +1245,7 @@ the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
   <entry>
     <title type="html"><![CDATA[JAMF NetSUS Appliance]]></title>
     <link href="http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance/"/>
-    <updated>2012-02-06T11:22:00+01:00</updated>
+    <updated>2012-02-06T11:22:00-08:00</updated>
     <id>http://garylarizza.com/blog/2012/02/06/jamf-netsus-appliance</id>
     <content type="html"><![CDATA[<h2>JAMF&rsquo;s NetSUS Appliance &ndash; Netboot in a Box</h2>
 
@@ -1780,7 +1459,7 @@ deb-src http://apt.puppetlabs.com/ubuntu lucid main
   <entry>
     <title type="html"><![CDATA[Getting Started with The Luggage]]></title>
     <link href="http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage/"/>
-    <updated>2010-12-21T09:47:00+01:00</updated>
+    <updated>2010-12-21T09:47:00-08:00</updated>
     <id>http://garylarizza.com/blog/2010/12/21/getting-started-with-the-luggage</id>
     <content type="html"><![CDATA[<p>With the current movement in the Mac Community toward modular imaging strategies, there&rsquo;s a spike in the need for properly formed package installers. Apple&rsquo;s package format is well documented for its benefits and flaws and there are a string of applications that will help you create your perfect package (from Apple&rsquo;s Packagemaker to the many third-party applications).  While all the various package creation applications will ultimately create a desirable package in the end, very few of them have the triple-threat of easy code-review, replication, and portability.  This is where The Luggage comes in.</p>
 
@@ -1957,42 +1636,23 @@ PAYLOAD=unbz2-applications-Calculator.app
 
 <p>Now, let&rsquo;s look at our Makefile:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Managed Printer Makefile </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="err">&lt;/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="err">&lt;pre&gt;&lt;code&gt;include</span> <span class="err">/usr/local/share/luggage/luggage.make</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>HHS_Main_Office_9050_Managed_Installer
-</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.huronhs
-</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>    pack-hp-ppd <span class="se">\</span>
-</span><span class='line'>    pack-script-preflight
-</span><span class='line'>
-</span><span class='line'><span class="nf">pack-hp-ppd</span><span class="o">:</span> <span class="m">l_etc_cups_ppd</span>
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./psm_HHS_Office_9050.ppd <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/cups/ppd/psm_HHS_Office_9050.ppd
-</span><span class='line'>  @sudo chmod 644 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/cups/ppd/psm_HHS_Office_9050.ppd
-</span><span class='line'>  @sudo chown root:_lp <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/cups/ppd/psm_HHS_Office_9050.ppd
-</span><span class='line'><span class="err">&lt;/code&gt;&lt;/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="err">&lt;p&gt;</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock Managed Printer Makefile lang:make %}</p>
+
+<pre><code>include /usr/local/share/luggage/luggage.make
+
+TITLE=HHS_Main_Office_9050_Managed_Installer
+REVERSE_DOMAIN=com.huronhs
+PAYLOAD=\
+    pack-hp-ppd \
+    pack-script-preflight
+
+pack-hp-ppd: l_etc_cups_ppd
+  @sudo ${CP} ./psm_HHS_Office_9050.ppd ${WORK_D}/etc/cups/ppd/psm_HHS_Office_9050.ppd
+  @sudo chmod 644 ${WORK_D}/etc/cups/ppd/psm_HHS_Office_9050.ppd
+  @sudo chown root:_lp ${WORK_D}/etc/cups/ppd/psm_HHS_Office_9050.ppd
+</code></pre>
+
+<p>{% endcodeblock %}</p>
 
 <p>The first thing you should notice is that our PAYLOAD variable starts with a \ and has three lines.  The \ signifies that the contents of our variable spans multiple lines.  In reality, the value of PAYLOAD is actually &ldquo;pack-hp-ppd pack-script-preflight&rdquo; but it&rsquo;s formatted so it&rsquo;s easier to read.  Next, notice that the pack-script-preflight rule contains the word &ldquo;preflight&rdquo; after pack-script-.  This means that our script must be named preflight (EXACTLY &ndash; case is sensitive here).  Finally, we&rsquo;ve also specified a pack-hp-ppd rule.  Since luggage.make DOES NOT define this rule, we&rsquo;ve defined it in our Makefile.</p>
 
@@ -2015,100 +1675,52 @@ PAYLOAD=unbz2-applications-Calculator.app
 
 <p>So far our Makefiles have been pretty easy.  In fact, most of them have been a couple of lines.  Lets look at a package that installs files into multiple locations.  There&rsquo;s a cool open source tool called <a href="http://github.com/ripienaar/angelia">Angelia that was created by R.I Pienaar</a>.  I use it to send alerts to my iPhone and to also process Nagios Alerts.  The problem is that it&rsquo;s only packaged for Linux machines.  Since I manage Mac machines, I thought I&rsquo;d lend R.I. a hand and create a package installer for it.  <a href="https://github.com/huronschools/luggage/tree/master/examples/angelia">This package is also on my luggage repo</a> if you want to work ahead.  Let&rsquo;s look at the Makefile:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>Angelia Recipe </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="err">&lt;/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="nf">&lt;pre&gt;&lt;code&gt;#  Angelia Package Creation</span><span class="o">:</span>
-</span><span class='line'>
-</span><span class='line'><span class="cp">include /usr/local/share/luggage/luggage.make</span>
-</span><span class='line'>
-</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>Angelia_Installer
-</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.huronhs
-</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>    pack-angelia-etc <span class="se">\</span>
-</span><span class='line'>    pack-angelia-binaries <span class="se">\</span>
-</span><span class='line'>    pack-angelia-lib <span class="se">\</span>
-</span><span class='line'>    pack-angelia-spool <span class="se">\</span>
-</span><span class='line'>    pack-angelia-log <span class="se">\</span>
-</span><span class='line'>    pack-angelia-launchd
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'><span class="nf">pack-angelia-launchd</span><span class="o">:</span> <span class="m">l_Library_LaunchDaemons</span>
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> net.devco.angelia.plist <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/LaunchDaemons
-</span><span class='line'>  @sudo chmod -R 644 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/LaunchDaemons
-</span><span class='line'>
-</span><span class='line'><span class="nf">pack-angelia-binaries</span><span class="o">:</span> <span class="m">l_usr_sbin</span>
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia-send.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin/angelia-send
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia-spoold.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin/angelia-spoold
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia-nagios-send.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin/angelia-nagios-send
-</span><span class='line'>  @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/usr/sbin
-</span><span class='line'>
-</span><span class='line'><span class="nf">pack-angelia-lib</span><span class="o">:</span> <span class="m">l_Library_Ruby_Site_1_8</span>
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> -R ./angelia <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/Ruby/Site/1.8
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia.rb <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/Ruby/Site/1.8
-</span><span class='line'>  @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/Library/Ruby/Site/1.8
-</span><span class='line'>
-</span><span class='line'><span class="nf">pack-angelia-etc</span><span class="o">:</span> <span class="m">l_etc_angelia</span>
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> -R ./templates <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./angelia.cfg <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./COPYING <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">CP</span><span class="k">}</span> ./README.markdown <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>  @sudo chmod -R 755 <span class="k">${</span><span class="nv">WORK_D</span><span class="k">}</span>/etc/angelia
-</span><span class='line'>
-</span><span class='line'><span class="nf">pack-angelia-log</span><span class="o">:</span> <span class="m">l_var_log_angelia</span>
-</span><span class='line'>  @sudo touch .create
-</span><span class='line'><span class="nf">pack-angelia-spool</span><span class="o">:</span> <span class="m">l_var_spool_angelia</span>
-</span><span class='line'>  @sudo touch .create
-</span><span class='line'><span class="err">&lt;/code&gt;&lt;/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="err">&lt;p&gt;</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock Angelia Recipe lang:make %}</p>
+
+<pre><code>#  Angelia Package Creation:
+
+include /usr/local/share/luggage/luggage.make
+
+TITLE=Angelia_Installer
+REVERSE_DOMAIN=com.huronhs
+PAYLOAD=\
+    pack-angelia-etc \
+    pack-angelia-binaries \
+    pack-angelia-lib \
+    pack-angelia-spool \
+    pack-angelia-log \
+    pack-angelia-launchd
+
+
+pack-angelia-launchd: l_Library_LaunchDaemons
+  @sudo ${CP} net.devco.angelia.plist ${WORK_D}/Library/LaunchDaemons
+  @sudo chmod -R 644 ${WORK_D}/Library/LaunchDaemons
+
+pack-angelia-binaries: l_usr_sbin
+  @sudo ${CP} ./angelia-send.rb ${WORK_D}/usr/sbin/angelia-send
+  @sudo ${CP} ./angelia-spoold.rb ${WORK_D}/usr/sbin/angelia-spoold
+  @sudo ${CP} ./angelia-nagios-send.rb ${WORK_D}/usr/sbin/angelia-nagios-send
+  @sudo chmod -R 755 ${WORK_D}/usr/sbin
+
+pack-angelia-lib: l_Library_Ruby_Site_1_8
+  @sudo ${CP} -R ./angelia ${WORK_D}/Library/Ruby/Site/1.8
+  @sudo ${CP} ./angelia.rb ${WORK_D}/Library/Ruby/Site/1.8
+  @sudo chmod -R 755 ${WORK_D}/Library/Ruby/Site/1.8
+
+pack-angelia-etc: l_etc_angelia
+  @sudo ${CP} -R ./templates ${WORK_D}/etc/angelia
+  @sudo ${CP} ./angelia.cfg ${WORK_D}/etc/angelia
+  @sudo ${CP} ./COPYING ${WORK_D}/etc/angelia
+  @sudo ${CP} ./README.markdown ${WORK_D}/etc/angelia
+  @sudo chmod -R 755 ${WORK_D}/etc/angelia
+
+pack-angelia-log: l_var_log_angelia
+  @sudo touch .create
+pack-angelia-spool: l_var_spool_angelia
+  @sudo touch .create
+</code></pre>
+
+<p>{% endcodeblock %}</p>
 
 <p>It&rsquo;s definitely longer, but I don&rsquo;t think it&rsquo;s any more complex than the examples we&rsquo;ve seen before.  The PAYLOAD variable spans multiple lines using the \ character and I&rsquo;ve defined all the custom rules.  All of the rules depend on <a href="https://github.com/huronschools/luggage/blob/master/luggage.make">folder rules in my luggage.make file</a> (which were created if they didn&rsquo;t exist before), and the recipes inside those rules are extremely simple to navigate (mainly copying files and changing permissions).  Creating a script that makes this package would be QUITE A BIT longer than this Makefile, and the Makefile itself took less than 3 minutes to create.  The only caveat is that we need to make sure all the files/directories we&rsquo;re copying into Luggage&rsquo;s WORK_D directory are in the folder that contains the Makefile.  Because of this, anytime Angelia is updated I will need to copy over new files.</p>
 
@@ -2120,204 +1732,104 @@ PAYLOAD=unbz2-applications-Calculator.app
 
 <p><a href="http://github.com/puppetlabs/marionette-collective">Marionette-Collective is awesome software</a> (also created by R.I Pienaar and now owned by Puppet Labs) that allows you to communicate with multiple nodes at once.  They DID have a script that created their packages, but I wanted to create a Makefile that would create a package of ANY version of their software.  Let&rsquo;s look at the Makefile first and I&rsquo;ll break it down:</p>
 
-<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>MCollective Recipe </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-<span class='line-number'>56</span>
-<span class='line-number'>57</span>
-<span class='line-number'>58</span>
-<span class='line-number'>59</span>
-<span class='line-number'>60</span>
-<span class='line-number'>61</span>
-<span class='line-number'>62</span>
-<span class='line-number'>63</span>
-<span class='line-number'>64</span>
-<span class='line-number'>65</span>
-<span class='line-number'>66</span>
-<span class='line-number'>67</span>
-<span class='line-number'>68</span>
-<span class='line-number'>69</span>
-<span class='line-number'>70</span>
-<span class='line-number'>71</span>
-<span class='line-number'>72</span>
-<span class='line-number'>73</span>
-<span class='line-number'>74</span>
-<span class='line-number'>75</span>
-<span class='line-number'>76</span>
-<span class='line-number'>77</span>
-<span class='line-number'>78</span>
-<span class='line-number'>79</span>
-<span class='line-number'>80</span>
-<span class='line-number'>81</span>
-<span class='line-number'>82</span>
-<span class='line-number'>83</span>
-<span class='line-number'>84</span>
-<span class='line-number'>85</span>
-<span class='line-number'>86</span>
-<span class='line-number'>87</span>
-<span class='line-number'>88</span>
-<span class='line-number'>89</span>
-<span class='line-number'>90</span>
-<span class='line-number'>91</span>
-<span class='line-number'>92</span>
-<span class='line-number'>93</span>
-<span class='line-number'>94</span>
-<span class='line-number'>95</span>
-<span class='line-number'>96</span>
-<span class='line-number'>97</span>
-<span class='line-number'>98</span>
-</pre></td><td class='code'><pre><code class='make'><span class='line'><span class="err">&lt;/p&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="nf">&lt;pre&gt;&lt;code&gt;#  Example</span><span class="o">:</span>  <span class="m">A dynamic installer for Marionette-Collective</span>
-</span><span class='line'><span class="c">#</span>
-</span><span class='line'><span class="c">#  Author:  Gary Larizza</span>
-</span><span class='line'><span class="c">#  Created: 12/17/2010</span>
-</span><span class='line'><span class="c">#  Last Modified: 12/18/2010</span>
-</span><span class='line'><span class="c">#</span>
-</span><span class='line'><span class="c">#  Description:  This Makefile will download the version of MCollective specified</span>
-</span><span class='line'><span class="c">#    in the PACKAGE_VERSION variable from the Puppet Labs website, untar it,</span>
-</span><span class='line'><span class="c">#    and then install the source files into their Mac-specific locations.  </span>
-</span><span class='line'><span class="c">#    The MAJOR and MINOR versions must be specified for the Info.plist file</span>
-</span><span class='line'><span class="c">#    that Packagemaker requires, but I use awk on the PACKAGE_VERSION to </span>
-</span><span class='line'><span class="c">#    get these.  See inline comments.</span>
-</span><span class='line'><span class="c">#</span>
-</span><span class='line'><span class="cp">include /usr/local/share/luggage/luggage.make</span>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'><span class="c"># Luggage Variables:</span>
-</span><span class='line'><span class="c">#    If the TYPE variable isn&#39;t specified via the CLI, we will install everything</span>
-</span><span class='line'><span class="c">#    into the resultant package</span>
-</span><span class='line'><span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Full
-</span><span class='line'><span class="nv">REVERSE_DOMAIN</span><span class="o">=</span>com.puppetlabs
-</span><span class='line'><span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>    unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
-</span><span class='line'>    pack-mc-libexec <span class="se">\</span>
-</span><span class='line'>    pack-mc-binaries <span class="se">\</span>
-</span><span class='line'>    pack-mc-lib <span class="se">\</span>
-</span><span class='line'>    pack-mc-config <span class="se">\</span>
-</span><span class='line'>    pack-mc-config-server <span class="se">\</span>
-</span><span class='line'>    pack-mc-config-client <span class="se">\</span>
-</span><span class='line'>    pack-mc-launchd <span class="se">\</span>
-</span><span class='line'>    pack-mc-mcollectived <span class="se">\</span>
-</span><span class='line'>    pack-mc-preflight-all
-</span><span class='line'>
-</span><span class='line'><span class="c"># Variable Declarations:  </span>
-</span><span class='line'><span class="c">#    Any variable can be set from the command line by doing this:</span>
-</span><span class='line'><span class="c">#    &quot;make pkg PACKAGE_VERSION=1.0.0&quot;</span>
-</span><span class='line'><span class="nv">PACKAGE_VERSION</span><span class="o">=</span>1.0.0
-</span><span class='line'><span class="nv">PACKAGE_MAJOR_VERSION</span><span class="o">=</span><span class="sb">`</span><span class="nb">echo</span> <span class="k">${</span><span class="nv">PACKAGE_VERSION</span><span class="k">}</span> | awk -F <span class="s1">&#39;.&#39;</span> <span class="s1">&#39;{print $$1}&#39;</span><span class="sb">`</span>
-</span><span class='line'><span class="nv">PACKAGE_MINOR_VERSION</span><span class="o">=</span><span class="sb">`</span><span class="nb">echo</span> <span class="k">${</span><span class="nv">PACKAGE_VERSION</span><span class="k">}</span> | awk -F <span class="s1">&#39;.&#39;</span> <span class="s1">&#39;{print $$2$$3}&#39;</span><span class="sb">`</span>
-</span><span class='line'><span class="nv">MCFILE</span><span class="o">=</span>mcollective-<span class="k">${</span><span class="nv">PACKAGE_VERSION</span><span class="k">}</span>
-</span><span class='line'><span class="nv">MCURL</span><span class="o">=</span>http://puppetlabs.com/downloads/mcollective/<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>.tgz
-</span><span class='line'>
-</span><span class='line'><span class="c"># Package Creation Limiters:</span>
-</span><span class='line'><span class="c">#    These if-statements will check for one of three values for the TYPE variable:</span>
-</span><span class='line'><span class="c">#    &quot;COMMON, CLIENT, or BASE&quot;  If either of these values are present (CASE SENSITIVE)</span>
-</span><span class='line'><span class="c">#    the PAYLOAD variable will be changed to limit what is installed into the package.</span>
-</span><span class='line'>
-</span><span class='line'><span class="c"># COMMON Package:</span>
-</span><span class='line'><span class="c">#    This package includes the Ruby libraries and MCollective plugins with nothing else.</span>
-</span><span class='line'><span class="cp">ifeq (${TYPE},COMMON)</span>
-</span><span class='line'>  <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>      unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
-</span><span class='line'>      pack-mc-libexec <span class="se">\</span>
-</span><span class='line'>      pack-mc-lib <span class="se">\</span>
-</span><span class='line'>      pack-mc-preflight-common
-</span><span class='line'>  <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Common
-</span><span class='line'><span class="cp">endif</span>
-</span><span class='line'>
-</span><span class='line'><span class="c"># CLIENT Package:</span>
-</span><span class='line'><span class="c">#    This package includes the MCollective Binaries and the configuration file for</span>
-</span><span class='line'><span class="c">#    MCollective&#39;s client binaries.  </span>
-</span><span class='line'><span class="cp">ifeq (${TYPE},CLIENT)</span>
-</span><span class='line'>  <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>      unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
-</span><span class='line'>      pack-mc-config <span class="se">\</span>
-</span><span class='line'>      pack-mc-binaries <span class="se">\</span>
-</span><span class='line'>      pack-mc-config-client <span class="se">\</span>
-</span><span class='line'>      pack-mc-preflight-client
-</span><span class='line'>  <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Client
-</span><span class='line'><span class="cp">endif</span>
-</span><span class='line'>
-</span><span class='line'><span class="c"># BASE Package:</span>
-</span><span class='line'><span class="c">#    This package includes the mcollectived daemon, Ruby Libraries, a launchd plist</span>
-</span><span class='line'><span class="c">#    to call mcollectived, and the configuration files for the MCollective server.</span>
-</span><span class='line'><span class="cp">ifeq (${TYPE},BASE)</span>
-</span><span class='line'>  <span class="nv">PAYLOAD</span><span class="o">=</span><span class="se">\</span>
-</span><span class='line'>      unpack-mc-<span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span> <span class="se">\</span>
-</span><span class='line'>      pack-mc-config <span class="se">\</span>
-</span><span class='line'>      pack-mc-config-server <span class="se">\</span>
-</span><span class='line'>      pack-mc-launchd <span class="se">\</span>
-</span><span class='line'>      pack-mc-mcollectived <span class="se">\</span>
-</span><span class='line'>      pack-mc-lib <span class="se">\</span>
-</span><span class='line'>      pack-mc-preflight-base
-</span><span class='line'>  <span class="nv">TITLE</span><span class="o">=</span>MCollective_Installer_Base
-</span><span class='line'><span class="cp">endif</span>
-</span><span class='line'>
-</span><span class='line'><span class="c"># This rule will curl the selected version of MCollective and untar it into the directory</span>
-</span><span class='line'><span class="c">#    in which the Makefile resides.</span>
-</span><span class='line'><span class="nf">unpack-mc-${MCFILE}</span><span class="o">:</span>
-</span><span class='line'>  curl <span class="k">${</span><span class="nv">MCURL</span><span class="k">}</span> -o <span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>.tgz
-</span><span class='line'>  @sudo <span class="k">${</span><span class="nv">TAR</span><span class="k">}</span> xzf <span class="k">${</span><span class="nv">MCFILE</span><span class="k">}</span>.tgz
-</span><span class='line'>
-</span><span class='line'><span class="c"># This rule will install MCollective&#39;s plugin files to /usr/libexec/mcollective</span>
-</span><span class='line'><span class="err">&lt;/code&gt;&lt;/pre&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="err">&lt;p&gt;</span>
-</span></code></pre></td></tr></table></div></figure></notextile></div></p>
+<p>{% codeblock MCollective Recipe lang:make %}</p>
+
+<pre><code>#  Example:  A dynamic installer for Marionette-Collective
+#
+#  Author:  Gary Larizza
+#  Created: 12/17/2010
+#  Last Modified: 12/18/2010
+#
+#  Description:  This Makefile will download the version of MCollective specified
+#    in the PACKAGE_VERSION variable from the Puppet Labs website, untar it,
+#    and then install the source files into their Mac-specific locations.  
+#    The MAJOR and MINOR versions must be specified for the Info.plist file
+#    that Packagemaker requires, but I use awk on the PACKAGE_VERSION to 
+#    get these.  See inline comments.
+#
+include /usr/local/share/luggage/luggage.make
+
+
+# Luggage Variables:
+#    If the TYPE variable isn't specified via the CLI, we will install everything
+#    into the resultant package
+TITLE=MCollective_Installer_Full
+REVERSE_DOMAIN=com.puppetlabs
+PAYLOAD=\
+    unpack-mc-${MCFILE} \
+    pack-mc-libexec \
+    pack-mc-binaries \
+    pack-mc-lib \
+    pack-mc-config \
+    pack-mc-config-server \
+    pack-mc-config-client \
+    pack-mc-launchd \
+    pack-mc-mcollectived \
+    pack-mc-preflight-all
+
+# Variable Declarations:  
+#    Any variable can be set from the command line by doing this:
+#    "make pkg PACKAGE_VERSION=1.0.0"
+PACKAGE_VERSION=1.0.0
+PACKAGE_MAJOR_VERSION=`echo ${PACKAGE_VERSION} | awk -F '.' '{print $$1}'`
+PACKAGE_MINOR_VERSION=`echo ${PACKAGE_VERSION} | awk -F '.' '{print $$2$$3}'`
+MCFILE=mcollective-${PACKAGE_VERSION}
+MCURL=http://puppetlabs.com/downloads/mcollective/${MCFILE}.tgz
+
+# Package Creation Limiters:
+#    These if-statements will check for one of three values for the TYPE variable:
+#    "COMMON, CLIENT, or BASE"  If either of these values are present (CASE SENSITIVE)
+#    the PAYLOAD variable will be changed to limit what is installed into the package.
+
+# COMMON Package:
+#    This package includes the Ruby libraries and MCollective plugins with nothing else.
+ifeq (${TYPE},COMMON)
+  PAYLOAD=\
+      unpack-mc-${MCFILE} \
+      pack-mc-libexec \
+      pack-mc-lib \
+      pack-mc-preflight-common
+  TITLE=MCollective_Installer_Common
+endif
+
+# CLIENT Package:
+#    This package includes the MCollective Binaries and the configuration file for
+#    MCollective's client binaries.  
+ifeq (${TYPE},CLIENT)
+  PAYLOAD=\
+      unpack-mc-${MCFILE} \
+      pack-mc-config \
+      pack-mc-binaries \
+      pack-mc-config-client \
+      pack-mc-preflight-client
+  TITLE=MCollective_Installer_Client
+endif
+
+# BASE Package:
+#    This package includes the mcollectived daemon, Ruby Libraries, a launchd plist
+#    to call mcollectived, and the configuration files for the MCollective server.
+ifeq (${TYPE},BASE)
+  PAYLOAD=\
+      unpack-mc-${MCFILE} \
+      pack-mc-config \
+      pack-mc-config-server \
+      pack-mc-launchd \
+      pack-mc-mcollectived \
+      pack-mc-lib \
+      pack-mc-preflight-base
+  TITLE=MCollective_Installer_Base
+endif
+
+# This rule will curl the selected version of MCollective and untar it into the directory
+#    in which the Makefile resides.
+unpack-mc-${MCFILE}:
+  curl ${MCURL} -o ${MCFILE}.tgz
+  @sudo ${TAR} xzf ${MCFILE}.tgz
+
+# This rule will install MCollective's plugin files to /usr/libexec/mcollective
+</code></pre>
+
+<p>{% endcodeblock %}</p>
 ]]></content>
   </entry>
   

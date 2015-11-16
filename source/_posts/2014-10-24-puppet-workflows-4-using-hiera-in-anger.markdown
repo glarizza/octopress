@@ -82,9 +82,19 @@ somewhere to start.
 
 
 
-## An argument AGAINST {global,common}.yaml
+## Common.yaml, your organization's common values - **REVISED**
 
-I might as well drum up some controversy now...
+**UPDATE - 28 October**
+
+*Previously, this section was where I presented the idea of removing the lowest
+level of the hierarchy as a way of ensuring that you didn't omit a value in Hiera
+(the idea being that common values would be in the profile, anything higher would
+be in Hiera, and all your 'defaults', or 'common values' would be inside the profile).
+The idea of removing the lowest level of the Hiera hierarchy was always something
+I was kicking around in my head, but R.I. made a comment below that's made me revise
+my thought process. There's still a greater concern around definitively tracking
+down values pulled from Hiera, but I think we can accomplish that through other
+means. I'm going to revise what I wrote below to point out the relevant details.*
 
 When using Hiera, you need to define a hierarchy that Hiera uses in its search
 for your data. Most often, it looks something like this:
@@ -103,8 +113,11 @@ for your data. Most often, it looks something like this:
 {% endcodeblock %}
 
 Notice that little "common" at the end?  That means that, failing everything
-else, it's going to look in `common.yaml` for a value.  This means that
-`common.yaml` is a storage bin of default values.
+else, it's going to look in `common.yaml` for a value. I had thought of common
+as the 'defaults' level, but the reality is that it is a list of values common
+across all the nodes in your infrastructure.  These are the values, SPECIFIC TO
+YOUR ORGANIZATION, that should be the same everywhere. Barring an override at a
+higher level, these values are your organization's 'defaults', if you will.
 
 Previously, you may have heard me rail against Hiera's optional second argument
 and how I really don't like it.  Take this example:
@@ -120,50 +133,87 @@ value of '80'.  I don't like using this second argument because:
 1. If you forget to enter the 'port' parameter into the hierarchy, or typo it in the YAML file, Hiera will gladly assign the default value of '80' (which, unless you're checking for this, might sneak and get into production)
 2. Where is the real 'default' value: the value in `common.yaml` or the optional second argument?
 
-Okay, so we're resigned to never use the second argument.  Cool.  BUT, what
-happens when you already have a value in `common.yaml` and you typo the name
-of the parameter at a higher level (for example, you write "prot: 44" inside
-a YAML file at a higher level)?  You're going to get the value in `common.yaml`,
-and, again, unless you're watching for this, suddenly you get a default value
-when you didn't expect it.
+It actually depends on where you do the hiera() call as to what 'kind' of
+default value this is. Note that previously we talked about how the 'common'
+level represented values common across your infrastructure. If you do this
+hiera() call inside a profile (which is where I recommend it be done), providing
+the optional second argument ends up being redundant (i.e. the value should be
+inside Hiera).
 
-So, what is this value in `common.yaml` used for anyways? Well, it's a value
-default for every node that needs it.  And where are we going to be getting
-this value?  If you said "The Profile", you would be correct.  So what should
-we do about this?  I say you hardcode the value right into the Profile (GASP!!)
-I will talk about this more in the next section (because it's more appropriate
-there), so just hold that thought for another section.
+The moral of this story being: values common to all nodes should be in the
+lowest level of the Hiera hierarchy, and all explicit hiera calls should
+omit the default second argument if that common value is expected to be found
+in the hierarchy.
 
-Until then, let me say that I've started to align myself with the idea that
-`hiera.yaml` shouldn't have a "defaults" level.  The idea is that if there's
-a value that every node should have, keep it visible and in the Profile. If
-you need Hiera's dynamic lookup capability, THEN drop it into the hierarchy.
-The downside of this philosophy is that you'll suddenly need to enter a value
-in many different places (i.e. if suddenly you want to define a different port
-in the 'dev' application tier than in all the other application tiers, then you
-need to add the port parameter to EVERY ONE of your application tier files. If
-you have 8 of these tiers, then you need to enter the value into all 8 files).
-This is also less-than-ideal, but what are you optimizing for here?  You're
-optimizing for early failure.  If Hiera can't find a value and it SHOULD, this
-is an early failure at catalog compilation time. You'll know INSTANTLY that
-there's a problem (instead of deploying a default value to production, for
-example).
 
-If you don't need this level of optimization, by all means keep the default
-level.  If you don't want this much redundancy by entering values in multiple
-files, by all means keep the default level.  I simply offer forth a solution
-for those folks who are wanting a "fail-early, fail-often" approach in their
-data lookup mechanism.
 
-**NOTE**: You're never going to completely escape the idea of typos. Even
-if you remove the "defaults" level in the hierarchy, you could still have the
-case where you enter a port value in every file at the `$::applicationtier`
-level, but maybe typo the parameter at a higher level.  In this case, Hiera
-DOES return a value, but it's the `$::applicationtier` value.  This requires
-"CONSTANT VIGILANCE!" to catch these cases, but the idea is that these edge
-cases are much less than a defaults-level override, so you SHOULD be able to
-spot it easier. No level of automation will totally remove human error (and
-watch The Matrix if you don't believe me).
+## Data Bindings
+
+In Puppet 3, we introduced the concept of 'data bindings' for parameterized classes,
+which meant that Puppet now had another choice for gathering parmeter values.
+Previously, the order Puppet would look to assign a value for parameters to
+classes was:
+
+1. A value passed to the class via the parameterized class syntax
+2. A default value provided by the class
+
+As of Puppet 3, this is the new parameter assignment order:
+
+1. A value passed to the class via the parameterized class syntax
+2. A Hiera lookup for *classname::parametername*
+3. A default value provided by the class
+
+Data bindings is meant to be pluggable to allow for ANY data backend, but,
+as of this writing, there's currently only one: Hiera.  Because of this,
+Puppet will now automatically do a Hiera lookup for every parameter to a
+parameterized class that isn't explicitly passed a value via the parameterized
+class syntax (which means that if you just do `include classname`, Puppet
+will do a Hiera lookup for EVERY parameter defined to the "classname" class).
+
+This is really cool because it means that you can just add *classname::parametername*
+to your Hiera setup, and, as long as you're not EXPLICITLY passing that
+parameter's value to the class, Puppet will do a lookup and find the value.
+
+It's also completely transparent to you unless you know it's happening.
+
+The issue here is that this is new functionality to Puppet, and it feels like
+magic to me. You can make the argument and say "If you don't start using it,
+Gary, people will never take to it," however I feel like this kind of magical
+lookup in the background is always going to be a bad thing.
+
+There's also another problem.  Consider a Hiera hierarchy that has 15 levels
+(they exist, TRUST ME).  What happens if you don't define ANY parameters in
+Hiera in the form of *classname::parametername* and simply want to rely on
+the default values for every class?  Well, it means that Hiera is STILL going
+to be triggered for every parameter to a class that isn't explicitly passed a
+value.  That's a hell of a performance hit.  Fortunately, there's a way to
+disable this lookup.  Simply add the following to the Puppet master's `puppet.conf`
+file:
+
+{% codeblock %}
+data_binding_terminus = none
+{% endcodeblock _%}
+
+It's going to be up to how your team needs to work as to whether you use Hiera
+data bindings or not. If you have a savvy team that feels they can debug these
+lookups, then cool - use the hell out of it. I prefer to err on the side of an
+explicit hiera() lookup for every value I'm querying, even if it's a lot of extra
+lines of code. I prefer the visibility, especially for new members to your team.
+For those people with large hierarchies, you may want to weigh the performance
+hit.  Try to disable data bindings and see if your master is more performant. If
+so, then explicit hiera() calls may actually buy you some rewards.
+
+**PROS:**
+
+* Adding parameters to Hiera in the style of *classname::parametername* will set parameterized class values automatically
+* Simplified code - simply use the include() function everywhere (which is safer than the parameterized class syntax)
+
+**CONS:**
+
+* Lookup is completely transparent unless you know what's going on
+* Debugging parameter values can be difficult (especially with typos or forgetting to set values in Hiera)
+* Performance hit for values you want to be assigned the class default value
+
 
 
 ## Where to data - Hiera or Profile?
@@ -173,20 +223,39 @@ repeatedly when I'm working with customers. It's a good question, and one of
 the quickest ways to blow up your YAML files in Hiera. Here's the order I use
 when deciding where to put data:
 
-### Enter the data into the Profile itself
+### WHERE did that data come from?
 
-Yes, that's exactly what I said - put it in the Profile.  "BUT GARY!", you
-should be thinking, "THAT'S EMBEDDING DATA INSIDE YOUR PUPPET CODE!"  To that
-I say: "It depends on how you look at the problem and solution." The profile is
-YOUR implementation.  It describes how YOU define the implementation of a piece
-of technology in YOUR organization. As such, it's less about Puppet code and
-more about pulling data and passing it TO the Puppet code. It's the glue-code
-that grabs the data and wires it up to the model that uses it. How it grabs the
-data is not really a big deal, so long as it grabs the RIGHT data - right? You
-can choose to hardcode it into the Profile, or use Hiera, or use some other
-magical data lookup mechanism - we don't really care (so long as the Profile
-gathers the data and passes it to the correct Puppet class).
+Remember that the profile is YOUR implementation - it describes how YOU define
+the implementation of a piece of technology in YOUR organization. As such, it's
+less about Puppet code and more about pulling data and passing it TO the Puppet
+code. It's the glue-code that grabs the data and wires it up to the model that
+uses it. How it grabs the data is not really a big deal, so long as it grabs
+the RIGHT data - right? You can choose to hardcode it into the Profile, or use
+Hiera, or use some other magical data lookup mechanism - we don't really care
+(so long as the Profile gathers the data and passes it to the correct Puppet
+class).
 
+The PROBLEM here is debugging WHERE the data came from. As I said previously,
+Hiera has a level for all bits of data common to your organization, and, obviously,
+data overridden at a higher level takes precedence over the 'common' level at
+the bottom. With Hiera, unless you run the `hiera` binary in debug mode (-d),
+you can never be completely sure where the data came from. Puppet has no way of
+dumping out every variable and where it came from (whether Hiera or set directly
+in the DSL, and, if it WAS Hiera, exactly what level or file it came from).
+
+It is THIS REASON that causes me to eschew things like data bindings in Puppet.
+Debugging where a value came from can be a real pain in the ass. If there were
+amazing tooling around this, I would 100% support using data bindings and just
+setting everything inside Hiera and using the include() function, but, alas,
+that's not been my experience. Until then, I will continue to recommend explicit
+`hiera` calls for visibility into when Hiera is being called and when values
+are being set inside the DSL.
+
+
+### Enter the data into the Profile
+
+One of the first choices people make is to enter the data (like ntpserver
+address, java version, or whatever it is) directly into the Profile.
 "BUT GARY! IT'S GOING TO MAKE IT HARD TO DEBUG!"  Not really. You're going to
 have to open the Profile anyway to see what's going on (whether you pull the
 data from Hiera or hardcode it in the Profile), right? And, arguably, the
@@ -194,13 +263,13 @@ Profile is legible...doing Hiera lookups gives you flexibility at a cost of
 abstracting away how it got that bit of data (i.e. "It used Hiera"). For newer
 users of Puppet, having the data in the Profile is easier to follow. So, in the
 end, putting the data into the Profile itself is the least-flexible and most-visible
-option...so consequently it should be the first available option. This option
-is best for defaults that are applicable for ALL nodes.
+option...so consequently people consider it as the first available option. This option
+is good for common/default values, BUT, if you eventually want to use Hiera, you need
+to re-enter the data into the common level of Hiera. It also splits up your
+"source of truth" to include BOTH the Profile manifest and Hiera. In the end,
+you need to weigh your team's goals, who has access to the Hiera repo, and
+how flexible you need to be with your data.
 
-Remember when I offered that crazy idea of not having a "defaults" level in the
-hierarchy?  This is why: erring on the side of visibility in the Profile and
-failing early with Hiera. It also gives you a logical starting point when
-determining WHERE to put your data.  Moving along...
 
 **PROS:**
 
@@ -209,21 +278,18 @@ determining WHERE to put your data.  Moving along...
 **CONS:**
 
 * Inability to redefine variables in Puppet DSL makes any settings constants by default (i.e. no overriding permitted)
+* Data outside of Hiera creates a second "source of truth"
+
 
 ### Enter the data into Hiera
 
 If you find that you need to have different bits of data for different nodes
 (i.e. a different version of Java in the dev tier instead of the prod tier),
-then you can start to put the data into Hiera.
-
-**NOTE**: If you subscribe to my "no defaults" philosophy above, you suddenly
-need to enter the data into as many files as that level of the hierarchy has
-(or more if you override at a higher level). Understand that you're not me,
-and you DON'T NEED to subscribe to this "no defaults" view of the world. Yay
-for being different!
-
-Where to put the data is going to depend on your own needs - I'm trusting that
-you can figure this part out :)
+then you can look to put the data into Hiera.  Where to put the data is going
+to depend on your own needs - I'm trusting that you can figure this part out - but
+the bigger piece here is that once the data is in Hiera you need to ensure
+you're getting the RIGHT data (i.e. if it's overridden at a higher level, you
+are certain you entered it into the right file and didn't typo anything).
 
 This answers that "where" question, but doesn't answer the "what" question...as
 in "What data should I put into Hiera?"  For that, we have another section...
@@ -231,6 +297,7 @@ in "What data should I put into Hiera?"  For that, we have another section...
 **PROS:**
 
 * Flexibility in returning different values based on different conditions
+* All the data is inside one 'source of truth' for data according to your organization
 
 **CONS:**
 
@@ -502,73 +569,6 @@ being authoritative and simply 'suggesting' a classification.
 * Decreased visibility: need to do a Hiera lookup to determine classification
 * Insecure: since facts are insecure and can be overridden, so can classification
 
-
-## Data Bindings
-
-In Puppet 3, we introduced the concept of 'data bindings' for parameterized classes,
-which meant that Puppet now had another choice for gathering parmeter values.
-Previously, the order Puppet would look to assign a value for parameters to
-classes was:
-
-1. A value passed to the class via the parameterized class syntax
-2. A default value provided by the class
-
-As of Puppet 3, this is the new parameter assignment order:
-
-1. A value passed to the class via the parameterized class syntax
-2. A Hiera lookup for *classname::parametername*
-3. A default value provided by the class
-
-Data bindings is meant to be pluggable to allow for ANY data backend, but,
-as of this writing, there's currently only one: Hiera.  Because of this,
-Puppet will now automatically do a Hiera lookup for every parameter to a
-parameterized class that isn't explicitly passed a value via the parameterized
-class syntax (which means that if you just do `include classname`, Puppet
-will do a Hiera lookup for EVERY parameter defined to the "classname" class).
-
-This is really cool because it means that you can just add *classname::parametername*
-to your Hiera setup, and, as long as you're not EXPLICITLY passing that
-parameter's value to the class, Puppet will do a lookup and find the value.
-
-It's also completely transparent to you unless you know it's happening.
-
-The issue here is that this is new functionality to Puppet, and it feels like
-magic to me. You can make the argument and say "If you don't start using it,
-Gary, people will never take to it," however I feel like this kind of magical
-lookup in the background is always going to be a bad thing.
-
-There's also another problem.  Consider a Hiera hierarchy that has 15 levels
-(they exist, TRUST ME).  What happens if you don't define ANY parameters in
-Hiera in the form of *classname::parametername* and simply want to rely on
-the default values for every class?  Well, it means that Hiera is STILL going
-to be triggered for every parameter to a class that isn't explicitly passed a
-value.  That's a hell of a performance hit.  Fortunately, there's a way to
-disable this lookup.  Simply add the following to the Puppet master's `puppet.conf`
-file:
-
-{% codeblock %}
-data_binding_terminus = none
-{% endcodeblock _%}
-
-It's going to be up to how your team needs to work as to whether you use Hiera
-data bindings or not. If you have a savvy team that feels they can debug these
-lookups, then cool - use the hell out of it. I prefer to err on the side of an
-explicit hiera() lookup for every value I'm querying, even if it's a lot of extra
-lines of code. I prefer the visibility, especially for new members to your team.
-For those people with large hierarchies, you may want to weigh the performance
-hit.  Try to disable data bindings and see if your master is more performant. If
-so, then explicit hiera() calls may actually buy you some rewards.
-
-**PROS:**
-
-* Adding parameters to Hiera in the style of *classname::parametername* will set parameterized class values automatically
-* Simplified code - simply use the include() function everywhere (which is safer than the parameterized class syntax)
-
-**CONS:**
-
-* Lookup is completely transparent unless you know what's going on
-* Debugging parameter values can be difficult (especially with typos or forgetting to set values in Hiera)
-* Performance hit for values you want to be assigned the class default value
 
 
 [workflows2]: http://bit.ly/puppetworkflows2
