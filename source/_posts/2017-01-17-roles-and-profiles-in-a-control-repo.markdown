@@ -134,6 +134,16 @@ If the people that own the Puppet infrastructure are the same people that
 make changes to Puppet modules, then it doesn't really matter where Roles and
 Profiles go.
 
+For many organizations this is THE consideration that determines their choice,
+but remember to build a workflow for today with the ability to adapt to
+tomorrow.  If you have a single person outside the ops team contributing to
+Puppet, it doesn't mean that you need to upend the workflow just for them.
+Moving from something like having Roles & Profiles inside the Control Repo to
+having them outside the Control Repo is an easy switch to implement (from
+a technical standpoint), but the second you make that switch you're adding
+steps to EVERYONE'S workflow and changing the location of the most commonly
+used modules within Puppet. That's a heavy cost - don't do it without reason.
+
 ## So what are the OFFICIAL RECOMMENDATIONS THEN?!?!
 
 We officially recommend you calm down with that punctuation. Beyond that, here it is:
