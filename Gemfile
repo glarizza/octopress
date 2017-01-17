@@ -1,7 +1,8 @@
 source "https://rubygems.org"
 
 group :development do
-  gem 'rake', '~> 0.9'
+  gem 'bundler'
+  gem 'rake', '~> 11.3.0'
   gem 'jekyll', '~> 0.12'
   gem 'rdiscount', '~> 1.6.8'
   gem 'redcarpet', '~> 2.1.1'

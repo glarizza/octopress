@@ -12,9 +12,4 @@ vendor
 node_modules
 public/*
 vendor/ruby
-vendor/ruby
-vendor/ruby
-vendor/ruby
-vendor/ruby
-vendor/ruby
-vendor/ruby
+bin/*

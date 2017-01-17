@@ -104,7 +104,11 @@
         <loc>
             http://garylarizza.com/blog/2015/11/16/workflows-evolved-even-besterer-practices/
         </loc>
-        <lastmod>2015-11-16T13:13:38-08:00</lastmod>
+        <lastmod>2016-12-12T06:34:21-08:00</lastmod>
+    </url>
+    <url>
+        <loc>http://garylarizza.com/blog/2017/01/17/roles-and-profiles-in-a-control-repo/</loc>
+        <lastmod>2017-01-17T14:19:57-08:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/about/</loc>
@@ -112,14 +116,18 @@
     </url>
     <url>
         <loc>http://garylarizza.com/blog/archives/</loc>
-        <lastmod>2015-11-16T13:13:38-08:00</lastmod>
+        <lastmod>2017-01-17T14:19:57-08:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/</loc>
-        <lastmod>2015-11-16T13:13:38-08:00</lastmod>
+        <lastmod>2017-01-17T14:19:57-08:00</lastmod>
     </url>
     <url>
         <loc>http://garylarizza.com/robots.txt</loc>
         <lastmod>2014-10-22T06:40:02-07:00</lastmod>
+    </url>
+    <url>
+        <loc>http://garylarizza.com/static/11BD7D11.asc</loc>
+        <lastmod>2017-01-10T12:16:03-08:00</lastmod>
     </url>
 </urlset>

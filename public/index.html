@@ -9,8 +9,8 @@
   <meta name="author" content="Gary larizza">
 
   
-  <meta name="description" content="It&rsquo;s nearly been two years since I posted the Puppet Workflow series and
-several things have changed: R10k now ships with Puppet Enterprise and &hellip;">
+  <meta name="description" content="In the past, the thing that got me to make a blog post was answering a question
+more than once and not having a good source to point someone to after &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -79,6 +79,246 @@ several things have changed: R10k now ships with Puppet Enterprise and &hellip;"
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2017/01/17/roles-and-profiles-in-a-control-repo/">Roles and Profiles in a Control Repo?</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2017-01-17T11:14:36-08:00" pubdate data-updated="true">Jan 17<span>th</span>, 2017</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>In the past, the thing that got me to make a blog post was answering a question
+more than once and not having a good source to point someone to after-the-fact.
+As the docs at <a href="http://docs.puppet.com">docs.puppet.com</a> have become more
+comprehensive, I find that I&rsquo;m wanting to write about things infrequently. But,
+all it takes is a question or two from a customer to kick things in the
+ass and remind me that there&rsquo;s still a <em>LOT</em> of tribal knowledge around Puppet
+(let alone the greater community). It&rsquo;s with THAT theme that we talk about
+Roles &amp; Profiles, and the Control Repo.</p>
+
+<p><a href="https://docs.puppet.com/pe/latest/cmgmt_control_repo.html">Like many things nowadays, there are official Puppet docs on the Control Repo.</a>
+In a nutshell, the Control Repo is the repository that Puppet&rsquo;s Code Manager
+(or R10k in the open source) uses to track Puppet Environments and the versions
+of all Puppet modules within each Puppet Environment. On a greater scale, the
+Control Repo is an organization&rsquo;s implementation of Puppet to the extent that
+it can (and eventually will) fully represent your organization&rsquo;s
+infrastructure. Changes to the Control Repo WILL incur changes to your Puppet
+Master(s), and in most cases will also bubble down to your managed nodes
+(i.e. if you&rsquo;re changing a profile that&rsquo;s being used by 1000 nodes, then that
+change will be definitely change the file that&rsquo;s on each Puppet Master but will
+also change the enforcement of Puppet on those 1000 nodes).</p>
+
+<p><a href="https://docs.puppet.com/pe/latest/r_n_p_intro.html">Similarly, Roles &amp; Profiles has its own official docs page!</a>
+As a recap, &ldquo;Role &amp; Profiles&rdquo; is a design pattern (that&rsquo;s all!) that has been
+employed by Puppet Users for several years as a way to make sense of wiring
+up public Puppet modules with site-specific implementations and data. It allows
+organizations to share common modules while also having the ability to add their
+own customizations and implement a separate configuration management data layer
+(i.e. Hiera).</p>
+
+<p>Both the Control Repo and Roles &amp; Profiles (R&amp;P) have undergone several evolutions to
+get them to the reliable state we know today, and they&rsquo;ve had their shared
+history: we&rsquo;ve implemented Roles &amp; Profiles both inside and outside the Control Repo&hellip;</p>
+
+<h2>Roles and Profiles outside the Control Repo</h2>
+
+<p>Roles &amp; Profiles were (was?) created before the Control Repo because the problem of
+disentangling data from Puppet code was a greater priority than automating
+code-consistency across multiple Puppet masters. When the idea of using a git
+repo to implement dynamic Puppet Environments came along, the success of
+being able to ensure module consistency across all your masters was pretty
+landmark. The workflow, however, needed some work &ndash; there were a LOT of steps.
+Git workflow automation loves it some hooks, and so the idea of a post-receive hook
+that would immediately update a Puppet environment was a logical landing point.
+The idea was that all modules would be listed and &lsquo;pinned&rsquo; to their correct
+version/tag/commit within <code>Puppetfile</code> that lived at the root of the Control
+Repo. &lsquo;Roles&rsquo; and &lsquo;Profiles&rsquo; are Puppet modules, modules were already listed
+in <code>Puppetfile</code>, so some customers listed them there initially. During a code
+deploy, R10k/Code Manager would read that file, pull down all the modules at their
+correct versions, and then move along. That entire workflow looked like this:</p>
+
+<ol>
+<li>Create/Modify a Profile and push changes to the Profile module repo</li>
+<li>Create a branch to the Control Repo and modify <code>Puppetfile</code> to target the new Profile changes</li>
+<li>Push the Control Repo changes up to the remote (where the git webhook catches that change and deploys it to Puppet Masters)</li>
+<li>Classify your node (if needed) and/or test the changes</li>
+<li>If changes are necessary, go back to step 1 and repeat up to step 4</li>
+<li>Once everything works, submit a Pull Request to the Control Repo</li>
+</ol>
+
+
+<p>This workflow works regardless of whether a Role or Profile was changed, but
+the biggest thing to understand is that ONLY the Control Repo has the git webhook
+that will deploy code changes to your Puppet Masters, so if you want to trigger
+a code deploy then you&rsquo;ll need to change the Control Repo and push that change
+up (or have access to trigger R10k/Code Manager on the Puppet Master). This
+resulted in a lot of &lsquo;dummy&rsquo; changes that were necessary SOLELY to trigger a
+code change. Conversely, changes to the Roles or Profiles module (they&rsquo;re separate)
+don&rsquo;t get automatically replicated, so even if there&rsquo;s a small change to a
+Profile you&rsquo;ll still need to either trigger R10k/Code Manager by hand or make
+a small dummy commit to the Control Repo to trigger a code deploy.</p>
+
+<p>As I said before, some customers implemented Roles &amp; Profiles and the Control Repo
+this way for awhile until it was realized that you could save steps by putting
+both the Roles and Profiles module into the Control Repo itself&hellip;</p>
+
+<h2>Roles and Profiles inside the Control Repo</h2>
+
+<p>Since the entire contents of the Control Repo are already cloned down to disk by
+R10k/Code Manager, the idea came about to store the Roles and Profiles modules
+in a special directory of the Control Repo (usually called &lsquo;site&rsquo; which is short
+for &lsquo;site-specific modules&rsquo;), and then change <code>$modulepath</code> within Puppet to
+look for the &lsquo;site&rsquo; folder within every Puppet Environment&rsquo;s directory path as
+another place for Puppet modules to live. This worked for two reasons:</p>
+
+<ol>
+<li>It shortened the workflow (since changes to Roles and Profiles were done
+within the history of the Control Repo, there was no need to change the
+version &lsquo;pin&rsquo; inside <code>Puppetfile</code> as a separate step)</li>
+<li>Because Roles and Profiles are now within the Control Repo, changes made to
+Roles and Profiles will now trigger a code deploy</li>
+</ol>
+
+
+<p>For the vast majority of customers, putting Roles &amp; Profiles inside the Control
+Repo made sense and kept the workflow shorter than it was before. It also had
+the added benefit of turning the Control Repo into the important artifact that
+it is today (thanks to the git webhook).</p>
+
+<h2>Can/Should we also put other modules inside the Control Repo?</h2>
+
+<p>Once you add the site directory to <code>$modulepath</code>, it opens up that directory to
+be used as a place for storing ANY Puppet modules. The question then remains:
+should the site directory be used for anything else other than Roles and Profiles?</p>
+
+<p>Maybe?</p>
+
+<p>Just like Puppet, though, just because you CAN do things, doesn&rsquo;t immediately
+mean you SHOULD. It&rsquo;s important to understand that the Control Repo is
+fundamental to ensuring code consistency across multiple Puppet Masters. For
+that reason, commits to the Control Repo should be scruitinized closely. If
+you&rsquo;re a large team with many Puppet contributers and many Puppet masters, then
+it&rsquo;s best to keep modules within their own git repositories so multiple team
+members can work independenly and the Control Repo can be used to &ldquo;tie it all
+together&rdquo; in the end. If you&rsquo;re the only Puppet contributor, you&rsquo;re using 80%
+of your modules from the Puppet Forge, but you have 3 relatively-static modules
+outside of Roles and Profiles that you&rsquo;ve written specifically for your
+organization and you want them in the site directory of the Control Repo then
+you&rsquo;re probably fine. See the difference?</p>
+
+<h2>Who owns what?</h2>
+
+<p>One of the biggest factors to influence where Puppet modules should be managed
+is the split of which teams own which decisions. Usually, Puppet infrastructure
+is owned by an internal operations team, which means that the Ops team is used
+to making changes to the Control Repo. If Puppet usage is wide enough within
+your organization it&rsquo;s common to find application teams who own specific
+Profiles that are separate from the infrastructure. It&rsquo;s usually easier to
+grant an outside team access to a separate repo than it is to try and restrict
+access to a specific folder or even branch of an existing repository, and so
+in that case it might make sense to make the Profile module its own repository.
+If the people that own the Puppet infrastructure are the same people that
+make changes to Puppet modules, then it doesn&rsquo;t really matter where Roles and
+Profiles go.</p>
+
+<h2>So what are the OFFICIAL RECOMMENDATIONS THEN?!?!</h2>
+
+<p>We officially recommend you calm down with that punctuation. Beyond that, here it is:</p>
+
+<ul>
+<li>Put Roles &amp; Profiles within the site directory of the Control Repo unless you
+have a specific reason NOT to.</li>
+</ul>
+
+
+<p>Do you have multiple Puppet contributors and separate modules for EACH
+INDIVIDUAL Profile?  Then you might want to have separate repos for each
+Profile and put them in <code>Puppetfile</code> to keep the development history separate.
+You ALSO might want to put each individual Profile module in the site directory
+of the Control Repo and just run with it that way. The bottom line here would
+be access: who can/should access Profiles, who can/should access the Control
+Repo, are those people the same, and do you need to restrict access for some
+reason? Start with doing it this way and change WHEN YOU HIT THAT COMPLEXITY!
+Don&rsquo;t deviate because you &lsquo;anticipate something&rsquo; &ndash; change when you&rsquo;re ready
+for it and don&rsquo;t overarchitect early.</p>
+
+<ul>
+<li>If you&rsquo;re a smaller team with the same people who own the Puppet infrastructure
+as who own Puppet module development and you have a couple of small internal modules
+that don&rsquo;t change very often, AND putting them inside the &lsquo;site&rsquo; folder of
+the Control Repo is easier for you than managing individual git repos, then by
+all means do it!</li>
+</ul>
+
+
+<p>Whew that was a lot. Basically, yes, I&rsquo;ve outlined a narrow case because usually
+creating a new git repository is a very small cost for an organization. If
+you&rsquo;re in an organization where that&rsquo;s NOT the case, then the site directory
+solution might appeal to you. What you gain in simplicity you lose in access
+and security, though, so consider that ahead of time. Finally, the biggest factor
+HERE is that the same people own the infrastructure and module code, so you can
+afford to make shortcuts.</p>
+
+<ul>
+<li>Have an internal Puppet Policy/Style Guide for where Puppet modules &ldquo;go.&rdquo;</li>
+</ul>
+
+
+<p>If you&rsquo;ve had the conversation and made the decision, DOCUMENT IT! It&rsquo;s more
+important to have an escalation path/policy for new Puppet users in your
+organization to ensure consistency (the last thing you want to do is to keep
+having this conversation every other month).</p>
+
+<ul>
+<li>Moving a module from the &lsquo;site&rsquo; directory to its own repository is not
+difficult, but it does add workflow steps.</li>
+</ul>
+
+
+<p>Remember that if a module doesn&rsquo;t live in the &lsquo;site&rsquo; directory then it needs
+to get &lsquo;pinned&rsquo; in <code>Puppetfile</code>, and that adds an extra step anytime that
+module needs updated within a Puppet Environment.</p>
+
+<h2>Summary</h2>
+
+<p>First, if you&rsquo;ve read this post it&rsquo;s probably because you&rsquo;re Googling for
+material to support your cause (or someone cited this post as evidence to back
+their position). You might have even skipped down here for &ldquo;the answer.&rdquo; Guess
+what &ndash; shit doesn&rsquo;t work like that! Storing Roles &amp; Profiles (and/or other
+Puppet modules) within the &lsquo;site&rsquo; directory is an organizational choice based
+on the workflow that best jives with an organization&rsquo;s existing developmental
+cycle and ownership requirements. The costs/benefits for each choice boil down
+to access, security, and saving time. The majority of the time putting Roles
+&amp; Profiles in the Control Repo saves time and keeps all organizational-specific
+information in one place.  If you don&rsquo;t have a great reason to change that,
+then don&rsquo;t.</p>
+</div>
+  
+  
+
+
+    </article>
   
   
     <article>
@@ -5728,254 +5968,6 @@ whatever names you decide to use).</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/02/17/puppet-workflow-part-1/">Building a Functional Puppet Workflow Part 1: Module Structure</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-02-17T14:01:37-08:00" pubdate data-updated="true">Feb 17<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Working as a professional services engineer for <a href="http://www.puppetlabs.com">Puppet Labs</a>,
-my life consists almost entirely of either correcting some of the worst code
-atrocities you&rsquo;ve seen in your life, or helping people get started with Puppet
-so that they don&rsquo;t need to call us again due to: A.) Said code atrocities or
-B.) Refactor the work we JUST helped them start.  It wasn&rsquo;t ALWAYS like this &ndash;
-I can remember some of my earliest gigs, and I almost feel like I should go
-revisit them if only to correct some of the previous &lsquo;best practices&rsquo; that
-didn&rsquo;t quite pan out.</p>
-
-<p>This would be exactly why I&rsquo;m wary of &lsquo;Best Practices&rsquo; &ndash; because one person&rsquo;s
-&lsquo;Best Practice&rsquo; is another person&rsquo;s &lsquo;What the fuck did you just do?!&rsquo;</p>
-
-<p>Having said that, I&rsquo;m finding myself repeating a story over and over again when
-I train/consult, and that&rsquo;s the story of &lsquo;The Usable Puppet Workflow.&rsquo;  Everybody
-wants to know &lsquo;The Right Way™&rsquo;, and I feel like we finally have a way that survives
-a reasonable test of time. I&rsquo;ve been promoting this workflow for over a year (which
-is a HELL of a long time in Startup time), and I&rsquo;ve yet to really see an edge case
-it couldn&rsquo;t handle.</p>
-
-<p>(If you&rsquo;re already savvy: yes, this is the Roles and Profiles talk)</p>
-
-<p>I&rsquo;ll be breaking this workflow down into separate blog posts for every component,
-and, as always, your comments are welcome&hellip;</p>
-
-<h2>It all starts with the component module</h2>
-
-<p>The first piece of a functional Puppet deployment starts with what we call
-&lsquo;component modules&rsquo;.  Component modules are the lowest level in your
-deployment, and are modules that configure specific pieces of technology (like
-apache, ntp, mysql, and etc&hellip;).  Component modules are well-encapsulated, have
-a reasonable API, and focus on doing small, specific things really well (i.e.
-the *nix way).</p>
-
-<p>I don&rsquo;t want to write thousands of words on building component modules because
-I feel like others have done this better than I. As examples, check out
-<a href="http://www.devco.net/archives/2012/12/13/simple-puppet-module-structure-redux.php">RI&rsquo;s Post on a simple module structure</a>,
-<a href="http://docs.puppetlabs.com/guides/module_guides/bgtm.html">Puppet Labs&#8217; very own docs on the subject</a>,
-<a href="http://www.confreaks.com/videos/1651-puppetconf2012-puppet-modules-for-fun-and-profit">and even Alessandro&rsquo;s Puppetconf 2012 session.</a> Instead, I&rsquo;d like to
-provide some pointers on what I feel makes a good component module, and some
-&lsquo;gotchas&rsquo; we&rsquo;ve noticed.</p>
-
-<h3>Parameters are your API</h3>
-
-<p>In the current world of Puppet, you MUST define the parameters your module will
-accept in the Puppet DSL. Also, every parameter MUST ultimately have a value
-when Puppet compiles the catalog (whether by explicitly passing this parameter
-value when declaring the class, or by assuming a default value). Yes, it&rsquo;s
-funny that, when writing a Puppet class, if you typo a VARIABLE Puppet will
-not alert you to this (in a NON <code>use strict</code>-ian sort of approach) and will
-happily accept a variable in an undefined state, but the second you don&rsquo;t pass
-a value to your class parameter you&rsquo;re in for a rude compilation error.
-This is the way of Puppet classes at the time of this writing, so you&rsquo;re going
-to see Puppet classes with LINES of defined parameters. I expect this to change
-in the future (please let this change in the near future), but for now, it&rsquo;s
-a necessary evil.</p>
-
-<p>The parameters you expose to your top-level class (i.e. given class names like
-<code>apache</code> and <code>apache::install</code>, I&rsquo;m talking specifically about <code>apache</code>) should
-be treated as an API to your module. IDEALLY, they&rsquo;re the ONLY THING that
-a user needs to modify when using your module. Also, whenever possible, it
-should be the case that a user need ONLY interact with the top-level class when
-using your module (of course, defined resource types like <code>apache::vhost</code> are
-used on an ad-hoc basis, and thus are the exception here).</p>
-
-<h3>Inherit the <code>::params</code> class</h3>
-
-<p>We&rsquo;re starting to make enemies at this point. It&rsquo;s been a convention for modules
-to use a <code>::params</code> class to assign values to all variables that are going to
-be used for all classes inside the module. The idea is that the <code>::params</code> class
-is the one-stop-shop to see where a variable is set. Also, to get access to a
-variable that&rsquo;s set in a Puppet class, you have to declare the class (i.e. use
-the <code>include()</code> function or inherit from that class). When you declare a class
-that has both variables AND resources, those resources get put into the catalog,
-which means that Puppet ENFORCES THE STATE of those resources. What if you only
-needed a variable&rsquo;s value and didn&rsquo;t want to enforce the rest of the resources
-in that class? There&rsquo;s no good way in Puppet to do that. Finally, when you inherit
-from a class in Puppet that has assigned variable values, you ALSO get access
-to those variables in the parameter definition section of your class (i.e. the
-following section of the class:</p>
-
-<pre><code>class apache (
-  $port = $apache::params::port,
-  $user = $apache::params::user,
-) inherits apache::params {
-</code></pre>
-
-<p>See how I set the default value of <code>$apache::port</code> to <code>$apache::params::port</code>?
-I could only access the value of the variable <code>$apache::params::port</code> in that
-section by inheriting from the <code>apache::params</code> class.  I couldn&rsquo;t insert
-<code>include apache::params</code> below that section and be allowed access to the variable
-up in the parameter defaults section (due to the way that Puppet parses classes).</p>
-
-<p><strong>FOR THIS REASON, THIS IS THE </strong><em>ONLY</em><strong> RECOMMENDED USAGE OF INHERITANCE IN
-PUPPET!</strong></p>
-
-<p>We do NOT recommend using inheritance anywhere else in Puppet and for any other
-reason because there are better ways to achieve what you want to do INSTEAD of
-using inheritance.  Inheritance is a holdover from a scarier, more lawless time.</p>
-
-<p><strong>NOTE: Data in Modules</strong> &ndash; There&rsquo;s a &lsquo;Data in Modules&rsquo; pattern out there that
-attempts to eliminate the <code>::params</code> class.  <a href="http://garylarizza.com/blog/2013/12/08/when-to-hiera/">I wrote about it in a previous post</a>,
-and I recommend you read that post for more info (it&rsquo;s near the bottom).</p>
-
-<h3>Do <strong>NOT</strong> do Hiera lookups in your component modules!</h3>
-
-<p>This is something that&rsquo;s really only RECENTLY been pushed. When Hiera was
-released, we quickly recognized that it would be the answer to quite a few
-problems in Puppet. In the rush to adopt Hiera, many people started adding
-Hiera calls to their modules, and suddenly you had &lsquo;Hiera-compatible&rsquo; modules
-out there. This caused all kinds of compatibility problems, and it was largely
-because there wasn&rsquo;t a better module structure and workflow by which to integrate
-Hiera. The pattern that I&rsquo;ll be pushing DOES INDEED use Hiera, <strong>BUT</strong> it
-confines all Hiera calls to a higher-level wrapper class we call a &lsquo;profile&rsquo;.
-The reasons for NOT using Hiera in your module are:</p>
-
-<ul>
-<li>By doing Hiera calls at a higher level, you have a greater visibility on
-exactly what parameters were set by Hiera and which were set explicitly or by
-default values.</li>
-<li>By doing Hiera calls elsewhere, your module is backwards-compatible for
-those folks who are NOT using Hiera</li>
-</ul>
-
-
-<p>Remember &ndash; your module should just accept a value and use it somewhere. Don&rsquo;t
-get <strong>TOO</strong> smart with your component module &ndash; leave the logic for other
-places.</p>
-
-<h3>Keep your component modules generic</h3>
-
-<p>We always get asked &ldquo;How do I know if I&rsquo;m writing a good module?&rdquo; We USED to
-say &ldquo;Well, does it work?&rdquo; (and trust me, that was a BIG hurdle). Now, with
-data separation models out there like Hiera, I have a couple of other questions
-that I ask (you know, BEYOND asking if it compiles and actually installs the
-thing it&rsquo;s supposed to install). The best way I&rsquo;ve found to determine if your
-module is &lsquo;generic enough&rsquo; is if I asked you TODAY to give me your module,
-would you give it to me, or would you be worried that there was some
-company-specific data locked in there? If you have company-specific data in
-your module, then you need to refactor the module, store the data in Hiera, and
-make your module more generic/reusable. Also, does your module focus on installing
-one piece of technology, or are you declaring packages for shared libraries
-or other components (like gcc, apache, or other common components)? You&rsquo;re
-not going to win any prizes for having the biggest, most monolithic module
-out there. Rather, if your module is that large and that complex, you&rsquo;re
-going to have a hell of a time debugging it. Err on the side of making your
-modules smaller and more task-specific. So what if you end up needing to
-declare 4 classes where you previously declared 1? In the roles and profiles
-pattern we will show you in the next blog post, you can abstract that away
-ANYHOW.</p>
-
-<h3>Don&rsquo;t play the &ldquo;what if&rdquo; game</h3>
-
-<p>I&rsquo;ve had more than a couple of gigs where the customer says something along the
-lines of &ldquo;What if we need to introduce FreeBSD/Solaris/etc&hellip; nodes into our
-organization, shouldn&rsquo;t I account for them now?&rdquo; This leads more than a few
-people down a path of entirely too-complex modules that become bulky and
-unwieldy. Yes, your modules should be formatted so that you can simply add
-another case in your <code>::params</code> class for another OS&rsquo;s parameters, and yes,
-your module should be formatted so that your <code>::install</code> or <code>::config</code>
-class can handle another OS, but if you currently only manage Redhat, and
-you&rsquo;ve only EVER managed Redhat, then don&rsquo;t start adding Debian parameters
-RIGHT NOW just because you&rsquo;re afraid you might inherit Ubuntu machines. The
-goal of Puppet is to automate the tasks that eat up the MAJORITY of your time
-so you can focus on the edge cases that really demand your time. If you can
-eventually automate those edge cases, then AWESOME! Until then, don&rsquo;t spend
-the majority of your time trying to automate the edge cases only to drown
-under the weight of deadlines from simple work that you COULD have already
-automated (but didn&rsquo;t, because you were so worried about the exceptions)!</p>
-
-<h3>Store your modules in version control</h3>
-
-<p>This should go without saying, but your modules should be stored in version
-control (a la git, svn, hg, whatever). We tend to prefer git due to its lightweight
-branching and merging (most of our tooling and solutions will use git because
-we&rsquo;re big git users), but you&rsquo;re free to use whatever you want. The bigger
-question is HOW to store your modules in version control. There are usually
-two schools of thought:</p>
-
-<ul>
-<li>One repository per module</li>
-<li>All modules in a single repository</li>
-</ul>
-
-
-<p>Each model has its pros and cons, but we tend to recommend one module per
-repository for the following reasons:</p>
-
-<ul>
-<li>Individual repos mean individual module development histories</li>
-<li>Most VCS solutions don&rsquo;t have per-folder ACLs for a single repositories;
-having multiple repos allows per-module security settings.</li>
-<li>With the one-repository-per-module solution, modules you pull down from the
-Forge (or Github) must be committed to your repo. Having multiple
-repositories for each module allow you to keep everything separate</li>
-</ul>
-
-
-<p><strong>NOTE:</strong> This becomes important in the third blog post in the series when we
-talk about moving changes to each Puppet Environment, but it&rsquo;s important to
-introduce it NOW as a &lsquo;best practice&rsquo;. If you use our recommended module/environment
-solution, then one-module-per-repo is the best practice. If you DON&rsquo;T use our
-solution, then the single repository per for all modules will STILL work,
-but you&rsquo;ll have to manage the above issues. Also note that even if you currently
-have every module in a single repository, you can STILL use our solution in
-part 3 of the series (you&rsquo;ll just need to perform a couple of steps to conform).</p>
-
-<h2>Best practices are shit</h2>
-
-<p>In general, &lsquo;best practices&rsquo; are only recommended if they fit into your organizational
-workflow. The best and worst part of Puppet is that it&rsquo;s infinitely customizable,
-so &lsquo;best practices&rsquo; will invariably be left wanting for a certain subset of the
-community. As always, take what I say under consideration; it&rsquo;s quite possible
-that I could be entirely full of shit.</p>
-</div>
-  
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -5991,6 +5983,10 @@ that I could be entirely full of shit.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2017/01/17/roles-and-profiles-in-a-control-repo/">Roles and Profiles in a Control Repo?</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/11/16/workflows-evolved-even-besterer-practices/">Workflows Evolved: Even Besterer Practices</a>
       </li>
     
@@ -6004,10 +6000,6 @@ that I could be entirely full of shit.</p>
     
       <li class="post">
         <a href="/blog/2014/10/19/on-dependencies-and-order/">On Dependencies and Order</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2014/08/31/r10k-plus-directory-environments/">R10k + Directory Environments</a>
       </li>
     
   </ul>
@@ -6097,7 +6089,7 @@ that I could be entirely full of shit.</p>
     </div>
   </div>
   <footer role="contentinfo"><p>
-  Copyright &copy; 2015 - Gary larizza -
+  Copyright &copy; 2017 - Gary larizza -
   <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
 </p>
 

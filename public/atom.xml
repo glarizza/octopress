@@ -4,7 +4,7 @@
   <title><![CDATA[Shit Gary Says]]></title>
   <link href="http://garylarizza.com/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2015-11-16T13:13:35-08:00</updated>
+  <updated>2017-01-17T14:20:02-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -12,6 +12,219 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Roles and Profiles in a Control Repo?]]></title>
+    <link href="http://garylarizza.com/blog/2017/01/17/roles-and-profiles-in-a-control-repo/"/>
+    <updated>2017-01-17T11:14:36-08:00</updated>
+    <id>http://garylarizza.com/blog/2017/01/17/roles-and-profiles-in-a-control-repo</id>
+    <content type="html"><![CDATA[<p>In the past, the thing that got me to make a blog post was answering a question
+more than once and not having a good source to point someone to after-the-fact.
+As the docs at <a href="http://docs.puppet.com">docs.puppet.com</a> have become more
+comprehensive, I find that I&rsquo;m wanting to write about things infrequently. But,
+all it takes is a question or two from a customer to kick things in the
+ass and remind me that there&rsquo;s still a <em>LOT</em> of tribal knowledge around Puppet
+(let alone the greater community). It&rsquo;s with THAT theme that we talk about
+Roles &amp; Profiles, and the Control Repo.</p>
+
+<p><a href="https://docs.puppet.com/pe/latest/cmgmt_control_repo.html">Like many things nowadays, there are official Puppet docs on the Control Repo.</a>
+In a nutshell, the Control Repo is the repository that Puppet&rsquo;s Code Manager
+(or R10k in the open source) uses to track Puppet Environments and the versions
+of all Puppet modules within each Puppet Environment. On a greater scale, the
+Control Repo is an organization&rsquo;s implementation of Puppet to the extent that
+it can (and eventually will) fully represent your organization&rsquo;s
+infrastructure. Changes to the Control Repo WILL incur changes to your Puppet
+Master(s), and in most cases will also bubble down to your managed nodes
+(i.e. if you&rsquo;re changing a profile that&rsquo;s being used by 1000 nodes, then that
+change will be definitely change the file that&rsquo;s on each Puppet Master but will
+also change the enforcement of Puppet on those 1000 nodes).</p>
+
+<p><a href="https://docs.puppet.com/pe/latest/r_n_p_intro.html">Similarly, Roles &amp; Profiles has its own official docs page!</a>
+As a recap, &ldquo;Role &amp; Profiles&rdquo; is a design pattern (that&rsquo;s all!) that has been
+employed by Puppet Users for several years as a way to make sense of wiring
+up public Puppet modules with site-specific implementations and data. It allows
+organizations to share common modules while also having the ability to add their
+own customizations and implement a separate configuration management data layer
+(i.e. Hiera).</p>
+
+<p>Both the Control Repo and Roles &amp; Profiles (R&amp;P) have undergone several evolutions to
+get them to the reliable state we know today, and they&rsquo;ve had their shared
+history: we&rsquo;ve implemented Roles &amp; Profiles both inside and outside the Control Repo&hellip;</p>
+
+<h2>Roles and Profiles outside the Control Repo</h2>
+
+<p>Roles &amp; Profiles were (was?) created before the Control Repo because the problem of
+disentangling data from Puppet code was a greater priority than automating
+code-consistency across multiple Puppet masters. When the idea of using a git
+repo to implement dynamic Puppet Environments came along, the success of
+being able to ensure module consistency across all your masters was pretty
+landmark. The workflow, however, needed some work &ndash; there were a LOT of steps.
+Git workflow automation loves it some hooks, and so the idea of a post-receive hook
+that would immediately update a Puppet environment was a logical landing point.
+The idea was that all modules would be listed and &lsquo;pinned&rsquo; to their correct
+version/tag/commit within <code>Puppetfile</code> that lived at the root of the Control
+Repo. &lsquo;Roles&rsquo; and &lsquo;Profiles&rsquo; are Puppet modules, modules were already listed
+in <code>Puppetfile</code>, so some customers listed them there initially. During a code
+deploy, R10k/Code Manager would read that file, pull down all the modules at their
+correct versions, and then move along. That entire workflow looked like this:</p>
+
+<ol>
+<li>Create/Modify a Profile and push changes to the Profile module repo</li>
+<li>Create a branch to the Control Repo and modify <code>Puppetfile</code> to target the new Profile changes</li>
+<li>Push the Control Repo changes up to the remote (where the git webhook catches that change and deploys it to Puppet Masters)</li>
+<li>Classify your node (if needed) and/or test the changes</li>
+<li>If changes are necessary, go back to step 1 and repeat up to step 4</li>
+<li>Once everything works, submit a Pull Request to the Control Repo</li>
+</ol>
+
+
+<p>This workflow works regardless of whether a Role or Profile was changed, but
+the biggest thing to understand is that ONLY the Control Repo has the git webhook
+that will deploy code changes to your Puppet Masters, so if you want to trigger
+a code deploy then you&rsquo;ll need to change the Control Repo and push that change
+up (or have access to trigger R10k/Code Manager on the Puppet Master). This
+resulted in a lot of &lsquo;dummy&rsquo; changes that were necessary SOLELY to trigger a
+code change. Conversely, changes to the Roles or Profiles module (they&rsquo;re separate)
+don&rsquo;t get automatically replicated, so even if there&rsquo;s a small change to a
+Profile you&rsquo;ll still need to either trigger R10k/Code Manager by hand or make
+a small dummy commit to the Control Repo to trigger a code deploy.</p>
+
+<p>As I said before, some customers implemented Roles &amp; Profiles and the Control Repo
+this way for awhile until it was realized that you could save steps by putting
+both the Roles and Profiles module into the Control Repo itself&hellip;</p>
+
+<h2>Roles and Profiles inside the Control Repo</h2>
+
+<p>Since the entire contents of the Control Repo are already cloned down to disk by
+R10k/Code Manager, the idea came about to store the Roles and Profiles modules
+in a special directory of the Control Repo (usually called &lsquo;site&rsquo; which is short
+for &lsquo;site-specific modules&rsquo;), and then change <code>$modulepath</code> within Puppet to
+look for the &lsquo;site&rsquo; folder within every Puppet Environment&rsquo;s directory path as
+another place for Puppet modules to live. This worked for two reasons:</p>
+
+<ol>
+<li>It shortened the workflow (since changes to Roles and Profiles were done
+within the history of the Control Repo, there was no need to change the
+version &lsquo;pin&rsquo; inside <code>Puppetfile</code> as a separate step)</li>
+<li>Because Roles and Profiles are now within the Control Repo, changes made to
+Roles and Profiles will now trigger a code deploy</li>
+</ol>
+
+
+<p>For the vast majority of customers, putting Roles &amp; Profiles inside the Control
+Repo made sense and kept the workflow shorter than it was before. It also had
+the added benefit of turning the Control Repo into the important artifact that
+it is today (thanks to the git webhook).</p>
+
+<h2>Can/Should we also put other modules inside the Control Repo?</h2>
+
+<p>Once you add the site directory to <code>$modulepath</code>, it opens up that directory to
+be used as a place for storing ANY Puppet modules. The question then remains:
+should the site directory be used for anything else other than Roles and Profiles?</p>
+
+<p>Maybe?</p>
+
+<p>Just like Puppet, though, just because you CAN do things, doesn&rsquo;t immediately
+mean you SHOULD. It&rsquo;s important to understand that the Control Repo is
+fundamental to ensuring code consistency across multiple Puppet Masters. For
+that reason, commits to the Control Repo should be scruitinized closely. If
+you&rsquo;re a large team with many Puppet contributers and many Puppet masters, then
+it&rsquo;s best to keep modules within their own git repositories so multiple team
+members can work independenly and the Control Repo can be used to &ldquo;tie it all
+together&rdquo; in the end. If you&rsquo;re the only Puppet contributor, you&rsquo;re using 80%
+of your modules from the Puppet Forge, but you have 3 relatively-static modules
+outside of Roles and Profiles that you&rsquo;ve written specifically for your
+organization and you want them in the site directory of the Control Repo then
+you&rsquo;re probably fine. See the difference?</p>
+
+<h2>Who owns what?</h2>
+
+<p>One of the biggest factors to influence where Puppet modules should be managed
+is the split of which teams own which decisions. Usually, Puppet infrastructure
+is owned by an internal operations team, which means that the Ops team is used
+to making changes to the Control Repo. If Puppet usage is wide enough within
+your organization it&rsquo;s common to find application teams who own specific
+Profiles that are separate from the infrastructure. It&rsquo;s usually easier to
+grant an outside team access to a separate repo than it is to try and restrict
+access to a specific folder or even branch of an existing repository, and so
+in that case it might make sense to make the Profile module its own repository.
+If the people that own the Puppet infrastructure are the same people that
+make changes to Puppet modules, then it doesn&rsquo;t really matter where Roles and
+Profiles go.</p>
+
+<h2>So what are the OFFICIAL RECOMMENDATIONS THEN?!?!</h2>
+
+<p>We officially recommend you calm down with that punctuation. Beyond that, here it is:</p>
+
+<ul>
+<li>Put Roles &amp; Profiles within the site directory of the Control Repo unless you
+have a specific reason NOT to.</li>
+</ul>
+
+
+<p>Do you have multiple Puppet contributors and separate modules for EACH
+INDIVIDUAL Profile?  Then you might want to have separate repos for each
+Profile and put them in <code>Puppetfile</code> to keep the development history separate.
+You ALSO might want to put each individual Profile module in the site directory
+of the Control Repo and just run with it that way. The bottom line here would
+be access: who can/should access Profiles, who can/should access the Control
+Repo, are those people the same, and do you need to restrict access for some
+reason? Start with doing it this way and change WHEN YOU HIT THAT COMPLEXITY!
+Don&rsquo;t deviate because you &lsquo;anticipate something&rsquo; &ndash; change when you&rsquo;re ready
+for it and don&rsquo;t overarchitect early.</p>
+
+<ul>
+<li>If you&rsquo;re a smaller team with the same people who own the Puppet infrastructure
+as who own Puppet module development and you have a couple of small internal modules
+that don&rsquo;t change very often, AND putting them inside the &lsquo;site&rsquo; folder of
+the Control Repo is easier for you than managing individual git repos, then by
+all means do it!</li>
+</ul>
+
+
+<p>Whew that was a lot. Basically, yes, I&rsquo;ve outlined a narrow case because usually
+creating a new git repository is a very small cost for an organization. If
+you&rsquo;re in an organization where that&rsquo;s NOT the case, then the site directory
+solution might appeal to you. What you gain in simplicity you lose in access
+and security, though, so consider that ahead of time. Finally, the biggest factor
+HERE is that the same people own the infrastructure and module code, so you can
+afford to make shortcuts.</p>
+
+<ul>
+<li>Have an internal Puppet Policy/Style Guide for where Puppet modules &ldquo;go.&rdquo;</li>
+</ul>
+
+
+<p>If you&rsquo;ve had the conversation and made the decision, DOCUMENT IT! It&rsquo;s more
+important to have an escalation path/policy for new Puppet users in your
+organization to ensure consistency (the last thing you want to do is to keep
+having this conversation every other month).</p>
+
+<ul>
+<li>Moving a module from the &lsquo;site&rsquo; directory to its own repository is not
+difficult, but it does add workflow steps.</li>
+</ul>
+
+
+<p>Remember that if a module doesn&rsquo;t live in the &lsquo;site&rsquo; directory then it needs
+to get &lsquo;pinned&rsquo; in <code>Puppetfile</code>, and that adds an extra step anytime that
+module needs updated within a Puppet Environment.</p>
+
+<h2>Summary</h2>
+
+<p>First, if you&rsquo;ve read this post it&rsquo;s probably because you&rsquo;re Googling for
+material to support your cause (or someone cited this post as evidence to back
+their position). You might have even skipped down here for &ldquo;the answer.&rdquo; Guess
+what &ndash; shit doesn&rsquo;t work like that! Storing Roles &amp; Profiles (and/or other
+Puppet modules) within the &lsquo;site&rsquo; directory is an organizational choice based
+on the workflow that best jives with an organization&rsquo;s existing developmental
+cycle and ownership requirements. The costs/benefits for each choice boil down
+to access, security, and saving time. The majority of the time putting Roles
+&amp; Profiles in the Control Repo saves time and keeps all organizational-specific
+information in one place.  If you don&rsquo;t have a great reason to change that,
+then don&rsquo;t.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Workflows Evolved: Even Besterer Practices]]></title>
@@ -12097,329 +12310,6 @@ this my primary testing workflow.&rdquo;</p>
 project, and to <a href="http://github.com/timsutton">Tim Sutton</a> and <a href="https://twitter.com/bruienne">Pepijn Bruienne</a> &ndash; like I mentioned
 before &ndash; for the work they&rsquo;ve done on this. You can speak with them directly in
 the ##osx-server chatroom on Freenode, or by checking them out on Twitter.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Managing a Blog Is Insane; Octopress FTW!]]></title>
-    <link href="http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane/"/>
-    <updated>2013-01-17T00:00:00-08:00</updated>
-    <id>http://garylarizza.com/blog/2013/01/17/managing-a-blog-is-insane</id>
-    <content type="html"><![CDATA[<p>Masochists are everywhere. Managing a system by hand appeals to a certain subset
-of the population, but I joined <a href="http://www.puppetlabs.com">Puppet Labs</a> because
-I was a fan of automating the shit out of menial tasks. I have no burning desire
-to handcraft an artisanal blog made out of organic bits. I tried web development
-at one point in my life and learned an important lesson:</p>
-
-<p>I am not a web developer</p>
-
-<p>What I DO want is to have a platform to share information and code I&rsquo;ve
-accumulated along the way that:</p>
-
-<ol>
-<li>Doesn&rsquo;t look like hell</li>
-<li>Doesn&rsquo;t take forever to update</li>
-<li>Doesn&rsquo;t require me being online to write a post</li>
-<li>Allows me to post code that&rsquo;s syntactically highlighted and easy to copy/paste</li>
-<li>Accepts <a href="http://daringfireball.net/projects/markdown/">Markdown</a></li>
-<li>Fits into my DVCS workflow</li>
-<li>Is free &ndash; because screw paying for A BLOG</li>
-</ol>
-
-
-<h2>Seriously, is this too much to ask?</h2>
-
-<p>Originally I waded the waters of <a href="http://glarizza.posterous.com">Posterous</a> but
-found that not only did it have awkward <a href="http://daringfireball.net/projects/markdown/">Markdown</a> syntax, but staging of
-blog posts was cumbersome.  Also, while there WAS <a href="http://gist.github.com">gist</a> integration,
-the code you posted looked like crap. That sucks because most of what I post has
-code attached.</p>
-
-<p>Others have sold their soul for Wordpress/Drupal/Bumblefuck CMS (whether hosted
-or unhosted platforms), but it still felt like too much process and not enough
-action for my taste.</p>
-
-<h2>Github to the rescue&hellip;again</h2>
-
-<p>The answer, it turns out, was right in front of my face the whole time.
-<a href="http://pages.github.com/">Github Pages</a> has always been available to host web content or <a href="https://github.com/mojombo/jekyll">Jekyll
-sites</a> &ndash; I&rsquo;m just late to the damn party.</p>
-
-<p><a href="http://glarizza.github.com/images/blog_blog/left.png"><img class="left" src="http://garylarizza.com/images/blog_blog/left.png" width="300" height="300"></a></p>
-
-<p>Hosting static web content was out; like I said before, I don&rsquo;t really want to
-&lsquo;manage&rsquo; this thing. Jekyll, however, intrigued me. Jekyll is essentially
-a static site generator that allows you to throw Markdown at it and get static
-content in the end. There are even <a href="http://jekyllbootstrap.com/">Jekyll
-bootstrap</a> projects aimed at making it (even more)
-stupid simple. I tried plain vanilla Jekyll and realized that I didn&rsquo;t really
-want/need that level of control (again, I&rsquo;m not into web development).
-I pulled down Jekyll Bootstrap, but this time it felt a little TOO
-&lsquo;template-y&rsquo;. Next, I pulled down an awesome Jekyll template called <a href="https://github.com/holman/left">Left by
-Zach Holman</a> (seen, conveniently, in the
-picture on the left).  I REALLY liked the look of Left, but was stuck with
-Jekyll&rsquo;s code formatting that was&hellip;less than ideal. Jekyll is pluggable (and
-people have made plugins to fix this sort of thing), but I still
-didn&rsquo;t have enough experience at that time
-to be able to deal with the plugins in an intelligent manner.</p>
-
-<h2>Octopress = Jekyll + Plugins + &lt;3</h2>
-
-<p>During my plugin party, I discovered <a href="http://octopress.org">Octopress</a>, which
-basically had EVERYTHING I wanted wrapped with a templated bow. I loved the way
-it rendered code, it supported things like <a href="http://github.github.com/github-flavored-markdown/)">fenced code blocks</a> , and it
-seemed REALLY simple to update and deploy code.  The thing I DIDN&rsquo;T like was
-that NEARLY EVERY DAMN OCTOPRESS SITE LOOKS EXACTLY THE SAME! I know I said
-that I&rsquo;m not a web developer and didn&rsquo;t want to tweak styles a great bit, but
-damn &ndash; couldn&rsquo;t I get a BIT of differentiation? That can be done, but you&rsquo;re
-still editing styles (so some CSS is necessary &ndash; but not much). After
-evaluating all three options, I opted for Octopress.</p>
-
-<h2>Documentation? Who knew!?</h2>
-
-<p>Octopress.org has <a href="http://octopress.org/docs/setup/">GREAT documentation</a> for
-getting setup with an Octopress blog. They even have documentation for setting
-up Ruby 1.9.3 on rbenv or RVM (I recommend rbenv for reasons beyond this blog),
-so make sure to check it out if you&rsquo;re unfamiliar with either. To not reinvent
-that documented wheel, make sure to check out that site to get Octopress setup
-(I recommend cloning all repositories to somewhere in your home directory
-like ~/src or ~/repos, but other than that their docs are solid). Normally
-I post the dirty technical details, but the point of this post is to outline
-WHY I made the decision I did and WHY it works for ME.</p>
-
-<h2>Pretty code is pretty</h2>
-
-<p>I&rsquo;m not gonna lie &ndash; syntactical highlighting with the <a href="http://ethanschoonover.com/solarized">Solarized</a>
-theme was pretty sexy. Let&rsquo;s look at some Ruby:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="k">def</span> <span class="nf">create</span>
-</span><span class='line'>    <span class="k">if</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:value_type</span><span class="o">]</span> <span class="o">==</span> <span class="ss">:boolean</span>
-</span><span class='line'>      <span class="k">unless</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:value</span><span class="o">].</span><span class="n">first</span><span class="o">.</span><span class="n">to_s</span> <span class="o">=~</span> <span class="sr">/(true|false)/i</span>
-</span><span class='line'>        <span class="k">raise</span> <span class="ss">Puppet</span><span class="p">:</span><span class="ss">:Error</span><span class="p">,</span> <span class="s2">&quot;Valid boolean values are &#39;true&#39; or &#39;false&#39;, you specified &#39;</span><span class="si">#{</span><span class="n">resource</span><span class="o">[</span><span class="ss">:value</span><span class="o">].</span><span class="n">first</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
-</span><span class='line'>      <span class="k">end</span>
-</span><span class='line'>    <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="k">if</span> <span class="no">File</span><span class="o">.</span><span class="n">file?</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:path</span><span class="o">]</span>
-</span><span class='line'>      <span class="n">plist</span> <span class="o">=</span> <span class="n">read_plist_file</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:path</span><span class="o">]</span><span class="p">)</span>
-</span><span class='line'>    <span class="k">else</span>
-</span><span class='line'>      <span class="n">plist</span> <span class="o">=</span> <span class="ss">OSX</span><span class="p">:</span><span class="ss">:NSMutableDictionary</span><span class="o">.</span><span class="n">alloc</span><span class="o">.</span><span class="n">init</span>
-</span><span class='line'>    <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="k">case</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:value_type</span><span class="o">]</span>
-</span><span class='line'>    <span class="k">when</span> <span class="ss">:integer</span>
-</span><span class='line'>      <span class="n">plist_value</span> <span class="o">=</span> <span class="nb">Integer</span><span class="p">(</span><span class="n">resource</span><span class="o">[</span><span class="ss">:value</span><span class="o">].</span><span class="n">first</span><span class="p">)</span>
-</span><span class='line'>    <span class="k">when</span> <span class="ss">:boolean</span>
-</span><span class='line'>      <span class="k">if</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:value</span><span class="o">].</span><span class="n">to_s</span> <span class="o">=~</span> <span class="sr">/false/i</span>
-</span><span class='line'>        <span class="n">plist_value</span> <span class="o">=</span> <span class="kp">false</span>
-</span><span class='line'>      <span class="k">else</span>
-</span><span class='line'>        <span class="n">plist_value</span> <span class="o">=</span> <span class="kp">true</span>
-</span><span class='line'>      <span class="k">end</span>
-</span><span class='line'>    <span class="k">when</span> <span class="ss">:hash</span>
-</span><span class='line'>      <span class="n">plist_value</span> <span class="o">=</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:value</span><span class="o">].</span><span class="n">first</span>
-</span><span class='line'>    <span class="k">else</span>
-</span><span class='line'>      <span class="n">plist_value</span> <span class="o">=</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:value</span><span class="o">]</span>
-</span><span class='line'>    <span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="n">plist</span><span class="o">[</span><span class="n">resource</span><span class="o">[</span><span class="ss">:key</span><span class="o">]]</span> <span class="o">=</span> <span class="n">plist_value</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="n">write_plist_file</span><span class="p">(</span><span class="n">plist</span><span class="p">,</span> <span class="n">resource</span><span class="o">[</span><span class="ss">:path</span><span class="o">]</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>How about some Puppet code?</p>
-
-<figure class='code'><figcaption><span>Plist Management </span></figcaption>
-<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nc">property_list_key</span> <span class="p">{</span> <span class="s1">&#39;simple&#39;</span><span class="p">:</span>
-</span><span class='line'>  <span class="nt">ensure</span> <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">path</span> <span class="p">=&gt;</span> <span class="s1">&#39;/tmp/com.puppetlabs.puppet&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">key</span>    <span class="p">=&gt;</span> <span class="s1">&#39;simple&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">value</span>  <span class="p">=&gt;</span> <span class="s1">&#39;value&#39;</span><span class="p">,</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="nc">property_list_key</span> <span class="p">{</span> <span class="s1">&#39;boolean&#39;</span><span class="p">:</span>
-</span><span class='line'>  <span class="nt">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">path</span>       <span class="p">=&gt;</span> <span class="s1">&#39;/tmp/com.puppetlabs.puppet&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">key</span>        <span class="p">=&gt;</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">value</span>      <span class="p">=&gt;</span> <span class="ss">false</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">value_type</span> <span class="p">=&gt;</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="nc">property_list_key</span> <span class="p">{</span> <span class="s1">&#39;hashtest&#39;</span><span class="p">:</span>
-</span><span class='line'>  <span class="nt">ensure</span>     <span class="p">=&gt;</span> <span class="ss">present</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">path</span>       <span class="p">=&gt;</span> <span class="s1">&#39;/tmp/com.puppetlabs.puppet&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">key</span>        <span class="p">=&gt;</span> <span class="s1">&#39;hashtest&#39;</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">value</span>      <span class="p">=&gt;</span> <span class="p">{</span> <span class="s1">&#39;key&#39;</span> <span class="p">=&gt;</span> <span class="s1">&#39;value&#39;</span> <span class="p">},</span>
-</span><span class='line'>  <span class="nt">value_type</span> <span class="p">=&gt;</span> <span class="s1">&#39;hash&#39;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Doesn&rsquo;t that look awesome?</p>
-
-<p>For a blog with a ton of code, something like this is pretty damn important.</p>
-
-<h2>Markdown formatting</h2>
-
-<p><a href="http://daringfireball.net/projects/markdown/">Markdown</a> is becoming more prolific as a lightweight way to format
-text. If you&rsquo;ve used Github to comment on code, then you&rsquo;ve probably used
-markdown syntax at some point in your life. You&rsquo;ll notice the recurring goal of
-being quick and precise, and markdown really &lsquo;does it for me&rsquo;.</p>
-
-<h2>Workflow++</h2>
-
-<p>It&rsquo;s really liberating to write a blog post in (insert favorite text editor).
-Travelling as often as I do, I&rsquo;m usually jotting down notes in vi because I&rsquo;m
-in a plane or somewhere without internet access. Octopress not only lets you
-write offline, but it will let you generate and preview your site locally
-while being offline. That&rsquo;s totally handy.  My workflow typically looks like
-this:</p>
-
-<ul>
-<li><strong>Generate a post</strong></li>
-</ul>
-
-
-<p>To start a new post, you can create a new file by hand, or use the
-provided Rakefile to scaffold it out for you (NOTE: to see all commands
-available to the Rakefile, you can run <code>rake -T</code>). Here&rsquo;s how to scaffold
-with rake:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="err">$</span> <span class="n">rake</span> <span class="s1">&#39;new_post[&quot;Title of my post&quot;]&#39;</span>
-</span><span class='line'><span class="err">$</span> <span class="n">vi</span> <span class="n">source</span><span class="o">/</span><span class="n">_posts</span><span class="o">/</span><span class="mi">2013</span><span class="o">-</span><span class="mo">01</span><span class="o">-</span><span class="mi">17</span><span class="o">-</span><span class="n">title</span><span class="o">-</span><span class="n">of</span><span class="o">-</span><span class="n">my</span><span class="o">-</span><span class="n">post</span><span class="o">.</span><span class="n">markdown</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<ul>
-<li><strong>Edit the post file</strong></li>
-<li><strong>Generate the site content</strong></li>
-</ul>
-
-
-<p>Remember that Octopress/Jekyll generates static content to be uploaded to
-your host. With every change, you&rsquo;ll need to re-generate the content. Yeah,
-that kinda sucks, but that action has been abstracted away in the Rakefile
-with the following command:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="err">$</span> <span class="n">rake</span> <span class="n">generate</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<ul>
-<li><strong>Display and view the site</strong></li>
-</ul>
-
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="err">$</span> <span class="n">rake</span> <span class="n">preview</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The following command will serve up your page over Webrick in the terminal,
-just navigate to <a href="http://localhost:4000">http://localhost:4000</a> in your browser to see a local copy of
-how your site will look once deployed. Once you&rsquo;re done, just do a Control+c
-from your terminal to cancel the process.</p>
-
-<ul>
-<li><strong>Edit/generate/preview until done</strong></li>
-<li><strong>Commit your code and deploy</strong></li>
-</ul>
-
-
-<p>Because everything is a series of flat-files, you can use git to keep it all
-under version control. Did you make a mistake? Revert to a previous commit.
-Deploying to your blog is similarly easy, as you&rsquo;ll see in the next steps</p>
-
-<h2>Be a unique snowflake</h2>
-
-<p>I <a href="http://blog.bigdinosaur.org/changing-octopresss-header/">used this article</a> to help
-change the color scheme of my blog, and <a href="https://github.com/imathis/octopress/wiki/Octopress-Sites">checked out a list of other Octopress sites</a>
-to steal a couple of other tweaks. That&rsquo;s all I needed for customization, but
-if you need more knobs they&rsquo;re there for you to twist.</p>
-
-<h2>Hosted by your pals at Github</h2>
-
-<p><a href="http://pages.github.com/">Github Pages</a> is a free service for any Github user (again free to join) and
-is an EXCELLENT FIT for an Octopress blog. As you would expect, Octopress
-has <a href="http://octopress.org/docs/deploying/github/">great documentation for enabling deployment to Github Pages</a>.
-If you have your own custom domain, you can STILL use Github Pages
-(hint, the instructions are on that page too).</p>
-
-<h2>Fuck it. Ship it.</h2>
-
-<p>The act of updating a blog has GOT to be frictionless. Is this simple enough
-for you:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='ruby'><span class='line'><span class="n">rake</span> <span class="n">deploy</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Yep. That&rsquo;s all it takes to deploy code to your blog once you&rsquo;ve setup Github
-Pages. Forget about logging in, wading through a GUI, cutting/pasting content,
-FTPing things up to a host, and any of that crap. I&rsquo;ve done that. &lsquo;That&rsquo; sucks.</p>
-
-<h2>Write your own damn blog</h2>
-
-<p>You now have no excuse to NOT share all the cool things you&rsquo;re doing. Seriously,
-if you can EDIT A TEXT FILE then you can &lsquo;maintain&rsquo; a blog.</p>
 ]]></content>
   </entry>
   

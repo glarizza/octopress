@@ -4,7 +4,7 @@
   <title><![CDATA[Category: puppet | Shit Gary Says]]></title>
   <link href="http://garylarizza.com/blog/categories/puppet/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2015-11-16T13:13:46-08:00</updated>
+  <updated>2017-01-17T14:20:02-08:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -12,6 +12,219 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Roles and Profiles in a Control Repo?]]></title>
+    <link href="http://garylarizza.com/blog/2017/01/17/roles-and-profiles-in-a-control-repo/"/>
+    <updated>2017-01-17T11:14:36-08:00</updated>
+    <id>http://garylarizza.com/blog/2017/01/17/roles-and-profiles-in-a-control-repo</id>
+    <content type="html"><![CDATA[<p>In the past, the thing that got me to make a blog post was answering a question
+more than once and not having a good source to point someone to after-the-fact.
+As the docs at <a href="http://docs.puppet.com">docs.puppet.com</a> have become more
+comprehensive, I find that I&rsquo;m wanting to write about things infrequently. But,
+all it takes is a question or two from a customer to kick things in the
+ass and remind me that there&rsquo;s still a <em>LOT</em> of tribal knowledge around Puppet
+(let alone the greater community). It&rsquo;s with THAT theme that we talk about
+Roles &amp; Profiles, and the Control Repo.</p>
+
+<p><a href="https://docs.puppet.com/pe/latest/cmgmt_control_repo.html">Like many things nowadays, there are official Puppet docs on the Control Repo.</a>
+In a nutshell, the Control Repo is the repository that Puppet&rsquo;s Code Manager
+(or R10k in the open source) uses to track Puppet Environments and the versions
+of all Puppet modules within each Puppet Environment. On a greater scale, the
+Control Repo is an organization&rsquo;s implementation of Puppet to the extent that
+it can (and eventually will) fully represent your organization&rsquo;s
+infrastructure. Changes to the Control Repo WILL incur changes to your Puppet
+Master(s), and in most cases will also bubble down to your managed nodes
+(i.e. if you&rsquo;re changing a profile that&rsquo;s being used by 1000 nodes, then that
+change will be definitely change the file that&rsquo;s on each Puppet Master but will
+also change the enforcement of Puppet on those 1000 nodes).</p>
+
+<p><a href="https://docs.puppet.com/pe/latest/r_n_p_intro.html">Similarly, Roles &amp; Profiles has its own official docs page!</a>
+As a recap, &ldquo;Role &amp; Profiles&rdquo; is a design pattern (that&rsquo;s all!) that has been
+employed by Puppet Users for several years as a way to make sense of wiring
+up public Puppet modules with site-specific implementations and data. It allows
+organizations to share common modules while also having the ability to add their
+own customizations and implement a separate configuration management data layer
+(i.e. Hiera).</p>
+
+<p>Both the Control Repo and Roles &amp; Profiles (R&amp;P) have undergone several evolutions to
+get them to the reliable state we know today, and they&rsquo;ve had their shared
+history: we&rsquo;ve implemented Roles &amp; Profiles both inside and outside the Control Repo&hellip;</p>
+
+<h2>Roles and Profiles outside the Control Repo</h2>
+
+<p>Roles &amp; Profiles were (was?) created before the Control Repo because the problem of
+disentangling data from Puppet code was a greater priority than automating
+code-consistency across multiple Puppet masters. When the idea of using a git
+repo to implement dynamic Puppet Environments came along, the success of
+being able to ensure module consistency across all your masters was pretty
+landmark. The workflow, however, needed some work &ndash; there were a LOT of steps.
+Git workflow automation loves it some hooks, and so the idea of a post-receive hook
+that would immediately update a Puppet environment was a logical landing point.
+The idea was that all modules would be listed and &lsquo;pinned&rsquo; to their correct
+version/tag/commit within <code>Puppetfile</code> that lived at the root of the Control
+Repo. &lsquo;Roles&rsquo; and &lsquo;Profiles&rsquo; are Puppet modules, modules were already listed
+in <code>Puppetfile</code>, so some customers listed them there initially. During a code
+deploy, R10k/Code Manager would read that file, pull down all the modules at their
+correct versions, and then move along. That entire workflow looked like this:</p>
+
+<ol>
+<li>Create/Modify a Profile and push changes to the Profile module repo</li>
+<li>Create a branch to the Control Repo and modify <code>Puppetfile</code> to target the new Profile changes</li>
+<li>Push the Control Repo changes up to the remote (where the git webhook catches that change and deploys it to Puppet Masters)</li>
+<li>Classify your node (if needed) and/or test the changes</li>
+<li>If changes are necessary, go back to step 1 and repeat up to step 4</li>
+<li>Once everything works, submit a Pull Request to the Control Repo</li>
+</ol>
+
+
+<p>This workflow works regardless of whether a Role or Profile was changed, but
+the biggest thing to understand is that ONLY the Control Repo has the git webhook
+that will deploy code changes to your Puppet Masters, so if you want to trigger
+a code deploy then you&rsquo;ll need to change the Control Repo and push that change
+up (or have access to trigger R10k/Code Manager on the Puppet Master). This
+resulted in a lot of &lsquo;dummy&rsquo; changes that were necessary SOLELY to trigger a
+code change. Conversely, changes to the Roles or Profiles module (they&rsquo;re separate)
+don&rsquo;t get automatically replicated, so even if there&rsquo;s a small change to a
+Profile you&rsquo;ll still need to either trigger R10k/Code Manager by hand or make
+a small dummy commit to the Control Repo to trigger a code deploy.</p>
+
+<p>As I said before, some customers implemented Roles &amp; Profiles and the Control Repo
+this way for awhile until it was realized that you could save steps by putting
+both the Roles and Profiles module into the Control Repo itself&hellip;</p>
+
+<h2>Roles and Profiles inside the Control Repo</h2>
+
+<p>Since the entire contents of the Control Repo are already cloned down to disk by
+R10k/Code Manager, the idea came about to store the Roles and Profiles modules
+in a special directory of the Control Repo (usually called &lsquo;site&rsquo; which is short
+for &lsquo;site-specific modules&rsquo;), and then change <code>$modulepath</code> within Puppet to
+look for the &lsquo;site&rsquo; folder within every Puppet Environment&rsquo;s directory path as
+another place for Puppet modules to live. This worked for two reasons:</p>
+
+<ol>
+<li>It shortened the workflow (since changes to Roles and Profiles were done
+within the history of the Control Repo, there was no need to change the
+version &lsquo;pin&rsquo; inside <code>Puppetfile</code> as a separate step)</li>
+<li>Because Roles and Profiles are now within the Control Repo, changes made to
+Roles and Profiles will now trigger a code deploy</li>
+</ol>
+
+
+<p>For the vast majority of customers, putting Roles &amp; Profiles inside the Control
+Repo made sense and kept the workflow shorter than it was before. It also had
+the added benefit of turning the Control Repo into the important artifact that
+it is today (thanks to the git webhook).</p>
+
+<h2>Can/Should we also put other modules inside the Control Repo?</h2>
+
+<p>Once you add the site directory to <code>$modulepath</code>, it opens up that directory to
+be used as a place for storing ANY Puppet modules. The question then remains:
+should the site directory be used for anything else other than Roles and Profiles?</p>
+
+<p>Maybe?</p>
+
+<p>Just like Puppet, though, just because you CAN do things, doesn&rsquo;t immediately
+mean you SHOULD. It&rsquo;s important to understand that the Control Repo is
+fundamental to ensuring code consistency across multiple Puppet Masters. For
+that reason, commits to the Control Repo should be scruitinized closely. If
+you&rsquo;re a large team with many Puppet contributers and many Puppet masters, then
+it&rsquo;s best to keep modules within their own git repositories so multiple team
+members can work independenly and the Control Repo can be used to &ldquo;tie it all
+together&rdquo; in the end. If you&rsquo;re the only Puppet contributor, you&rsquo;re using 80%
+of your modules from the Puppet Forge, but you have 3 relatively-static modules
+outside of Roles and Profiles that you&rsquo;ve written specifically for your
+organization and you want them in the site directory of the Control Repo then
+you&rsquo;re probably fine. See the difference?</p>
+
+<h2>Who owns what?</h2>
+
+<p>One of the biggest factors to influence where Puppet modules should be managed
+is the split of which teams own which decisions. Usually, Puppet infrastructure
+is owned by an internal operations team, which means that the Ops team is used
+to making changes to the Control Repo. If Puppet usage is wide enough within
+your organization it&rsquo;s common to find application teams who own specific
+Profiles that are separate from the infrastructure. It&rsquo;s usually easier to
+grant an outside team access to a separate repo than it is to try and restrict
+access to a specific folder or even branch of an existing repository, and so
+in that case it might make sense to make the Profile module its own repository.
+If the people that own the Puppet infrastructure are the same people that
+make changes to Puppet modules, then it doesn&rsquo;t really matter where Roles and
+Profiles go.</p>
+
+<h2>So what are the OFFICIAL RECOMMENDATIONS THEN?!?!</h2>
+
+<p>We officially recommend you calm down with that punctuation. Beyond that, here it is:</p>
+
+<ul>
+<li>Put Roles &amp; Profiles within the site directory of the Control Repo unless you
+have a specific reason NOT to.</li>
+</ul>
+
+
+<p>Do you have multiple Puppet contributors and separate modules for EACH
+INDIVIDUAL Profile?  Then you might want to have separate repos for each
+Profile and put them in <code>Puppetfile</code> to keep the development history separate.
+You ALSO might want to put each individual Profile module in the site directory
+of the Control Repo and just run with it that way. The bottom line here would
+be access: who can/should access Profiles, who can/should access the Control
+Repo, are those people the same, and do you need to restrict access for some
+reason? Start with doing it this way and change WHEN YOU HIT THAT COMPLEXITY!
+Don&rsquo;t deviate because you &lsquo;anticipate something&rsquo; &ndash; change when you&rsquo;re ready
+for it and don&rsquo;t overarchitect early.</p>
+
+<ul>
+<li>If you&rsquo;re a smaller team with the same people who own the Puppet infrastructure
+as who own Puppet module development and you have a couple of small internal modules
+that don&rsquo;t change very often, AND putting them inside the &lsquo;site&rsquo; folder of
+the Control Repo is easier for you than managing individual git repos, then by
+all means do it!</li>
+</ul>
+
+
+<p>Whew that was a lot. Basically, yes, I&rsquo;ve outlined a narrow case because usually
+creating a new git repository is a very small cost for an organization. If
+you&rsquo;re in an organization where that&rsquo;s NOT the case, then the site directory
+solution might appeal to you. What you gain in simplicity you lose in access
+and security, though, so consider that ahead of time. Finally, the biggest factor
+HERE is that the same people own the infrastructure and module code, so you can
+afford to make shortcuts.</p>
+
+<ul>
+<li>Have an internal Puppet Policy/Style Guide for where Puppet modules &ldquo;go.&rdquo;</li>
+</ul>
+
+
+<p>If you&rsquo;ve had the conversation and made the decision, DOCUMENT IT! It&rsquo;s more
+important to have an escalation path/policy for new Puppet users in your
+organization to ensure consistency (the last thing you want to do is to keep
+having this conversation every other month).</p>
+
+<ul>
+<li>Moving a module from the &lsquo;site&rsquo; directory to its own repository is not
+difficult, but it does add workflow steps.</li>
+</ul>
+
+
+<p>Remember that if a module doesn&rsquo;t live in the &lsquo;site&rsquo; directory then it needs
+to get &lsquo;pinned&rsquo; in <code>Puppetfile</code>, and that adds an extra step anytime that
+module needs updated within a Puppet Environment.</p>
+
+<h2>Summary</h2>
+
+<p>First, if you&rsquo;ve read this post it&rsquo;s probably because you&rsquo;re Googling for
+material to support your cause (or someone cited this post as evidence to back
+their position). You might have even skipped down here for &ldquo;the answer.&rdquo; Guess
+what &ndash; shit doesn&rsquo;t work like that! Storing Roles &amp; Profiles (and/or other
+Puppet modules) within the &lsquo;site&rsquo; directory is an organizational choice based
+on the workflow that best jives with an organization&rsquo;s existing developmental
+cycle and ownership requirements. The costs/benefits for each choice boil down
+to access, security, and saving time. The majority of the time putting Roles
+&amp; Profiles in the Control Repo saves time and keeps all organizational-specific
+information in one place.  If you don&rsquo;t have a great reason to change that,
+then don&rsquo;t.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Workflows Evolved: Even Besterer Practices]]></title>
@@ -214,9 +427,8 @@ For the purposes of cleanliness, we usually end up putting both roles/profiles
 inside a <code>site</code> folder in the control repo. If you do that, your modulepath
 in <code>environment.conf</code> looks a little something like this:</p>
 
-<p>{% codeblock %}
-modulepath = site:modules:$basemodulepath
-{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>modulepath = site:modules:$basemodulepath</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>This means that Puppet will look for modules first in the &lsquo;site&rsquo; directory of
 its current environment (this is the directory where we put roles/profiles),
@@ -358,32 +570,43 @@ server), that bit of data goes into Hiera (and by &lsquo;that bit of data&rsquo;
 &lsquo;the value of the NTP server&rsquo; or &lsquo;the NTP server&rsquo;s FQDN&rsquo;), which would look
 SOMETHING like this:</p>
 
-<p>{% codeblock lang:yaml %}
-ntpserver: pool.ntp.org
-{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">ntpserver</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">pool.ntp.org</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>What does NOT go into Hiera is a hash-based representation of the Puppet
 resource that would then be passed to create_resources() and used to create
 the resource in the catalog&hellip;which would look something like this:</p>
 
-<p>{% codeblock lang:yaml %}
-ntpfiles:
-  &lsquo;/etc/ntp/ntpd.conf&rsquo;:</p>
-
-<pre><code>ensure: file
-owner:  0
-group:  0
-mode:   0644
-source: 'puppet:///modules/ntp/ntpd.conf'
-</code></pre>
-
-<p>{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">ntpfiles</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="nl">&amp;lsquo</span><span class="l-Scalar-Plain">;/etc/ntp/ntpd.conf&amp;rsquo;:&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="l-Scalar-Plain">&lt;pre&gt;&lt;code&gt;ensure</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">file</span>
+</span><span class='line'><span class="l-Scalar-Plain">owner</span><span class="p-Indicator">:</span>  <span class="l-Scalar-Plain">0</span>
+</span><span class='line'><span class="l-Scalar-Plain">group</span><span class="p-Indicator">:</span>  <span class="l-Scalar-Plain">0</span>
+</span><span class='line'><span class="l-Scalar-Plain">mode</span><span class="p-Indicator">:</span>   <span class="l-Scalar-Plain">0644</span>
+</span><span class='line'><span class="l-Scalar-Plain">source</span><span class="p-Indicator">:</span> <span class="s">&#39;puppet:///modules/ntp/ntpd.conf&#39;</span>
+</span><span class='line'><span class="l-Scalar-Plain">&lt;/code&gt;&lt;/pre&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="l-Scalar-Plain">&lt;p&gt;</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>&hellip;which would then be passed into Puppet like this:</p>
 
-<p>{% codeblock lang:puppet %}
-create_resources(&lsquo;file&rsquo;, hiera_hash(&lsquo;ntpfiles))
-{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nf">create_resources</span><span class="p">(</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">file</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span> <span class="nf">hiera_hash</span><span class="p">(</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">ntpfiles</span><span class="p">))</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Yes, this is an exaggeration based on a very narrow use case, but what I&rsquo;m trying
 to highlight is that the &lsquo;data&rsquo; bit in all that above mess is SOLELY an FQDN,
@@ -615,14 +838,19 @@ you add in that you should probably have a node-specific level at the top (for
 overrides) and a default level at the bottom (or not: see the next section), I&rsquo;m
 starting to picture this:</p>
 
-<p>{% codeblock lang:yaml %}
-:hierarchy:
-  &ndash; &ldquo;nodes/%{::clientcert}&rdquo;
-  &ndash; &ldquo;%{::location}/%{::applicationtier}&rdquo;
-  &ndash; &ldquo;%{::location}/common&rdquo;
-  &ndash; &ldquo;tier/%{::applicationtier}&rdquo;
-  &ndash; common
-{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">:hierarchy</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="nl">&amp;ndash</span><span class="l-Scalar-Plain">; &amp;ldquo;nodes/%{::clientcert}&amp;rdquo;</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">&amp;ndash; &amp;ldquo;%{::location}/%{::applicationtier}&amp;rdquo;</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">&amp;ndash; &amp;ldquo;%{::location}/common&amp;rdquo;</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">&amp;ndash; &amp;ldquo;tier/%{::applicationtier}&amp;rdquo;</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">&amp;ndash; common</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Every time you have a need, you consider a level.  Now, obviously, it doesn&rsquo;t
 mean that you NEED a level for every request (sometimes if it&rsquo;s an edge case
@@ -674,18 +902,30 @@ means. I&rsquo;m going to revise what I wrote below to point out the relevant de
 <p>When using Hiera, you need to define a hierarchy that Hiera uses in its search
 for your data. Most often, it looks something like this:</p>
 
-<h2>{% codeblock lang:yaml hiera.yaml %}</h2>
-
-<p>:backends:
-  &ndash; yaml
-:yaml:
-  :datadir: /etc/puppetlabs/puppet/hieradata
-:hierarchy:
-  &ndash; &ldquo;nodes/%{::clientcert}&rdquo;
-  &ndash; &ldquo;location/%{::location}&rdquo;
-  &ndash; &ldquo;environment/%{::applicationtier}&rdquo;
-  &ndash; common
-{% endcodeblock %}</p>
+<h2><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>hiera.yaml </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">&lt;/h2&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="l-Scalar-Plain">&lt;p&gt;:backends</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="nl">&amp;ndash</span><span class="l-Scalar-Plain">; yaml</span>
+</span><span class='line'><span class="l-Scalar-Plain">:yaml</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">:datadir</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">/etc/puppetlabs/puppet/hieradata</span>
+</span><span class='line'><span class="l-Scalar-Plain">:hierarchy</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="nl">&amp;ndash</span><span class="l-Scalar-Plain">; &amp;ldquo;nodes/%{::clientcert}&amp;rdquo;</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">&amp;ndash; &amp;ldquo;location/%{::location}&amp;rdquo;</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">&amp;ndash; &amp;ldquo;environment/%{::applicationtier}&amp;rdquo;</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">&amp;ndash; common</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Notice that little &ldquo;common&rdquo; at the end?  That means that, failing everything
 else, it&rsquo;s going to look in <code>common.yaml</code> for a value. I had thought of common
@@ -697,9 +937,9 @@ higher level, these values are your organization&rsquo;s &lsquo;defaults&rsquo;,
 <p>Previously, you may have heard me rail against Hiera&rsquo;s optional second argument
 and how I really don&rsquo;t like it.  Take this example:</p>
 
-<p>{% codeblock lang:puppet %}
-$foo = hiera(&lsquo;port&rsquo;, &lsquo;80&rsquo;)
-{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nv">$foo</span> <span class="o">=</span> <span class="nf">hiera</span><span class="p">(</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">port</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">,</span> <span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="m">80</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Given this code, Hiera is going to look for a parameter called &lsquo;port&rsquo; in its
 hierarchy, and, if it doesn&rsquo;t find one in ANY of the levels, assign back a default
@@ -772,9 +1012,8 @@ value.  That&rsquo;s a hell of a performance hit.  Fortunately, there&rsquo;s a 
 disable this lookup.  Simply add the following to the Puppet master&rsquo;s <code>puppet.conf</code>
 file:</p>
 
-<p>{% codeblock %}
-data_binding_terminus = none
-{% endcodeblock _%}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>data_binding_terminus = none</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>It&rsquo;s going to be up to how your team needs to work as to whether you use Hiera
 data bindings or not. If you have a savvy team that feels they can debug these
@@ -941,17 +1180,25 @@ for &ndash; and so it becomes slightly confusing. It IS, however, easier to unde
 that this magical phrase will return data, and that that data is going to be used
 to set the value for an attribute. Consider this example:</p>
 
-<p>{% codeblock lang:puppet %}
-$password = hiera(&lsquo;garypassword&rsquo;)</p>
-
-<p>user { &lsquo;gary&rsquo;:
-  ensure   => present,
-  uid      => &lsquo;5001&rsquo;,
-  gid      => &lsquo;gary&rsquo;,
-  shell    => &lsquo;zsh&rsquo;,
-  password => $password,
-}
-{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nv">$password</span> <span class="o">=</span> <span class="nf">hiera</span><span class="p">(</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">garypassword</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">)</span><span class="o">&lt;</span><span class="err">/</span><span class="ss">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="ss">p</span><span class="o">&gt;</span><span class="ss">user</span> <span class="err">{</span> <span class="err">&amp;lsquo;gary&amp;rsquo;:</span>
+</span><span class='line'>  <span class="err">ensure</span>   <span class="err">=&gt;</span> <span class="err">present,</span>
+</span><span class='line'>  <span class="err">uid</span>      <span class="err">=&gt;</span> <span class="err">&amp;lsquo;5001&amp;rsquo;,</span>
+</span><span class='line'>  <span class="err">gid</span>      <span class="err">=&gt;</span> <span class="err">&amp;lsquo;gary&amp;rsquo;,</span>
+</span><span class='line'>  <span class="err">shell</span>    <span class="err">=&gt;</span> <span class="err">&amp;lsquo;zsh&amp;rsquo;,</span>
+</span><span class='line'>  <span class="err">password</span> <span class="err">=&gt;</span> <span class="nv">$password</span><span class="err">,</span>
+</span><span class='line'><span class="err">}</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>This leads us to bullet 3, which is &ldquo;the Hiera + create_resources() solution.&rdquo;
 This solution allows you to lookup data from within Hiera and pass it directly
@@ -959,25 +1206,38 @@ to a function where Puppet creates the individual resources as if you had typed
 them into a Puppet manifest itself. The previous example can be entered into
 a Hiera YAML file like so:</p>
 
-<p>{% codeblock lang:yaml sysadmins.yaml %}
-users:
-  gary:</p>
-
-<pre><code>ensure: 'present'
-uid: '5001'
-gid: 'gary'
-shell: 'zsh'
-password: 'biglongpasswordhash'
-</code></pre>
-
-<p>{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>sysadmins.yaml </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">users</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">gary:&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="l-Scalar-Plain">&lt;pre&gt;&lt;code&gt;ensure</span><span class="p-Indicator">:</span> <span class="s">&#39;present&#39;</span>
+</span><span class='line'><span class="l-Scalar-Plain">uid</span><span class="p-Indicator">:</span> <span class="s">&#39;5001&#39;</span>
+</span><span class='line'><span class="l-Scalar-Plain">gid</span><span class="p-Indicator">:</span> <span class="s">&#39;gary&#39;</span>
+</span><span class='line'><span class="l-Scalar-Plain">shell</span><span class="p-Indicator">:</span> <span class="s">&#39;zsh&#39;</span>
+</span><span class='line'><span class="l-Scalar-Plain">password</span><span class="p-Indicator">:</span> <span class="s">&#39;biglongpasswordhash&#39;</span>
+</span><span class='line'><span class="l-Scalar-Plain">&lt;/code&gt;&lt;/pre&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="l-Scalar-Plain">&lt;p&gt;</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>And then a resource can be created inside the Puppet DSL by doing the following:</p>
 
-<p>{% codeblock lang:puppet %}
-$users = hiera(&lsquo;users&rsquo;)
-create_resources(&lsquo;users&rsquo;)
-{% endcodeblock _%}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="nv">$users</span> <span class="o">=</span> <span class="nf">hiera</span><span class="p">(</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">users</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">)</span>
+</span><span class='line'><span class="nf">create_resources</span><span class="p">(</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">users</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Both examples are functionally identical, except the first one only uses Hiera
 to get the password hash value, whereas the second one grabs both the
@@ -1049,10 +1309,10 @@ away.</p>
 
 <h3>Final word on create_resources?</h3>
 
-<p>{% codeblock %}
-Some people, when confronted with a problem, think “I know, I&rsquo;ll use create_resources().&ldquo;
-Now they have two problems.
-{% endcodeblock _%}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Some people, when confronted with a problem, think “I know, I&rsquo;ll use create_resources().&ldquo;
+</span><span class='line'>Now they have two problems.</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>The create_resources() function is often called the &ldquo;PSE Swiss Army knife&rdquo;
 (or, Professional Services Engineer &ndash; the people who do what
@@ -1110,22 +1370,30 @@ External Node Classifier, or ENC. There is a function called <code>hiera_include
 that allows you to include classes into the catalog as if you were to write
 &ldquo;include (classname)&rdquo; in a Puppet manifest.  It works like this:</p>
 
-<p>{% codeblock lang:yaml london.yaml %}
-classes:
-  &ndash; profiles::london::base
-  &ndash; profiles::london::network
-{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>london.yaml </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">classes</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="nl">&amp;ndash</span><span class="l-Scalar-Plain">; profiles::london::base</span>
+</span><span class='line'>  <span class="l-Scalar-Plain">&amp;ndash; profiles::london::network</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
-<p>{% codeblock lang:yaml dev.yaml %}
-classes:
-  &ndash; profiles::tomcat::application2
-{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>dev.yaml </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">classes</span><span class="p-Indicator">:</span>
+</span><span class='line'>  <span class="nl">&amp;ndash</span><span class="l-Scalar-Plain">; profiles::tomcat::application2</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
-<p>{% codeblock lang:puppet site.pp%}
-node default {
-  hiera_include(&lsquo;classes&rsquo;)
-}
-{% endcodeblock _%}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>site.pp</span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='puppet'><span class='line'><span class="kd">node</span> <span class="s">default</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nf">hiera_include</span><span class="p">(</span><span class="err">&amp;</span><span class="ss">lsquo</span><span class="err">;</span><span class="ss">classes</span><span class="err">&amp;</span><span class="ss">rsquo</span><span class="err">;</span><span class="p">)</span>
+</span><span class='line'>}
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Given the above example, the hiera_include() function will search every level
 of the hierarchy looking for a parameter called &lsquo;classes&rsquo;. It returns
@@ -1153,9 +1421,10 @@ ONCE. You don&rsquo;t NEED this conditional classification behavior. It&rsquo;s 
 returns the node&rsquo;s role, add a level to the Hiera hierarchy for this role fact,
 and in the role&rsquo;s YAML file in Hiera, simply do:</p>
 
-<p>{% codeblock lang:yaml appserver.yaml %}
-classes: role::application_server
-{% endcodeblock _%}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span>appserver.yaml </span></figcaption>
+<div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">classes</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">role::application_server</span>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <p>Then you can use the same hiera_include() call in the default node definition
 in <code>site.pp</code>. The ONLY time I recommend this is if you don&rsquo;t already have some
@@ -1217,39 +1486,70 @@ I&rsquo;ve written here anyways&hellip;).</p>
 
 <p>Before we go any further, let me define a couple of terms:</p>
 
-<p>{% codeblock %}
-dependencies     &ndash; In a nutshell, what happens when you use the metaparameters of</p>
-
-<pre><code>               'before', 'require', 'subscribe' or 'notify' on resources in a
-               Puppet manifest: it's a chain of resources that are to be
-               evaluted in a specific order every time Puppet runs. Any failure
-               of a resource in this chain stops Puppet from evaluating the
-               remaining resources in the chain.
-</code></pre>
-
-<p>evaluate         &ndash; When Puppet determines the &lsquo;is&rsquo; value (or current state) of a</p>
-
-<pre><code>               resource (i.e. for package resources, "is the package installed?")
-</code></pre>
-
-<p>remediate        &ndash; When Puppet determines that the &lsquo;is&rsquo; value (or current state of</p>
-
-<pre><code>               the resource) is different from the 'should' value (or the value
-               entered into the Puppet manifest...the way the resource SHOULD
-               end up looking on the system) and Puppet needs to make a change.
-</code></pre>
-
-<p>declarative(ish) &ndash; When I use the word &lsquo;declarative(ish)&rsquo;, I mean that the order</p>
-
-<pre><code>               by which Puppet evaluates resources that do not contain dependencies
-               does not have a set procedure/order. The way Puppet EVALUATES
-               resources does not have a set procedure/order, but the order
-               that Puppet reads/parses manifest files IS from top-to-bottom
-               (which is why variables in Puppet manifests need to be declared
-               before they can be used).
-</code></pre>
-
-<p>{% endcodeblock %}</p>
+<p><div class='bogus-wrapper'><notextile><figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>dependencies     &ndash; In a nutshell, what happens when you use the metaparameters of&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;pre>&lt;code>               'before', 'require', 'subscribe' or 'notify' on resources in a
+</span><span class='line'>               Puppet manifest: it's a chain of resources that are to be
+</span><span class='line'>               evaluted in a specific order every time Puppet runs. Any failure
+</span><span class='line'>               of a resource in this chain stops Puppet from evaluating the
+</span><span class='line'>               remaining resources in the chain.
+</span><span class='line'>&lt;/code>&lt;/pre>
+</span><span class='line'>
+</span><span class='line'>&lt;p>evaluate         &ndash; When Puppet determines the &lsquo;is&rsquo; value (or current state) of a&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;pre>&lt;code>               resource (i.e. for package resources, "is the package installed?")
+</span><span class='line'>&lt;/code>&lt;/pre>
+</span><span class='line'>
+</span><span class='line'>&lt;p>remediate        &ndash; When Puppet determines that the &lsquo;is&rsquo; value (or current state of&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;pre>&lt;code>               the resource) is different from the 'should' value (or the value
+</span><span class='line'>               entered into the Puppet manifest...the way the resource SHOULD
+</span><span class='line'>               end up looking on the system) and Puppet needs to make a change.
+</span><span class='line'>&lt;/code>&lt;/pre>
+</span><span class='line'>
+</span><span class='line'>&lt;p>declarative(ish) &ndash; When I use the word &lsquo;declarative(ish)&rsquo;, I mean that the order&lt;/p>
+</span><span class='line'>
+</span><span class='line'>&lt;pre>&lt;code>               by which Puppet evaluates resources that do not contain dependencies
+</span><span class='line'>               does not have a set procedure/order. The way Puppet EVALUATES
+</span><span class='line'>               resources does not have a set procedure/order, but the order
+</span><span class='line'>               that Puppet reads/parses manifest files IS from top-to-bottom
+</span><span class='line'>               (which is why variables in Puppet manifests need to be declared
+</span><span class='line'>               before they can be used).
+</span><span class='line'>&lt;/code>&lt;/pre>
+</span><span class='line'>
+</span><span class='line'>&lt;p></span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
 <h2>Why Puppet doesn&rsquo;t care about execution order (until it does)</h2>
 
@@ -1457,563 +1757,6 @@ right now is absolutely going to buy you the time you spend at home with your
 kids (and by &lsquo;kids&rsquo;, I mean &lsquo;XBox&rsquo;).</p>
 
 <p>And don&rsquo;t use bath salts, folks.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[R10k + Directory Environments]]></title>
-    <link href="http://garylarizza.com/blog/2014/08/31/r10k-plus-directory-environments/"/>
-    <updated>2014-08-31T12:00:00-07:00</updated>
-    <id>http://garylarizza.com/blog/2014/08/31/r10k-plus-directory-environments</id>
-    <content type="html"><![CDATA[<p>If you&rsquo;ve read anything I&rsquo;ve posted in the past year, you know my feelings about
-the word &lsquo;environments&rsquo; and about how well we tend to name things here at
-Puppet Labs (and if you don&rsquo;t, <a href="http://garylarizza.com/blog/2014/03/26/random-r10k-workflow-ideas/">you can check out that post here</a>).
-Since then, Puppet Labs has released a new feature called <a href="https://docs.puppetlabs.com/puppet/latest/reference/environments.html">directory
-environments (click this link for further reading)</a>
-that replace the older &lsquo;config file environments&rsquo; that we all used to use (i.e.
-stanzas in puppet.conf).  Directory environments weren&rsquo;t without their false
-starts and issues, but further releases of Puppet, and their inclusion in
-Puppet Enterprise 3.3.0, have allowed more people
-to ask about them.  SO, I thought I&rsquo;d do a quick writeup about them&hellip;</p>
-
-<h2>R10k had a child: Directory Environments</h2>
-
-<p>The Puppet platform team had a couple of problems with config file environments
-in puppet.conf &ndash; namely:</p>
-
-<ul>
-<li>Entering them in puppet.conf meant that you couldn&rsquo;t use environments named &lsquo;master&rsquo;, &lsquo;main&rsquo;, or &lsquo;agent&rsquo;</li>
-<li>There was no easy/reliable way to determine all the available/used Puppet environments without making assumptions (and hacky code) &ndash; especially if someone were using R10k + dynamic environments</li>
-<li>Adding more environments to <code>puppet.conf</code> made managing that file something of a nightmare (<code>environments.d</code> anyone?)</li>
-</ul>
-
-
-<p>Combine this with the fact that <a href="http://bit.ly/puppetworkflows3">most of the Professional Services team was
-rolling out R10k to create dynamic environments</a> (which meant we
-were abusing <code>$environment</code> inside <code>puppet.conf</code> and creating environments&hellip;well&hellip;
-dynamically and on-the-fly), and they knew something needed to be done.
-Because R10k was so popular and widely deployed, an environment solution that
-was a simple step-up from an R10k deployment was made the target, and directory
-environments were born.</p>
-
-<h2>How does it work?</h2>
-
-<p>Directory environments, essentially, are born out of a folder on the Puppet master
-(typically <code>$confdir/environments</code>, where <code>$confdir</code> is <code>/etc/puppetlabs/puppet</code>
-in Puppet Enterprise) wherein every subfolder is a new Puppet environment. Every
-subfolder contains a couple of key items:</p>
-
-<ul>
-<li>A <code>modules</code> folder containing all modules for that environment</li>
-<li>A <code>manifests/site.pp</code> file containing the site.pp file for that environment</li>
-<li>A new <code>environment.conf</code> file which can be used to set the <code>modulepath</code>, the <code>environment_timeout</code>, and, a new and often-requested feature, the ability to have environment-specific <code>config_version</code> settings</li>
-</ul>
-
-
-<p>Basically, it&rsquo;s everything that R10k ALREADY does with a couple of added goodies
-dropped into an <code>environment.conf</code> file. <a href="https://docs.puppetlabs.com/puppet/latest/reference/environments_configuring.html">Feel free to read the official docs
-on configuring directory environments</a> for further information
-on all of the goodies!</p>
-
-<h2>Cool, how do we set it up?</h2>
-
-<p>It wouldn&rsquo;t be one of my blog posts if it didn&rsquo;t include exact steps to configure
-shit, would it? For this walkthrough, I&rsquo;m using a Centos 6.5 vm with DNS working
-(i.e. the node can ping itself and knows its own hostname and FQDN), and I&rsquo;ve
-already installed an All-in-one installation of Puppet Enterprise 3.3.0. For
-the walkthrough, we&rsquo;re going to setup:</p>
-
-<ul>
-<li>Directory environments based on a control repo</li>
-<li>Hiera data inside a <code>hieradata</code> folder in the control repo</li>
-<li>Hiera to use the per-environment hieradata folder</li>
-</ul>
-
-
-<p>Let&rsquo;s start to break down the components:</p>
-
-<h3>The &lsquo;Control Repo&rsquo;?</h3>
-
-<p>Sometime between <a href="http://bit.ly/puppetworkflows3">my initial R10k post</a> and THIS post, the Puppet Labs PS
-team has come to call the repository that contains the Puppetfile and is used
-to track Puppet environments on all Puppet masters the &lsquo;Control Repo&rsquo; (because
-it &lsquo;Controls the creation of Puppet environments&rsquo;, ya dig?  Zack Smith and
-James Sweeny are actually pretty tickled about making that name stick). For
-the purpose of this demonstration, I&rsquo;m using a repository on Github:</p>
-
-<p><a href="https://github.com/glarizza/puppet_repository">https://github.com/glarizza/puppet_repository</a></p>
-
-<p>Everything you will need for this walkthrough is in that repository, and we
-will refer to it frequently. You DO NOT need to use my repository, and it&rsquo;s
-definitely going to be required that you create your OWN, but it&rsquo;s there
-for reference purposes (and to give you a couple of Puppet manifests to
-make setup a bit easier).</p>
-
-<h3>Configuring the Puppet master</h3>
-
-<p>We&rsquo;re going to first clone my control repo to <code>/tmp</code> so we can use it to
-configure R10k and the Puppet master itself:</p>
-
-<p>```
-[root@master ~]# cd /tmp</p>
-
-<p>[root@master /tmp]# git clone <a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>
-Initialized empty Git repository in /tmp/puppet_repository/.git/
-remote: Counting objects: 164, done.
-remote: Compressing objects: 100% (134/134), done.
-remote: Total 164 (delta 54), reused 81 (delta 16)
-Receiving objects: 100% (164/164), 22.68 KiB, done.
-Resolving deltas: 100% (54/54), done.</p>
-
-<p>[root@master /tmp]# cd puppet_repository
-```</p>
-
-<p>Great, I&rsquo;ve cloned my repo. To configure R10k, we&rsquo;re going to need to pull
-down Zack Smith&rsquo;s R10k module from the forge with <code>puppet module install zack/r10k</code>
-and then use <code>puppet apply</code> on a manifest in my repo with
-<code>puppet apply configure_r10k.pp</code>.  <strong>DO NOTE: If you want to use YOUR Control
-Repo, and NOT the one I use on Github, then you need to modify the
-<code>configure_r10k.pp</code> file and replace the <code>remote</code> property with the URL to
-YOUR Control Repo that&rsquo;s housed on a git repository!</strong></p>
-
-<p>```
-[root@master /tmp/puppet_repository:production]# puppet module install zack/r10k</p>
-
-<p>Notice: Preparing to install into /etc/puppetlabs/puppet/modules &hellip;
-Notice: Downloading from <a href="https://forgeapi.puppetlabs.com">https://forgeapi.puppetlabs.com</a> &hellip;
-Notice: Found at least one version of puppetlabs-stdlib compatible with PE (3.3.0);
-Notice: Skipping versions which don&rsquo;t express PE compatibility. To install
-the most recent version of the module regardless of compatibility
-with PE, use the &lsquo;&mdash;ignore-requirements&rsquo; flag.
-Notice: Found at least one version of puppetlabs-inifile compatible with PE (3.3.0);
-Notice: Skipping versions which don&rsquo;t express PE compatibility. To install
-the most recent version of the module regardless of compatibility
-with PE, use the &lsquo;&mdash;ignore-requirements&rsquo; flag.
-Notice: Found at least one version of puppetlabs-vcsrepo compatible with PE (3.3.0);
-Notice: Skipping versions which don&rsquo;t express PE compatibility. To install
-the most recent version of the module regardless of compatibility
-with PE, use the &lsquo;&mdash;ignore-requirements&rsquo; flag.
-Notice: Found at least one version of puppetlabs-concat compatible with PE (3.3.0);
-Notice: Skipping versions which don&rsquo;t express PE compatibility. To install
-the most recent version of the module regardless of compatibility
-with PE, use the &lsquo;&mdash;ignore-requirements&rsquo; flag.
-Notice: Installing &mdash; do not interrupt &hellip;
-/etc/puppetlabs/puppet/modules
-└─┬ zack-r10k (v2.2.7)
-  ├─┬ gentoo-portage (v2.2.0)
-  │ └── puppetlabs-concat (v1.0.3) [/opt/puppet/share/puppet/modules]
-  ├── mhuffnagle-make (v0.0.2)
-  ├── puppetlabs-gcc (v0.2.0)
-  ├── puppetlabs-git (v0.2.0)
-  ├── puppetlabs-inifile (v1.1.0) [/opt/puppet/share/puppet/modules]
-  ├── puppetlabs-pe_gem (v0.0.1)
-  ├── puppetlabs-ruby (v0.2.1)
-  ├── puppetlabs-stdlib (v3.2.2) [/opt/puppet/share/puppet/modules]
-  └── puppetlabs-vcsrepo (v1.1.0)</p>
-
-<p>[root@master /tmp/puppet_repository:production]# puppet apply configure_r10k.pp</p>
-
-<p>Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.71 seconds
-Warning: The package type&rsquo;s allow_virtual parameter will be changing its default value from false to true in a future release. If you do not want to allow virtual packages, please explicitly set allow_virtual to false.
-   (at /opt/puppet/lib/ruby/site_ruby/1.9.1/puppet/type.rb:816:in `set_default')
-Notice: /Stage[main]/R10k::Install/Package[r10k]/ensure: created
-Notice: /Stage[main]/R10k::Install::Pe_gem/File[/usr/bin/r10k]/ensure: created
-Notice: /Stage[main]/R10k::Config/File[r10k.yaml]/ensure: defined content as &lsquo;{md5}5cda58e8a01e7ff12544d30105d13a2a&rsquo;
-Notice: Finished catalog run in 11.24 seconds
-```</p>
-
-<p>Performing those commands will successfully setup R10k to point to my Control
-Repo out on Github (and, again, if you don&rsquo;t WANT that, then you need to make
-the change to the <code>remote</code> property in <code>configure_r10k.pp</code>). We next need to
-configure Directory Environments in <code>puppet.conf</code> by setting two attributes:</p>
-
-<ul>
-<li><code>environmentpath</code> (Or the path to the folder containing environments)</li>
-<li><code>basemodulepath</code> (Or, the set of modules that will be shared across ALL ENVIRONMENTS)</li>
-</ul>
-
-
-<p>I have created a Puppet manifest that will set these attributes, and this
-manifest requires the <code>puppetlabs/inifile</code> module from the Puppet Forge.
-Fortunately, since I&rsquo;m using Puppet Enterprise, that module is already installed.
-If you&rsquo;re using open source Puppet and the module is NOT installed, feel free
-to install it by running <code>puppet module install puppetlabs/inifile</code>. Once
-this is done, go ahead and execute the manifest by running
-<code>puppet apply configure_directory_environments.pp</code>:</p>
-
-<p>```
-[root@master /tmp/puppet_repository:production]# puppet apply configure_directory_environments.pp</p>
-
-<p>Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.05 seconds
-Notice: /Stage[main]/Main/Ini_setting[Configure environmentpath]/ensure: created
-Notice: /Stage[main]/Main/Ini_setting[Configure basemodulepath]/value: value changed &lsquo;/etc/puppetlabs/puppet/modules:/opt/puppet/share/puppet/modules&rsquo; to &lsquo;$confdir/modules:/opt/puppet/share/puppet/modules&rsquo;
-Notice: Finished catalog run in 0.20 seconds
-```</p>
-
-<p>The last step to configuring the Puppet master is to execute an R10k run.
-We can do that by running <code>r10k deploy environment -pv</code>:</p>
-
-<p>```
-[root@master /tmp/puppet_repository:production]# r10k deploy environment -pv</p>
-
-<p>[R10K::Source::Git &ndash; INFO] Determining current branches for &ldquo;<a href="https://github.com/glarizza/puppet_repository.git">https://github.com/glarizza/puppet_repository.git</a>&rdquo;
-[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment production
-[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
-[R10K::Task::Module::Sync &ndash; INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/production/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/production/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/production/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/production/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/production/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/production/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/production/modules
-[R10K::Task::Environment::Deploy &ndash; NOTICE] Deploying environment webinar_env
-[R10K::Task::Puppetfile::Sync &ndash; INFO] Loading modules from Puppetfile into queue
-[R10K::Task::Module::Sync &ndash; INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying haproxy into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying profiles into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying notifyme into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying haproxy into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying mysql into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying ntp into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Module::Sync &ndash; INFO] Deploying apache into /etc/puppetlabs/puppet/environments/webinar_env/modules
-[R10K::Task::Deployment::PurgeEnvironments &ndash; INFO] Purging stale environments from /etc/puppetlabs/puppet/environments
-```</p>
-
-<p>Great!  Everything should be setup (if you&rsquo;re using my repo)!  My repository has
-a production branch, which is what Puppet&rsquo;s default environment is named,
-so we can test that everything works by listing out all modules in the main
-production environment with the <code>puppet module list</code> command:</p>
-
-<p>```
-[root@master /tmp/puppet_repository:production]# puppet module list</p>
-
-<p>Warning: Module &lsquo;puppetlabs-stdlib&rsquo; (v3.2.2) fails to meet some dependencies:
-  &lsquo;puppetlabs-ntp&rsquo; (v3.1.2) requires &lsquo;puppetlabs-stdlib&rsquo; (>= 4.0.0)
-/etc/puppetlabs/puppet/environments/production/modules
-├── notifyme (???)
-├── profiles (???)
-├── puppetlabs-apache (v1.1.1)
-└── puppetlabs-ntp (v3.1.2)
-/etc/puppetlabs/puppet/modules
-├── gentoo-portage (v2.2.0)
-├── mhuffnagle-make (v0.0.2)
-├── puppetlabs-gcc (v0.2.0)
-├── puppetlabs-git (v0.2.0)
-├── puppetlabs-pe_gem (v0.0.1)
-├── puppetlabs-ruby (v0.2.1)
-├── puppetlabs-vcsrepo (v1.1.0)
-└── zack-r10k (v2.2.7)
-/opt/puppet/share/puppet/modules
-├── puppetlabs-apt (v1.5.0)
-├── puppetlabs-auth_conf (v0.2.2)
-├── puppetlabs-concat (v1.0.3)
-├── puppetlabs-firewall (v1.1.2)
-├── puppetlabs-inifile (v1.1.0)
-├── puppetlabs-java_ks (v1.2.4)
-├── puppetlabs-pe_accounts (v2.0.2-3-ge71b5a0)
-├── puppetlabs-pe_console_prune (v0.1.1-4-g293f45b)
-├── puppetlabs-pe_mcollective (v0.2.10-15-gb8343bb)
-├── puppetlabs-pe_postgresql (v1.0.4-4-g0bcffae)
-├── puppetlabs-pe_puppetdb (v1.1.1-7-g8cb11bf)
-├── puppetlabs-pe_razor (v0.2.1-1-g80acb4d)
-├── puppetlabs-pe_repo (v0.7.7-32-gfd1c97f)
-├── puppetlabs-pe_staging (v0.3.3-2-g3ed56f8)
-├── puppetlabs-postgresql (v2.5.0-pe2)
-├── puppetlabs-puppet_enterprise (v3.2.1-27-g8f61956)
-├── puppetlabs-reboot (v0.1.4)
-├── puppetlabs-request_manager (v0.1.1)
-└── puppetlabs-stdlib (v3.2.2)  invalid
-```</p>
-
-<p>Notice a couple of things:</p>
-
-<ul>
-<li>First, I&rsquo;ve got some dependency issues&hellip;oh well, nothing that&rsquo;s a game-stopper</li>
-<li>Second, the path to the production environment&rsquo;s module is correct at: <code>/etc/puppetlabs/puppet/environments/production/modules</code></li>
-</ul>
-
-
-<h3>Configuring Hiera</h3>
-
-<p>The last dinghy to be configured on this dreamboat is Hiera. Hiera is Puppet&rsquo;s
-data lookup mechanism, and is used to gather specific bits of data (such
-as versions of packages, hostnames, passwords, and other business-specific
-data). Explaining HOW Hiera works is beyond the scope of this article, but
-configuring Hiera data on a per-environment basis IS absolutely a worthwhile
-endeavor.</p>
-
-<p>In this example, I&rsquo;m going to demonstrate coupling Hiera data with the Control
-Repo for simple replication of Hiera data across environments. You COULD also
-choose to put your Hiera data in a separate repository and set it up in
-<code>/etc/r10k.yaml</code> as another source, but that exercise is left to the reader
-<a href="http://bit.ly/puppetworkflows3b">(and if you&rsquo;re interested, I talk about it in this post).</a></p>
-
-<p>You&rsquo;ll notice that my demonstration repository ALREADY includes Hiera data,
-and so that data is automatically being replicated to all environments. By
-default, Hiera&rsquo;s configuration file (<code>hiera.yaml</code>) has no YAML data directory
-specified, so we&rsquo;ll need to make that change.  <a href="https://github.com/glarizza/puppet_repository/blob/production/hiera.yaml">In my demonstration control
-repository, I&rsquo;ve included a sample <code>hiera.yaml</code>,</a> but let&rsquo;s take a look at
-one below:</p>
-
-<p>```yaml</p>
-
-<h2>/etc/puppetlabs/puppet/hiera.yaml</h2>
-
-<hr />
-
-<p>:backends:
-  &ndash; yaml
-:hierarchy:
-  &ndash; &ldquo;%{clientcert}&rdquo;
-  &ndash; &ldquo;%{application_tier}&rdquo;
-  &ndash; common</p>
-
-<p>:yaml:</p>
-
-<h1>datadir is empty here, so hiera uses its defaults:</h1>
-
-<h1>&ndash; /var/lib/hiera on *nix</h1>
-
-<h1>&ndash; %CommonAppData%\PuppetLabs\hiera\var on Windows</h1>
-
-<h1>When specifying a datadir, make sure the directory exists.</h1>
-
-<p>  :datadir: &ldquo;/etc/puppetlabs/puppet/environments/%{environment}/hieradata&rdquo;
-```</p>
-
-<p>This hiera.yaml file specifies a hierarchy with three levels &ndash; a node-specific,
-level, a level for different application tiers (like &lsquo;dev&rsquo;, &lsquo;test&rsquo;, &lsquo;prod&rsquo;, and
-etc), and finally makes the change we need: mapping the data directory to each
-environment&rsquo;s hieradata folder.  The path to <code>hiera.yaml</code> is Puppet&rsquo;s
-configuration directory (which is <code>/etc/puppetlabs/puppet</code> for Puppet
-Enterprise, or <code>/etc/puppet</code> for the open source version of Puppet), so open
-the file there, make your changes, and finally you&rsquo;ll need to need to restart
-the Puppet master service to have the changes picked up.</p>
-
-<p>Next, let&rsquo;s perform a test by executing the <code>hiera</code> binary from the command
-line before running puppet:</p>
-
-<p>```
-[root@master /etc/puppetlabs/puppet/environments]# hiera message environment=production
-This node is using common data</p>
-
-<p>[root@master /etc/puppetlabs/puppet/environments]# hiera message environment=webinar_env -d
-DEBUG: 2014-08-31 19:55:44 +0000: Hiera YAML backend starting
-DEBUG: 2014-08-31 19:55:44 +0000: Looking up message in YAML backend
-DEBUG: 2014-08-31 19:55:44 +0000: Looking for data source common
-DEBUG: 2014-08-31 19:55:44 +0000: Found message in common
-This node is using common data</p>
-
-<p>[root@master /etc/puppetlabs/puppet/environments]# hiera message environment=bad_env -d
-DEBUG: 2014-08-31 19:58:22 +0000: Hiera YAML backend starting
-DEBUG: 2014-08-31 19:58:22 +0000: Looking up message in YAML backend
-DEBUG: 2014-08-31 19:58:22 +0000: Looking for data source common
-DEBUG: 2014-08-31 19:58:22 +0000: Cannot find datafile /etc/puppetlabs/puppet/environments/bad_env/hieradata/common.yaml, skipping
-nil
-```</p>
-
-<p>You can see that for the first example, I passed the environment of <code>production</code>
-and did a simple lookup for a key called <code>message</code> &ndash; Hiera then returned me
-the value of out that environment&rsquo;s <code>common.yaml</code> file.  Next, I did another
-lookup, but added <code>-d</code> to enable debug mode (debug mode on the <code>hiera</code>
-binary is REALLY handy for debugging problems with Hiera &ndash; combine it with
-specifying values from the command line, and you can pretty quickly simulate
-what value a node is going to get).  Notice the last example where I specified
-an invalid environment &ndash; Hiera logged that it couldn&rsquo;t find the datafile
-requested and ultimately returned a nil, or empty, value.</p>
-
-<p>Since we&rsquo;re working on the Puppet master machine, we can even check for a value
-using <code>puppet apply</code> combined with the notice function:</p>
-
-<p><code>
-[root@master /etc/puppetlabs/puppet/environments]# puppet apply -e "notice(hiera('message'))"
-Notice: Scope(Class[main]): This node is using common data
-Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.09 seconds
-Notice: Finished catalog run in 0.19 seconds
-</code></p>
-
-<p>Great, it&rsquo;s working, but let&rsquo;s look at pulling data from a higher level in the
-hierarchy &ndash; like from the <code>application_tier</code> level. We haven&rsquo;t defined an
-<code>application_tier</code> fact, however, so we&rsquo;ll need to fake it. First, let&rsquo;s do
-that with the <code>hiera</code> binary:</p>
-
-<p><code>
-[root@master /etc/puppetlabs/puppet/environments]# hiera message environment=production application_tier=dev -d
-DEBUG: 2014-08-31 20:04:12 +0000: Hiera YAML backend starting
-DEBUG: 2014-08-31 20:04:12 +0000: Looking up message in YAML backend
-DEBUG: 2014-08-31 20:04:12 +0000: Looking for data source dev
-DEBUG: 2014-08-31 20:04:12 +0000: Found message in dev
-You are in the development application tier
-</code></p>
-
-<p>And then also with <code>puppet apply</code>:</p>
-
-<p><code>
-[root@master /etc/puppetlabs/puppet/environments]# FACTER_application_tier=dev puppet apply -e "notice(hiera('message'))"
-Notice: Scope(Class[main]): You are in the development application tier
-Notice: Compiled catalog for master.puppetlabs.vm in environment production in 0.09 seconds
-Notice: Finished catalog run in 0.18 seconds
-</code></p>
-
-<h2>Tuning <code>environment.conf</code></h2>
-
-<p>The brand-new, per-environment  <code>environment.conf</code> file is meant to be (for
-the most part) a one-stop-shop for your Puppet environment tuning needs. Right
-now, the only things you&rsquo;ll need to tune will be the <code>modulepath</code>,
-<code>config_version</code>, and possibly the <code>environment_timeout</code>.</p>
-
-<h3>Module path</h3>
-
-<p>Before directory environments, every environment had its own <code>modulepath</code> that
-needed to be tuned to allow for modules that were to be used by this
-machine/environment, as well as shared modules.  That <code>modulepath</code> worked like
-<code>$PATH</code> in that it was a priority-based lookup for modules (i.e. the first
-directory in <code>modulepath</code> that had a module matching the module name you wanted
-won).  It also previously required the FULL path to be used for every path in
-<code>modulepath</code>.</p>
-
-<p>Those days are over.</p>
-
-<p>As I mentioned before, the main <code>puppet.conf</code> configuration file has a new
-parameter called <code>basemodulepath</code> that can be used to specify modules that are
-to be shared across ALL modules in ALL environments. Paths defined here
-(typically <code>$confdir/modules</code> and <code>/opt/puppet/share/puppet/modules</code>) are
-usually put at the END of a <code>modulepath</code> so Puppet can search for any
-overridden modules that show up in earlier <code>modulepath</code> paths. In the previous
-configuration steps, we executed a manifest that setup <code>basemodulepath</code> to
-look like:</p>
-
-<p><code>
-basemodulepath = $confdir/modules:/opt/puppet/share/puppet/modules
-</code></p>
-
-<p>Again, feel free to add or remove paths (except don&rsquo;t remove
-<code>/opt/puppet/share/puppet/modules</code> if you&rsquo;re using Puppet Enterprise, because
-that&rsquo;s where all Puppet Enterprise modules are located), especially if you&rsquo;re
-using a giant monolithic repo of modules (which was typically done before things
-like R10k evolved).</p>
-
-<p>With <code>basemodulepath</code> configured, it&rsquo;s now time to configure the <code>modulepath</code>
-to be defined for every environment. My demonstration control repo contains
-a sample <code>environment.conf</code> that defines a <code>modulepath</code> like so:</p>
-
-<p><code>
-modulepath = modules:$basemodulepath
-</code></p>
-
-<p>You&rsquo;ll notice, now, that there are relative paths in <code>modulepath</code>. This is
-possible because now each environment contains an <code>environment.conf</code>, and thus
-relative paths make sense. In this example, nodes in the production environment
-(<code>/etc/puppetlabs/puppet/environments/production</code>) will look for a module by its
-name FIRST by looking in a folder called <code>modules</code> inside the current
-environment folder (i.e. <code>/etc/puppetlabs/puppet/environments/production/modules/&lt;module_name&gt;</code>).
-If the module wasn&rsquo;t found there, it looks for the module in the order that
-paths are defined for <code>basemodulepath</code> above. If Puppet fails to find a module
-in ANY of the paths, a compile error is raised.</p>
-
-<h3>Per-environment <code>config_version</code></h3>
-
-<p><a href="https://docs.puppetlabs.com/references/stable/configuration.html#configversion">Setting <code>config_version</code> has been around for awhile</a> &ndash; hell,
-I remember video of Jeff McCune talking about it at the first Puppetcamp Europe
-in like 2010 &ndash; but the new directory environments implementation has fine
-tuned it a bit. Previously, <code>config_version</code> was a command executed on the
-Puppet master at compile time to determine a string used for versioning the
-configuration enforced during that Puppet run. When it&rsquo;s not set it defaults
-to something of a time/date stamp off the parser, but it&rsquo;s way more useful to
-make it do something like determine the most recent commit hash from a repository.</p>
-
-<p>In the past when we used a giant monolithic repository containing all Puppet
-modules, it was SUPER easy to get a single commit hash and be done. As everyone
-moved their modules into individual repositories, determining <em>WHAT</em> you were
-enforcing became harder. With the birth of R10k an the control repo, we
-suddenly had something we could query for the state of our modules being
-enforced. The problem existed, though, that with multiple dynamic environments
-using multiple git branches, <code>config_version</code> wasn&rsquo;t easily tuned to be able
-to grab the most recent commit from every branch.</p>
-
-<p>Now that <code>config_version</code> is set in a per-environment <code>environment.conf</code>, we
-can make <code>config_version</code> much smarter. Again, looking in the <code>environment.conf</code>
-defined in my demonstration control repo produces this:</p>
-
-<p><code>
-config_version = '/usr/bin/git --git-dir $confdir/environments/$environment/.git rev-parse HEAD'
-</code></p>
-
-<p>This setting will cause the Puppet master to produce the most recent commit ID
-for whatever environment you&rsquo;re in and embed it in the catalog and the report
-that is sent back to the Puppet master after a Puppet run.</p>
-
-<p><a href="https://tickets.puppetlabs.com/browse/PUP-3150">I actually discovered a bug in <code>config_version</code> while writing this post</a>,
-and it&rsquo;s that <code>config_version</code> is subject to the relative pathing fun that other
-<code>environment.conf</code> settings are subject to. Relative pathing is great for things like
-<code>modulepath</code>, and it&rsquo;s even good for <code>config_version</code> if you&rsquo;re including the
-script you want to run to gather the <code>config_version</code> string inside the control
-repo, but using a one-line command that tries to execute a binary on the system
-that DOESN&rsquo;T include the full path to the binary causes an error (because Puppet
-attempts to look for that binary in the current environment path, and NOT by
-searching <code>$PATH</code> on the system).  Feel free to follow or comment on the bug
-if the mood hits you.</p>
-
-<h3>Caching and environment_timeout</h3>
-
-<p>The Puppet master loads environments on-request, but it also caches data associated
-with each environment to make things faster. This caching is finally tunable on a
-per-environment basis by defining the <code>environment_timeout</code> setting in
-<code>environment.conf</code>.  The default setting is 3 minutes, which means the Puppet master
-will invalidate its caches and reload environment data every 3 minutes, but that&rsquo;s
-now tunable. <a href="https://docs.puppetlabs.com/puppet/3.6/reference/environments_configuring.html#environmenttimeout">Definitely read up on this setting before making changes.</a></p>
-
-<h2>Classification</h2>
-
-<p>One of the last new features of directory environments is the ability to include
-an environment-specific <code>site.pp</code> file for classification. You could ALWAYS do
-this by modifying the <code>manifest</code> configuration item in <code>puppet.conf</code>, but now
-each environment can have its own <code>manifest</code> setting. The default behavior is
-to have the Puppet master look for <code>manifests/site.pp</code> in every environment
-directory, and I really wouldn&rsquo;t change that unless you have a good reason. DO
-NOTE, however, that if you&rsquo;re using Puppet Enterprise, you&rsquo;ll need to be careful
-with your <code>site.pp</code> file.  Puppet Enterprise defines things like the Filebucket
-and overrides for the File resource in <code>site.pp</code>, so if you&rsquo;re using Puppet Enterprise,
-you&rsquo;ll need to copy those changes into the <code>site.pp</code> file you add into your control
-repo (as I did).</p>
-
-<p>It may take you a couple of times to change your thinking from looking at the main
-<code>site.pp</code> in <code>$confdir/manifests</code> to looking at each environment-specific <code>site.pp</code>
-file, but definitely take advantage of Puppet&rsquo;s commandline tool to help you track
-which <code>site.pp</code> Puppet is monitoring:</p>
-
-<p>```
-[root@master /etc/puppetlabs/puppet/environments]# puppet config print manifest
-/etc/puppetlabs/puppet/environments/production/manifests</p>
-
-<p>[root@master /etc/puppetlabs/puppet/environments]# puppet config print manifest &mdash;environment webinar_env
-/etc/puppetlabs/puppet/environments/webinar_env/manifests
-```</p>
-
-<p>You can see that <code>puppet config print</code> can be used to get the path to the
-directory that contains <code>site.pp</code>.  Even cooler is what happens when you
-specify an environment that doesn&rsquo;t exist:</p>
-
-<p><code>
-[root@master /etc/puppetlabs/puppet/environments]# puppet config print manifest --environment bad_env
-no_manifest
-</code></p>
-
-<p>Yep, Puppet tells you if it can&rsquo;t find the manifest file.  That&rsquo;s pretty cool.</p>
-
-<h2>Wrapping Up</h2>
-
-<p>Even though the new implementation of directory environments is meant to map
-closely to a workflow most of us have been using (if you&rsquo;ve been using R10k, that is),
-there are still some new features that may take you by surprise. Hopefully this
-post gets you started with just enough information to setup your own test
-environment and start playing. PLEASE DO make sure to file bugs on any behavior
-that comes as unexpected or stops you from using your existing workflow. Cheers!</p>
 ]]></content>
   </entry>
   
