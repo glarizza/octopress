@@ -439,11 +439,11 @@ goal can seem daunting. With this post, I hope you now have a clearer path for
 structuring your Puppet code!
 
 
-[rnp]: https://docs.puppet.com/pe/latest/r_n_p_intro.html [apl]:
-https://docs.puppet.com/hiera/latest/puppet.html#automatic-parameter-lookup
-[lookup]: https://docs.puppet.com/puppet/latest/lookup_quick.html [resource]:
-https://docs.puppet.com/puppet/latest/lang_classes.html#using-resource-like-declarations
+[rnp]: https://docs.puppet.com/pe/latest/r_n_p_intro.html
+[apl]: https://docs.puppet.com/hiera/latest/puppet.html#automatic-parameter-lookup
+[lookup]: https://docs.puppet.com/puppet/latest/lookup_quick.html 
+[resource]: https://docs.puppet.com/puppet/latest/lang_classes.html#using-resource-like-declarations
 [ps_classes]: https://docs.puppet.com/puppetserver/2.4/puppet-api/v3/environment_classes.html
-[datatypes]: https://docs.puppet.com/puppet/4.10/lang_data.html [enc]:
-https://docs.puppet.com/puppet/5.0/nodes_external.html#what-is-an-enc
+[datatypes]: https://docs.puppet.com/puppet/4.10/lang_data.html
+[enc]: https://docs.puppet.com/puppet/5.0/nodes_external.html#what-is-an-enc
 

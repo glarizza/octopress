@@ -4,7 +4,7 @@
   <title><![CDATA[Shit Gary Says]]></title>
   <link href="http://garylarizza.com/atom.xml" rel="self"/>
   <link href="http://garylarizza.com/"/>
-  <updated>2017-08-24T21:04:16-05:00</updated>
+  <updated>2017-08-24T21:06:38-05:00</updated>
   <id>http://garylarizza.com/</id>
   <author>
     <name><![CDATA[Gary larizza]]></name>
@@ -372,7 +372,7 @@ calls) is another story.</p>
 
 <p>Before we get there, it&rsquo;s important to understand that Hiera lookups can be
 done ad hoc <a href="https://docs.puppet.com/puppet/latest/lookup_quick.html">through the use of the <code>hiera()</code> or <code>lookup()</code> functions</a>,
-or through the [automatic class parameter lookup functionality][apl]. The
+or through the <a href="https://docs.puppet.com/hiera/latest/puppet.html#automatic-parameter-lookup">automatic class parameter lookup functionality</a>. The
 previous links will give you detailed explanations. Briefly, if a class is
 declared and a value is not explicitly assigned for any of the class&rsquo;s
 parameters, Hiera will automatically do a lookup for the full parameter name.
@@ -391,8 +391,8 @@ function and the newer <code>lookup</code> function:</p>
 
 
 <p>Explicit lookups using one of the above functions are easier to see and
-understand when you&rsquo;re new to Puppet, because [the automatic parameter
-lookup][apl] functionality is relatively hidden to you (should you not be aware
+understand when you&rsquo;re new to Puppet, because <a href="https://docs.puppet.com/hiera/latest/puppet.html#automatic-parameter-lookup">the automatic parameter
+lookup</a> functionality is relatively hidden to you (should you not be aware
 of its existence). More importantly, explicit lookups within a Puppet class are
 considered to be private to that class. By &ldquo;private,&rdquo; I mean the
 object-oriented programming definition: The data is limited in scope to this
@@ -456,12 +456,12 @@ Torx screws usually mean that customer intervention is disallowed, much the
 same way as variables or explicit lookups within a profile cannot be reassigned
 or overridden.</p>
 
-<p>As referenced in the previous section, [this document on the automatic class
-parameter lookup functionality][apl] describes the order of precedence for
+<p>As referenced in the previous section, <a href="https://docs.puppet.com/hiera/latest/puppet.html#automatic-parameter-lookup">this document on the automatic class
+parameter lookup functionality</a> describes the order of precedence for
 setting class parameters:</p>
 
 <ol>
-<li>Parameter values are explicitly set with a [resource-like class declaration][resource].</li>
+<li>Parameter values are explicitly set with a <a href="https://docs.puppet.com/puppet/latest/lang_classes.html#using-resource-like-declarations">resource-like class declaration</a>.</li>
 <li>Puppet performs a Hiera lookup in the style of <code>(CLASS NAME)::(PARAMETER NAME)</code>.</li>
 <li>The default value set in the class definition.</li>
 </ol>
@@ -488,7 +488,7 @@ your codebase manually.</p>
 <p>Next, class parameters can have their values assigned by an external node
 classifier, or ENC, but explicit Hiera lookups cannot. An ENC is an arbitrary
 script or application that can tell Puppet which classes a node should have.
-(For more information, [refer to this document on ENCs][enc].)  For Puppet
+(For more information, <a href="https://docs.puppet.com/puppet/5.0/nodes_external.html#what-is-an-enc">refer to this document on ENCs</a>.)  For Puppet
 Enterprise, the Puppet Enterprise console acts as an ENC.</p>
 
 <p>Finally, consider the extensibility of explicit lookups versus class
@@ -508,7 +508,7 @@ treating their usages separately.</p>
 
 <ul>
 <li>Signals to users of Puppet code that this data item is configurable.</li>
-<li>Allows the value to be assigned either by the Puppet Enterprise console ([or other configured ENC][enc]) or Hiera.</li>
+<li>Allows the value to be assigned either by the Puppet Enterprise console (<a href="https://docs.puppet.com/puppet/5.0/nodes_external.html#what-is-an-enc">or other configured ENC</a>) or Hiera.</li>
 <li>Classes and parameters are discoverable through the Puppet Server API.</li>
 </ul>
 
@@ -539,10 +539,6 @@ treating their usages separately.</p>
 the back of every Puppet user&rsquo;s mind, but the mechanics of how to achieve this
 goal can seem daunting. With this post, I hope you now have a clearer path for
 structuring your Puppet code!</p>
-
-<p><a href="https://docs.puppet.com/hiera/latest/puppet.html#automatic-parameter-lookup">https://docs.puppet.com/hiera/latest/puppet.html#automatic-parameter-lookup</a>
-<a href="https://docs.puppet.com/puppet/latest/lang_classes.html#using-resource-like-declarations">https://docs.puppet.com/puppet/latest/lang_classes.html#using-resource-like-declarations</a>
-<a href="https://docs.puppet.com/puppet/5.0/nodes_external.html#what-is-an-enc">https://docs.puppet.com/puppet/5.0/nodes_external.html#what-is-an-enc</a></p>
 ]]></content>
   </entry>
   
